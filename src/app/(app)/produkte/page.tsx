@@ -1,17 +1,113 @@
 import type { Metadata } from "next";
+import { Plus, FolderTree } from "lucide-react";
 
-import { ModulePlaceholder } from "@/components/module-placeholder";
+import { PageHeader } from "@/components/shared/page-header";
+import { SupabaseNotice } from "@/components/shared/supabase-notice";
+import { EmptyState } from "@/components/shared/empty-state";
+import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { ProductFormDialog } from "@/components/produkte/product-form-dialog";
+import { GroupManager } from "@/components/produkte/group-manager";
+import { getProducts, getProductGroups } from "@/lib/data/products";
+import { formatCurrency } from "@/lib/format";
 
-export const metadata: Metadata = {
-  title: "Produkte",
-};
+export const metadata: Metadata = { title: "Produkte" };
 
-export default function Page() {
-  return (
-    <ModulePlaceholder
-      navKey="produkte"
-      description="Produktkatalog mit Gruppen und Datenblatt-Assets."
-      phase="Phase 3"
+export default async function ProduktePage() {
+  const [products, groups] = await Promise.all([
+    getProducts(),
+    getProductGroups(),
+  ]);
+  const groupName = (id: string | null) =>
+    groups.find((g) => g.id === id)?.name ?? "–";
+
+  const newButton = (
+    <ProductFormDialog
+      groups={groups}
+      trigger={
+        <Button>
+          <Plus className="size-4" /> Neues Produkt
+        </Button>
+      }
     />
+  );
+
+  return (
+    <div>
+      <PageHeader title="Produkte" description="Produktkatalog und Gruppen.">
+        <GroupManager
+          groups={groups}
+          trigger={
+            <Button variant="outline">
+              <FolderTree className="size-4" /> Gruppen
+            </Button>
+          }
+        />
+        {newButton}
+      </PageHeader>
+
+      <SupabaseNotice />
+
+      {products.length === 0 ? (
+        <EmptyState
+          title="Noch keine Produkte"
+          description="Lege Produkte an, um sie in Kalkulationen zu verwenden."
+        >
+          {newButton}
+        </EmptyState>
+      ) : (
+        <div className="bg-card rounded-lg border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Gruppe</TableHead>
+                <TableHead>Hersteller</TableHead>
+                <TableHead className="text-right">EK</TableHead>
+                <TableHead className="text-right">VK</TableHead>
+                <TableHead className="w-24" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {products.map((p) => (
+                <TableRow key={p.id}>
+                  <TableCell className="font-medium">{p.name}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {groupName(p.group_id)}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {p.manufacturer ?? "–"}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {formatCurrency(p.price_purchase)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {formatCurrency(p.price_sell)}
+                  </TableCell>
+                  <TableCell>
+                    <ProductFormDialog
+                      product={p}
+                      groups={groups}
+                      trigger={
+                        <Button variant="ghost" size="sm">
+                          Bearbeiten
+                        </Button>
+                      }
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </div>
   );
 }
