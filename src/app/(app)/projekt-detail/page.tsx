@@ -1,17 +1,15 @@
-import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-import { ModulePlaceholder } from "@/components/module-placeholder";
+import { getProjects } from "@/lib/data/projects";
 
-export const metadata: Metadata = {
-  title: "Aktives Projekt",
-};
-
-export default function Page() {
-  return (
-    <ModulePlaceholder
-      navKey="projekt-detail"
-      description="Das aktuell gewählte Projekt inkl. Logbuch/Timeline."
-      phase="Phase 3"
-    />
-  );
+/**
+ * „Aktives Projekt" (Legacy-Navigationspunkt): leitet auf das zuletzt
+ * bearbeitete Projekt weiter, sonst auf die Projektliste.
+ */
+export default async function AktivesProjektPage() {
+  const projects = await getProjects();
+  if (projects.length > 0) {
+    redirect(`/projekte/${projects[0].id}`);
+  }
+  redirect("/projekte");
 }
