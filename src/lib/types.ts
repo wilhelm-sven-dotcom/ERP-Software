@@ -1,12 +1,24 @@
 /**
  * Zentrale TypeScript-Typen (Goldene Regel #4).
- * Baseline aus CLAUDE.md §5 — wird je Modul (Phase 3) erweitert.
- * In dieser Phase bewusst schlank gehalten.
+ * Spiegeln das Postgres-Schema aus supabase/migrations wider.
+ * jsonb-Felder bleiben bewusst flexibel (Record/Array), bis die Fachmodule
+ * (Phase 3) genauere Strukturen festlegen.
  */
 
 export type Role = "admin" | "mitarbeiter";
 
 export type CustomerKind = "privat" | "gewerbe";
+
+/** Pipeline-Stufen (Legacy-Werte aus /legacy; ohne harten DB-CHECK). */
+export type ProjectStatus =
+  | "Anfrage"
+  | "Angebot"
+  | "Auftrag"
+  | "Entwurf"
+  | "gewonnen"
+  | "verloren";
+
+export type AuditAction = "create" | "update" | "delete";
 
 /** Aktueller, eingeloggter Nutzer (aus Supabase Auth + employees). */
 export interface CurrentUser {
@@ -16,34 +28,148 @@ export interface CurrentUser {
   role: Role;
 }
 
-/** Mitarbeiter (Tabelle `employees`). */
 export interface Employee {
   id: string;
   auth_user_id: string | null;
   name: string | null;
-  email: string;
+  email: string | null;
   role: Role;
   active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
-/** Kunde (Tabelle `customers`) — Baseline. */
+export interface ProductGroup {
+  id: string;
+  name: string;
+  parent_id: string | null;
+  sort: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Customer {
   id: string;
   customer_nr: number | null;
   kind: CustomerKind | null;
   company: string | null;
+  salutation: string | null;
+  academic_title: string | null;
   first_name: string | null;
   last_name: string | null;
   email: string | null;
   phone: string | null;
+  mobile: string | null;
+  street: string | null;
+  zip: string | null;
   city: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
-/** Projekt (Tabelle `projects`) — Baseline. */
 export interface Project {
   id: string;
-  customer_id: string;
+  customer_id: string | null;
   title: string | null;
-  status: string | null;
+  status: ProjectStatus | string | null;
+  assigned_employee_id: string | null;
+  street: string | null;
+  zip: string | null;
+  city: string | null;
   system_size_kwp: number | null;
+  notes: string | null;
+  details: Record<string, unknown>;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Activity {
+  id: string;
+  project_id: string | null;
+  customer_id: string | null;
+  type: string | null;
+  title: string | null;
+  body: string | null;
+  employee_id: string | null;
+  occurred_at: string | null;
+  created_at: string;
+}
+
+export interface Product {
+  id: string;
+  group_id: string | null;
+  name: string;
+  manufacturer: string | null;
+  category: string | null;
+  sku: string | null;
+  price_purchase: number | null;
+  price_sell: number | null;
+  unit: string | null;
+  specs: Record<string, unknown>;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductAsset {
+  id: string;
+  product_id: string | null;
+  kind: string | null;
+  name: string | null;
+  storage_path: string | null;
+  mime: string | null;
+  created_at: string;
+}
+
+export interface OfferTemplate {
+  id: string;
+  name: string;
+  kind: string | null;
+  is_default: boolean;
+  content: Record<string, unknown>;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CalcTemplate {
+  id: string;
+  name: string;
+  is_default: boolean;
+  positions: unknown[];
+  defaults: Record<string, unknown>;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Calculation {
+  id: string;
+  project_id: string | null;
+  positions: unknown[];
+  totals: Record<string, unknown>;
+  margin: number | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Setting {
+  key: string;
+  value: unknown;
+  updated_at: string;
+}
+
+export interface ChangeLogEntry {
+  id: string;
+  entity_type: string;
+  entity_id: string | null;
+  action: AuditAction;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+  employee_id: string | null;
+  created_at: string;
 }
