@@ -1,0 +1,162 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+  ip³ PV-Tool — Design-Token.
+  CI-Primärfarbe und Theme-Werte 1:1 aus der Legacy-Datei
+  (legacy/ip3_PV_Tool_6_19.html, :root) übernommen.
+*/
+:root {
+  --radius: 0.5rem;
+
+  /* Flächen & Text (Legacy Light) */
+  --background: #f7f8fb; /* --bg */
+  --foreground: #1f2937; /* --text */
+  --card: #ffffff; /* --surface */
+  --card-foreground: #1f2937;
+  --popover: #ffffff;
+  --popover-foreground: #1f2937;
+
+  /* CI-Primärfarbe */
+  --primary: #2e3192; /* --ci-primary */
+  --primary-foreground: #ffffff;
+
+  --secondary: #f1f5f9; /* --surface-hover */
+  --secondary-foreground: #1f2937;
+  --muted: #f1f5f9;
+  --muted-foreground: #6b7280; /* --text-muted */
+  --accent: #eef0fb; /* zarter CI-Tint */
+  --accent-foreground: #2e3192;
+
+  --destructive: #dc2626; /* --danger */
+  --destructive-foreground: #ffffff;
+
+  --border: #e5e7eb; /* --border */
+  --input: #e5e7eb;
+  --ring: #2e3192;
+
+  /* Status (für spätere Module) */
+  --success: #10b981;
+  --warning: #f59e0b;
+
+  /* Diagramm-Palette (Baseline) */
+  --chart-1: #2e3192;
+  --chart-2: #3b82f6;
+  --chart-3: #10b981;
+  --chart-4: #f59e0b;
+  --chart-5: #dc2626;
+
+  /* Sidebar */
+  --sidebar: #ffffff;
+  --sidebar-foreground: #1f2937;
+  --sidebar-primary: #2e3192;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #eef0fb;
+  --sidebar-accent-foreground: #2e3192;
+  --sidebar-border: #e5e7eb;
+  --sidebar-ring: #2e3192;
+}
+
+.dark {
+  --background: #0f172a; /* --bg (dark) */
+  --foreground: #f1f5f9; /* --text (dark) */
+  --card: #1e293b; /* --surface (dark) */
+  --card-foreground: #f1f5f9;
+  --popover: #1e293b;
+  --popover-foreground: #f1f5f9;
+
+  /* CI im Dark-Mode aufgehellt für Kontrast */
+  --primary: #818cf8;
+  --primary-foreground: #0f172a;
+
+  --secondary: #334155; /* --surface-hover (dark) */
+  --secondary-foreground: #f1f5f9;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8; /* --text-muted (dark) */
+  --accent: #334155;
+  --accent-foreground: #f1f5f9;
+
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+
+  --border: #334155; /* --border (dark) */
+  --input: #334155;
+  --ring: #818cf8;
+
+  --success: #10b981;
+  --warning: #f59e0b;
+
+  --chart-1: #818cf8;
+  --chart-2: #3b82f6;
+  --chart-3: #10b981;
+  --chart-4: #f59e0b;
+  --chart-5: #ef4444;
+
+  --sidebar: #1e293b;
+  --sidebar-foreground: #f1f5f9;
+  --sidebar-primary: #818cf8;
+  --sidebar-primary-foreground: #0f172a;
+  --sidebar-accent: #334155;
+  --sidebar-accent-foreground: #f1f5f9;
+  --sidebar-border: #334155;
+  --sidebar-ring: #818cf8;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  }
+}
