@@ -3,11 +3,12 @@ import { createClient } from "@/lib/supabase/server";
 import type { Calculation } from "@/lib/types";
 import type { CalcPosition } from "@/lib/calc/types";
 
-/** Persistierte Kalkulationsdaten: Positionen + gespeicherte Eingaben (in totals). */
+/** Gespeicherte Eingaben (im totals-jsonb mitgeführt). */
 export interface StoredCalcMeta {
+  pauschalRabattPercent: number;
+  nachlass: number;
   mwstPercent: number;
-  gesamtRabattPercent: number;
-  zuschlaege: { bezeichnung: string; betrag: number }[];
+  skontoPercent: number;
 }
 
 export function readPositions(calc: Calculation | null): CalcPosition[] {
@@ -17,13 +18,12 @@ export function readPositions(calc: Calculation | null): CalcPosition[] {
 
 export function readMeta(calc: Calculation | null): StoredCalcMeta {
   const t = (calc?.totals ?? {}) as Record<string, unknown>;
+  const n = (v: unknown, d: number) => (typeof v === "number" ? v : d);
   return {
-    mwstPercent: typeof t.mwstPercent === "number" ? t.mwstPercent : 0,
-    gesamtRabattPercent:
-      typeof t.gesamtRabattPercent === "number" ? t.gesamtRabattPercent : 0,
-    zuschlaege: Array.isArray(t.zuschlaege)
-      ? (t.zuschlaege as { bezeichnung: string; betrag: number }[])
-      : [],
+    pauschalRabattPercent: n(t.pauschalRabattPercent, 0),
+    nachlass: n(t.nachlass, 0),
+    mwstPercent: n(t.mwstSatz ?? t.mwstPercent, 0),
+    skontoPercent: n(t.skontoPercent, 0),
   };
 }
 

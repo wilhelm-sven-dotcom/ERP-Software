@@ -24,7 +24,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { calculate } from "@/lib/calc/engine";
-import type { CalcPosition } from "@/lib/calc/types";
+import { POSITION_GROUPS, type CalcPosition, type PositionGroup } from "@/lib/calc/types";
 import { saveCalculation } from "@/app/(app)/kalkulation/actions";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import type { Product } from "@/lib/types";
@@ -40,6 +40,7 @@ function newRow(): CalcPosition {
     ek: 0,
     einzelpreis: 0,
     rabatt: 0,
+    group: "PV-Anlage",
   };
 }
 
@@ -47,41 +48,45 @@ export function CalcEditor({
   projectId,
   calcId,
   initialPositions,
+  initialPauschalRabatt,
+  initialNachlass,
   initialMwst,
-  initialGesamtRabatt,
+  initialSkonto,
   products,
 }: {
   projectId: string;
   calcId: string | null;
   initialPositions: CalcPosition[];
+  initialPauschalRabatt: number;
+  initialNachlass: number;
   initialMwst: number;
-  initialGesamtRabatt: number;
+  initialSkonto: number;
   products: Product[];
 }) {
   const router = useRouter();
   const [positions, setPositions] = React.useState<CalcPosition[]>(
     initialPositions.length ? initialPositions : [newRow()],
   );
+  const [pauschal, setPauschal] = React.useState(String(initialPauschalRabatt));
+  const [nachlass, setNachlass] = React.useState(String(initialNachlass));
   const [mwst, setMwst] = React.useState(String(initialMwst));
-  const [gesamtRabatt, setGesamtRabatt] = React.useState(
-    String(initialGesamtRabatt),
-  );
+  const [skonto, setSkonto] = React.useState(String(initialSkonto));
   const [saving, setSaving] = React.useState(false);
 
   const result = React.useMemo(
     () =>
       calculate({
         positions,
+        pauschalRabattPercent: Number(pauschal) || 0,
+        nachlass: Number(nachlass) || 0,
         mwstPercent: Number(mwst) || 0,
-        gesamtRabattPercent: Number(gesamtRabatt) || 0,
+        skontoPercent: Number(skonto) || 0,
       }),
-    [positions, mwst, gesamtRabatt],
+    [positions, pauschal, nachlass, mwst, skonto],
   );
 
   function update(id: string, patch: Partial<CalcPosition>) {
-    setPositions((rows) =>
-      rows.map((r) => (r.id === id ? { ...r, ...patch } : r)),
-    );
+    setPositions((rows) => rows.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   }
   function remove(id: string) {
     setPositions((rows) => rows.filter((r) => r.id !== id));
@@ -110,8 +115,10 @@ export function CalcEditor({
       "payload",
       JSON.stringify({
         positions,
+        pauschalRabattPercent: Number(pauschal) || 0,
+        nachlass: Number(nachlass) || 0,
         mwstPercent: Number(mwst) || 0,
-        gesamtRabattPercent: Number(gesamtRabatt) || 0,
+        skontoPercent: Number(skonto) || 0,
       }),
     );
     const res = await saveCalculation({ ok: false }, fd);
@@ -132,10 +139,10 @@ export function CalcEditor({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="min-w-48">Bezeichnung</TableHead>
-              <TableHead className="w-44">Produkt</TableHead>
+              <TableHead className="min-w-44">Bezeichnung</TableHead>
+              <TableHead className="w-36">Produkt</TableHead>
+              <TableHead className="w-32">Gruppe</TableHead>
               <TableHead className="w-20 text-right">Menge</TableHead>
-              <TableHead className="w-20">Einheit</TableHead>
               <TableHead className="w-24 text-right">EK €</TableHead>
               <TableHead className="w-24 text-right">VK €</TableHead>
               <TableHead className="w-20 text-right">Rabatt %</TableHead>
@@ -149,9 +156,7 @@ export function CalcEditor({
                 <TableCell>
                   <Input
                     value={p.bezeichnung}
-                    onChange={(e) =>
-                      update(p.id, { bezeichnung: e.target.value })
-                    }
+                    onChange={(e) => update(p.id, { bezeichnung: e.target.value })}
                     className="h-8"
                   />
                 </TableCell>
@@ -170,21 +175,31 @@ export function CalcEditor({
                   </Select>
                 </TableCell>
                 <TableCell>
+                  <Select
+                    value={p.group ?? "Sonstiges"}
+                    onValueChange={(v) =>
+                      update(p.id, { group: v as PositionGroup })
+                    }
+                  >
+                    <SelectTrigger size="sm" className="h-8 w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {POSITION_GROUPS.map((g) => (
+                        <SelectItem key={g} value={g}>
+                          {g}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </TableCell>
+                <TableCell>
                   <Input
                     type="number"
                     step="0.01"
                     value={p.menge}
-                    onChange={(e) =>
-                      update(p.id, { menge: Number(e.target.value) })
-                    }
+                    onChange={(e) => update(p.id, { menge: Number(e.target.value) })}
                     className="h-8 text-right"
-                  />
-                </TableCell>
-                <TableCell>
-                  <Input
-                    value={p.einheit ?? ""}
-                    onChange={(e) => update(p.id, { einheit: e.target.value })}
-                    className="h-8"
                   />
                 </TableCell>
                 <TableCell>
@@ -192,9 +207,7 @@ export function CalcEditor({
                     type="number"
                     step="0.01"
                     value={p.ek ?? 0}
-                    onChange={(e) =>
-                      update(p.id, { ek: Number(e.target.value) })
-                    }
+                    onChange={(e) => update(p.id, { ek: Number(e.target.value) })}
                     className="h-8 text-right"
                   />
                 </TableCell>
@@ -214,9 +227,7 @@ export function CalcEditor({
                     type="number"
                     step="1"
                     value={p.rabatt ?? 0}
-                    onChange={(e) =>
-                      update(p.id, { rabatt: Number(e.target.value) })
-                    }
+                    onChange={(e) => update(p.id, { rabatt: Number(e.target.value) })}
                     className="h-8 text-right"
                   />
                 </TableCell>
@@ -243,56 +254,74 @@ export function CalcEditor({
         <Plus className="size-4" /> Position
       </Button>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-        <div className="flex flex-wrap items-end gap-4">
+      <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
+        <div className="grid h-fit grid-cols-2 gap-4 sm:grid-cols-4">
+          <div className="grid gap-1.5">
+            <Label htmlFor="pauschal">Pauschalrabatt %</Label>
+            <Input
+              id="pauschal"
+              type="number"
+              step="1"
+              value={pauschal}
+              onChange={(e) => setPauschal(e.target.value)}
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="nachlass">Nachlass €</Label>
+            <Input
+              id="nachlass"
+              type="number"
+              step="0.01"
+              value={nachlass}
+              onChange={(e) => setNachlass(e.target.value)}
+            />
+          </div>
           <div className="grid gap-1.5">
             <Label htmlFor="mwst">MwSt</Label>
             <Select value={mwst} onValueChange={setMwst}>
-              <SelectTrigger id="mwst" className="w-40">
+              <SelectTrigger id="mwst" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="0">0 % (PV-Nullsteuersatz)</SelectItem>
+                <SelectItem value="0">0 % (PV)</SelectItem>
                 <SelectItem value="19">19 %</SelectItem>
                 <SelectItem value="7">7 %</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="grabatt">Gesamtrabatt %</Label>
+            <Label htmlFor="skonto">Skonto %</Label>
             <Input
-              id="grabatt"
+              id="skonto"
               type="number"
-              step="1"
-              value={gesamtRabatt}
-              onChange={(e) => setGesamtRabatt(e.target.value)}
-              className="w-32"
+              step="0.1"
+              value={skonto}
+              onChange={(e) => setSkonto(e.target.value)}
             />
           </div>
         </div>
 
         <div className="bg-card space-y-1.5 rounded-lg border p-4 text-sm">
-          <Row label="Zwischensumme" value={formatCurrency(t.zwischensumme)} />
-          {t.sumRabatt > 0 ? (
-            <Row label="Rabatt" value={`- ${formatCurrency(t.sumRabatt)}`} />
+          <Row label="Zwischensumme" value={formatCurrency(t.nettoVorPauschal)} />
+          {Number(pauschal) > 0 ? (
+            <Row label={`Pauschalrabatt ${pauschal} %`} value={`- ${formatCurrency(t.nettoVorPauschal - t.nettoVorPauschal * (1 - (Number(pauschal) || 0) / 100))}`} />
           ) : null}
-          <Row label="Summe netto" value={formatCurrency(t.sumNetto)} strong />
-          <Row
-            label={`MwSt (${Number(mwst) || 0} %)`}
-            value={formatCurrency(t.mwstBetrag)}
-          />
-          <Row
-            label="Summe brutto"
-            value={formatCurrency(t.sumBrutto)}
-            strong
-          />
+          {Number(nachlass) > 0 ? (
+            <Row label="Nachlass" value={`- ${formatCurrency(Number(nachlass))}`} />
+          ) : null}
+          <Row label="Summe netto" value={formatCurrency(t.netto)} strong />
+          <Row label={`MwSt (${t.mwstSatz} %)`} value={formatCurrency(t.mwstBetrag)} />
+          <Row label="Endpreis brutto" value={formatCurrency(t.brutto)} strong />
+          {t.skontoBetrag > 0 ? (
+            <>
+              <Row label={`Skonto ${skonto} %`} value={`- ${formatCurrency(t.skontoBetrag)}`} />
+              <Row label="Brutto nach Skonto" value={formatCurrency(t.bruttoNachSkonto)} />
+            </>
+          ) : null}
           <div className="text-muted-foreground border-t pt-1.5 text-xs">
             <Row
-              label="Deckungsbeitrag"
-              value={`${formatCurrency(t.deckungsbeitrag)} (${formatNumber(
-                t.margePercent,
-                1,
-              )} %)`}
+              label="Marge (DB)"
+              value={`${formatCurrency(t.marge)} (${formatNumber(t.margeProzent, 1)} %)`}
             />
           </div>
         </div>

@@ -1,76 +1,94 @@
 /**
- * Kalkulations-Typen.
+ * Kalkulations-Typen — abgeleitet aus der Legacy-Funktion `calculateSum`
+ * (legacy/ip3_PV_Tool_6_19.html, Z. 3344–3385).
  *
- * Feldnamen orientieren sich an der Legacy-Struktur (legacy/ip3_PV_Tool_6_19.html):
- * Positionen mit menge/einzelpreis/ek/rabatt/einheit/bezeichnung; Summen
- * sumRabatt, sumZuschlag, sumNetto, sumBrutto, mwst, Marge.
- *
- * Die Engine ist bewusst rein/testbar (keine DB, kein React) und in einer Datei
- * gekapselt, damit Formeln zentral angepasst werden können.
+ * Rabatt-Kaskade (NICHT kommutativ – Reihenfolge ist verbindlich):
+ *   1) Positionsrabatt (%)  je Position
+ *   2) Gruppenrabatt (%)    je Gruppe (PV-Anlage | Speicher | Wallbox | Sonstiges)
+ *   3) Pauschalrabatt (%)   auf die Zwischensumme
+ *   4) Nachlass (€)         absolut
+ *   5) MwSt (%)             Standard 19, PV-Nullsteuersatz = 0
+ *   6) Skonto (%)           auf den BRUTTO-Betrag
  */
 
-/** Art einer Position (Standardposition vs. Festpreis – aus Legacy 'PV'/'FIX'). */
-export type PositionKind = "standard" | "fix";
+/** Normalisierte Hauptgruppen (Legacy `positionGroup`). */
+export type PositionGroup =
+  | "PV-Anlage"
+  | "Speicher"
+  | "Wallbox"
+  | "Sonstiges";
 
-/** Eine Kalkulationsposition. */
+export const POSITION_GROUPS: PositionGroup[] = [
+  "PV-Anlage",
+  "Speicher",
+  "Wallbox",
+  "Sonstiges",
+];
+
+/** Eine Kalkulationsposition (Legacy-Felder: menge/vk/ek/rabatt). */
 export interface CalcPosition {
   id: string;
-  /** Verweis auf einen Produktkatalog-Eintrag (optional). */
   product_id?: string | null;
-  /** Bezeichnung (frei oder aus Produkt übernommen). */
   bezeichnung: string;
-  /** Menge. */
+  /** Menge (Legacy: quantity/menge). */
   menge: number;
-  /** Einheit (z.B. Stk, m, kWp). */
   einheit?: string | null;
-  /** Einkaufspreis je Einheit (für Marge). */
+  /** Einkaufspreis je Einheit (Legacy: ek). */
   ek?: number | null;
-  /** Verkaufspreis (Einzelpreis netto) je Einheit. */
+  /** Verkaufspreis netto je Einheit (Legacy: vk). */
   einzelpreis: number;
-  /** Rabatt in Prozent auf die Position (0–100). */
+  /** Positionsrabatt in Prozent (0–100). */
   rabatt?: number | null;
-  kind?: PositionKind;
+  /** Hauptgruppe (für Gruppenrabatt). Default: Sonstiges. */
+  group?: PositionGroup;
 }
 
-/** Eingaben für die Summenberechnung. */
+/** Eingaben für die Summenberechnung (entspricht den calc-Feldern). */
 export interface CalcInput {
   positions: CalcPosition[];
-  /** MwSt-Satz in Prozent (z.B. 19 oder 0 für den PV-Nullsteuersatz). */
+  /** Gruppenrabatte in Prozent je Hauptgruppe (optional). */
+  gruppenRabatte?: Partial<Record<PositionGroup, number>>;
+  /** Pauschalrabatt in Prozent auf die Zwischensumme (0–100). */
+  pauschalRabattPercent?: number;
+  /** Nachlass absolut in € (netto). */
+  nachlass?: number;
+  /** MwSt-Satz in Prozent (z. B. 19 oder 0 für PV-Nullsteuersatz). */
   mwstPercent: number;
-  /** Optionaler Gesamtrabatt in Prozent auf die Zwischensumme (0–100). */
-  gesamtRabattPercent?: number;
-  /** Optionale Zuschläge (absolut, netto), z.B. Anfahrt. */
-  zuschlaege?: { bezeichnung: string; betrag: number }[];
+  /** Skonto in Prozent auf den Bruttobetrag (0–100). */
+  skontoPercent?: number;
 }
 
-/** Ergebnis je Position. */
 export interface CalcPositionResult extends CalcPosition {
-  /** Position netto nach Positionsrabatt = menge * einzelpreis * (1 - rabatt/100). */
+  /** Position netto nach Positionsrabatt (vor Gruppenrabatt). */
   positionNetto: number;
   /** Einkaufswert der Position = menge * ek. */
   positionEk: number;
 }
 
-/** Gesamtergebnis (entspricht den Legacy-Summen). */
+/** Gesamtergebnis (Feldnamen entsprechen der Legacy-Rückgabe). */
 export interface CalcTotals {
-  /** Summe der Positionen vor Gesamtrabatt/Zuschlag. */
-  zwischensumme: number;
-  /** Rabattbetrag aus Positions- und Gesamtrabatt (Legacy: sumRabatt). */
-  sumRabatt: number;
-  /** Summe der Zuschläge (Legacy: sumZuschlag). */
-  sumZuschlag: number;
-  /** Summe netto (Legacy: sumNetto). */
-  sumNetto: number;
+  /** Σ Positionen netto vor Pauschalrabatt/Nachlass (nach Gruppenrabatt). */
+  nettoVorPauschal: number;
+  /** Summe netto (nach Pauschalrabatt & Nachlass). */
+  netto: number;
+  /** MwSt-Satz in Prozent. */
+  mwstSatz: number;
   /** MwSt-Betrag. */
   mwstBetrag: number;
-  /** Summe brutto (Legacy: sumBrutto). */
-  sumBrutto: number;
+  /** Brutto = netto + MwSt. */
+  brutto: number;
+  /** Skonto-Betrag (auf brutto). */
+  skontoBetrag: number;
+  /** Brutto nach Skonto. */
+  bruttoNachSkonto: number;
   /** Einkaufswert gesamt. */
-  sumEk: number;
-  /** Deckungsbeitrag = sumNetto - sumEk. */
-  deckungsbeitrag: number;
-  /** Marge in Prozent = deckungsbeitrag / sumNetto * 100. */
-  margePercent: number;
+  ekGesamt: number;
+  /** Marge (Deckungsbeitrag) = netto - ekGesamt. */
+  marge: number;
+  /** Marge in Prozent = marge / netto * 100. */
+  margeProzent: number;
+  /** Summen je Hauptgruppe (netto vor Pauschalrabatt). */
+  gruppenSummen: Record<PositionGroup, number>;
 }
 
 export interface CalcResult {

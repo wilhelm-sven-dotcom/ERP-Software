@@ -1,35 +1,31 @@
 /**
- * Reine Kalkulations-Engine (keine DB, kein React → einfach testbar).
+ * Reine Kalkulations-Engine — Nachbau von Legacy `calculateSum`
+ * (legacy/ip3_PV_Tool_6_19.html, Z. 3344–3385). Keine DB, kein React.
  *
- * Formeln (Standard-Angebotskalkulation, Feldnamen aus dem Legacy-Tool):
- *   Position netto      = menge * einzelpreis * (1 - rabatt/100)
- *   Position EK         = menge * ek
- *   Zwischensumme       = Σ Position netto (vor Gesamtrabatt)
- *   Gesamtrabatt-Betrag = Zwischensumme * gesamtRabattPercent/100
- *   sumRabatt           = Σ Positionsrabatte + Gesamtrabatt-Betrag
- *   sumZuschlag         = Σ Zuschläge (absolut, netto)
- *   sumNetto            = Zwischensumme - Gesamtrabatt-Betrag + sumZuschlag
- *   mwstBetrag          = sumNetto * mwstPercent/100
- *   sumBrutto           = sumNetto + mwstBetrag
- *   Deckungsbeitrag     = sumNetto - sumEk
- *   Marge %             = Deckungsbeitrag / sumNetto * 100
+ * Verbindliche Reihenfolge (nicht kommutativ):
+ *   1) vkSum         = menge * vk * (1 - rabatt/100)                je Position
+ *   2) vkNachGroup   = vkSum * (1 - gruppenRabatt[group]/100)       je Gruppe
+ *      nettoVorPauschal = Σ vkNachGroup
+ *   3) netto         = nettoVorPauschal * (1 - pauschalRabatt/100)
+ *   4) netto         = netto - nachlass
+ *   5) mwstBetrag    = netto * mwstSatz/100 ; brutto = netto + mwstBetrag
+ *   6) skontoBetrag  = brutto * skonto/100 ; bruttoNachSkonto = brutto - skontoBetrag
+ *   7) marge         = netto - ekGesamt ; margeProzent = marge/netto*100
  *
- * MwSt: Standard 19 %, für PV-Anlagen ist der Nullsteuersatz (0 %, §12 Abs. 3
- * UStG) durch mwstPercent=0 abbildbar.
- *
- * Hinweis: Die exakten Legacy-Rundungs-/Edge-Case-Details sind gegen das alte
- * Tool bzw. echte Daten zu verifizieren, sobald Supabase verbunden ist.
+ * MwSt: Standard 19 %, PV-Nullsteuersatz über mwstPercent = 0.
+ * Rundung wie Legacy: intern volle Genauigkeit, Ausgabewerte auf 2 NK.
  */
 
-import type {
-  CalcInput,
-  CalcPosition,
-  CalcPositionResult,
-  CalcResult,
-  CalcTotals,
+import {
+  POSITION_GROUPS,
+  type CalcInput,
+  type CalcPosition,
+  type CalcPositionResult,
+  type CalcResult,
+  type CalcTotals,
+  type PositionGroup,
 } from "./types";
 
-/** Kaufmännisch auf 2 Nachkommastellen runden. */
 export function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
@@ -38,67 +34,85 @@ function num(v: number | null | undefined): number {
   return typeof v === "number" && Number.isFinite(v) ? v : 0;
 }
 
+function clampPercent(v: number | null | undefined): number {
+  return Math.min(Math.max(num(v), 0), 100);
+}
+
+function groupOf(p: CalcPosition): PositionGroup {
+  return p.group ?? "Sonstiges";
+}
+
+/** Position netto (nach Positionsrabatt) + Einkaufswert. */
 export function computePosition(p: CalcPosition): CalcPositionResult {
-  const menge = num(p.menge);
-  const einzelpreis = num(p.einzelpreis);
-  const rabatt = Math.min(Math.max(num(p.rabatt), 0), 100);
-  const positionBrutto = menge * einzelpreis;
-  const positionNetto = round2(positionBrutto * (1 - rabatt / 100));
-  const positionEk = round2(menge * num(p.ek));
-  return { ...p, positionNetto, positionEk };
+  const vkSum = num(p.menge) * num(p.einzelpreis) * (1 - clampPercent(p.rabatt) / 100);
+  const positionEk = num(p.menge) * num(p.ek);
+  return { ...p, positionNetto: round2(vkSum), positionEk: round2(positionEk) };
 }
 
 export function calculate(input: CalcInput): CalcResult {
-  const positions = input.positions.map(computePosition);
+  const gruppenRabatte = input.gruppenRabatte ?? {};
 
-  const zwischensumme = round2(
-    positions.reduce((s, p) => s + p.positionNetto, 0),
-  );
-  const sumEk = round2(positions.reduce((s, p) => s + p.positionEk, 0));
+  // Schritt 1+2: Positions- und Gruppenrabatt, Summen je Gruppe
+  const gruppenSummen: Record<PositionGroup, number> = {
+    "PV-Anlage": 0,
+    Speicher: 0,
+    Wallbox: 0,
+    Sonstiges: 0,
+  };
+  let ekGesamt = 0;
 
-  // Positionsrabatte (Differenz Listenpreis vs. netto je Position)
-  const positionsRabatt = round2(
-    input.positions.reduce((s, p) => {
-      const brutto = num(p.menge) * num(p.einzelpreis);
-      const rabatt = Math.min(Math.max(num(p.rabatt), 0), 100);
-      return s + brutto * (rabatt / 100);
-    }, 0),
-  );
+  for (const p of input.positions) {
+    const group = groupOf(p);
+    const vkSum =
+      num(p.menge) * num(p.einzelpreis) * (1 - clampPercent(p.rabatt) / 100);
+    const grRab = clampPercent(gruppenRabatte[group]);
+    const vkNachGroup = vkSum * (1 - grRab / 100);
+    gruppenSummen[group] += vkNachGroup;
+    ekGesamt += num(p.menge) * num(p.ek);
+  }
 
-  const gesamtRabattPercent = Math.min(
-    Math.max(num(input.gesamtRabattPercent), 0),
-    100,
-  );
-  const gesamtRabattBetrag = round2(
-    zwischensumme * (gesamtRabattPercent / 100),
-  );
-
-  const sumZuschlag = round2(
-    (input.zuschlaege ?? []).reduce((s, z) => s + num(z.betrag), 0),
+  const nettoVorPauschal = POSITION_GROUPS.reduce(
+    (s, g) => s + gruppenSummen[g],
+    0,
   );
 
-  const sumRabatt = round2(positionsRabatt + gesamtRabattBetrag);
-  const sumNetto = round2(zwischensumme - gesamtRabattBetrag + sumZuschlag);
+  // Schritt 3+4: Pauschalrabatt, Nachlass
+  const pauschal = clampPercent(input.pauschalRabattPercent);
+  const nachlass = num(input.nachlass);
+  const netto = nettoVorPauschal * (1 - pauschal / 100) - nachlass;
 
-  const mwstPercent = Math.max(num(input.mwstPercent), 0);
-  const mwstBetrag = round2(sumNetto * (mwstPercent / 100));
-  const sumBrutto = round2(sumNetto + mwstBetrag);
+  // Schritt 5: MwSt
+  const mwstSatz = num(input.mwstPercent);
+  const mwstBetrag = netto * (mwstSatz / 100);
+  const brutto = netto + mwstBetrag;
 
-  const deckungsbeitrag = round2(sumNetto - sumEk);
-  const margePercent =
-    sumNetto > 0 ? round2((deckungsbeitrag / sumNetto) * 100) : 0;
+  // Schritt 6: Skonto (auf brutto)
+  const skonto = clampPercent(input.skontoPercent);
+  const skontoBetrag = brutto * (skonto / 100);
+  const bruttoNachSkonto = brutto - skontoBetrag;
+
+  // Schritt 7: Marge
+  const marge = netto - ekGesamt;
+  const margeProzent = netto > 0 ? (marge / netto) * 100 : 0;
 
   const totals: CalcTotals = {
-    zwischensumme,
-    sumRabatt,
-    sumZuschlag,
-    sumNetto,
-    mwstBetrag,
-    sumBrutto,
-    sumEk,
-    deckungsbeitrag,
-    margePercent,
+    nettoVorPauschal: round2(nettoVorPauschal),
+    netto: round2(netto),
+    mwstSatz,
+    mwstBetrag: round2(mwstBetrag),
+    brutto: round2(brutto),
+    skontoBetrag: round2(skontoBetrag),
+    bruttoNachSkonto: round2(bruttoNachSkonto),
+    ekGesamt: round2(ekGesamt),
+    marge: round2(marge),
+    margeProzent: round2(margeProzent),
+    gruppenSummen: {
+      "PV-Anlage": round2(gruppenSummen["PV-Anlage"]),
+      Speicher: round2(gruppenSummen.Speicher),
+      Wallbox: round2(gruppenSummen.Wallbox),
+      Sonstiges: round2(gruppenSummen.Sonstiges),
+    },
   };
 
-  return { positions, totals };
+  return { positions: input.positions.map(computePosition), totals };
 }

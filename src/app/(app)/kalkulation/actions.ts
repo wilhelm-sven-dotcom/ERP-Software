@@ -8,9 +8,9 @@ import { calculate } from "@/lib/calc/engine";
 import type { CalcInput } from "@/lib/calc/types";
 
 /**
- * Kalkulation eines Projekts speichern (upsert).
- * Der Client schickt die Eingaben als JSON; die Summen werden serverseitig
- * neu berechnet (Single Source of Truth) und in totals/margin abgelegt.
+ * Kalkulation eines Projekts speichern (insert/update).
+ * Eingaben kommen als JSON; die Summen werden serverseitig neu berechnet
+ * (Single Source of Truth) und mit den Eingaben in totals abgelegt.
  */
 export async function saveCalculation(
   _prev: ActionResult,
@@ -32,19 +32,20 @@ export async function saveCalculation(
   const result = calculate(input);
   const totals = {
     ...result.totals,
-    mwstPercent: input.mwstPercent,
-    gesamtRabattPercent: input.gesamtRabattPercent ?? 0,
-    zuschlaege: input.zuschlaege ?? [],
+    // Eingaben mitspeichern, damit der Editor sie wieder vorbelegt
+    pauschalRabattPercent: input.pauschalRabattPercent ?? 0,
+    nachlass: input.nachlass ?? 0,
+    skontoPercent: input.skontoPercent ?? 0,
+    gruppenRabatte: input.gruppenRabatte ?? {},
   };
 
   const supabase = await createClient();
   const existingId = String(fd.get("calc_id") ?? "");
-
   const row = {
     project_id: projectId,
     positions: input.positions,
     totals,
-    margin: result.totals.margePercent,
+    margin: result.totals.margeProzent,
   };
 
   const { error } = existingId

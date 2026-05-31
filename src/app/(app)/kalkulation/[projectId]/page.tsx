@@ -55,8 +55,10 @@ export default async function KalkulationEditorPage({
         projectId={projectId}
         calcId={calc?.id ?? null}
         initialPositions={positions}
+        initialPauschalRabatt={meta.pauschalRabattPercent}
+        initialNachlass={meta.nachlass}
         initialMwst={meta.mwstPercent}
-        initialGesamtRabatt={meta.gesamtRabattPercent}
+        initialSkonto={meta.skontoPercent}
         products={products}
       />
     </div>
