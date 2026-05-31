@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "import:legacy": "tsx scripts/import-legacy.ts"
+    "import:legacy": "tsx scripts/import-legacy.ts",
+    "test:calc": "tsx src/lib/calc/engine.test.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
