@@ -26,17 +26,20 @@ import {
 } from "@/components/ui/select";
 import { saveProduct } from "@/app/(app)/produkte/actions";
 import { type ActionResult } from "@/lib/actions";
-import type { Product, ProductGroup } from "@/lib/types";
+import { AssetUpload } from "@/components/produkte/asset-upload";
+import type { Product, ProductAsset, ProductGroup } from "@/lib/types";
 
 const initial: ActionResult = { ok: false };
 
 export function ProductFormDialog({
   product,
   groups,
+  assets = [],
   trigger,
 }: {
   product?: Product;
   groups: ProductGroup[];
+  assets?: ProductAsset[];
   trigger: React.ReactNode;
 }) {
   const router = useRouter();
@@ -163,6 +166,13 @@ export function ProductFormDialog({
             </Button>
           </DialogFooter>
         </form>
+
+        {isEdit && product ? (
+          <div className="border-t pt-4">
+            <p className="mb-2 text-sm font-medium">Bilder &amp; Datenblätter</p>
+            <AssetUpload productId={product.id} assets={assets} />
+          </div>
+        ) : null}
       </DialogContent>
     </Dialog>
   );

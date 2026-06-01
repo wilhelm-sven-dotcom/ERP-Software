@@ -83,6 +83,44 @@ export async function deleteGroup(fd: FormData): Promise<void> {
   revalidatePath("/produkte");
 }
 
+/** Metadaten eines hochgeladenen Assets in product_assets schreiben. */
+export async function registerProductAsset(input: {
+  productId: string;
+  kind: "image" | "datasheet";
+  name: string;
+  storagePath: string;
+  mime: string | null;
+}): Promise<ActionResult> {
+  const guard = ensureConfigured();
+  if (guard) return guard;
+  if (!input.productId || !input.storagePath) return fail("Ungültige Daten.");
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("product_assets").insert({
+    product_id: input.productId,
+    kind: input.kind,
+    name: input.name,
+    storage_path: input.storagePath,
+    mime: input.mime,
+  });
+  if (error) return fail(error.message);
+
+  revalidatePath("/produkte");
+  return OK;
+}
+
+export async function deleteProductAsset(fd: FormData): Promise<void> {
+  const id = String(fd.get("id") ?? "");
+  const path = String(fd.get("path") ?? "");
+  if (!id || ensureConfigured()) return;
+  const supabase = await createClient();
+  if (path) {
+    await supabase.storage.from("product-assets").remove([path]);
+  }
+  await supabase.from("product_assets").delete().eq("id", id);
+  revalidatePath("/produkte");
+}
+
 export interface CsvProductRow {
   name?: string;
   hersteller?: string;
