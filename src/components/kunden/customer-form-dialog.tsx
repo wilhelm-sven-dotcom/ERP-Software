@@ -49,16 +49,25 @@ export function CustomerFormDialog({
   const [zip, setZip] = React.useState(customer?.zip ?? "");
   const [city, setCity] = React.useState(customer?.city ?? "");
 
+  // Duplikat-Warnung: erlaubt erneutes Absenden mit force=1
+  const [force, setForce] = React.useState(false);
+
   React.useEffect(() => {
     if (state.ok && open) {
       toast.success(isEdit ? "Kunde aktualisiert" : "Kunde angelegt");
       setOpen(false);
+      setForce(false);
       router.refresh();
       state.ok = false;
     } else if (state.error) {
       toast.error(state.error);
     }
   }, [state, open, isEdit, router]);
+
+  // Bei neuer Warnung force aktivieren, sodass der nächste Klick durchspeichert.
+  React.useEffect(() => {
+    if (state.warning) setForce(true);
+  }, [state.warning]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -79,6 +88,7 @@ export function CustomerFormDialog({
           {customer ? (
             <input type="hidden" name="id" value={customer.id} />
           ) : null}
+          {force ? <input type="hidden" name="force" value="1" /> : null}
 
           <div className="grid gap-2 sm:grid-cols-2">
             <div className="grid gap-2">
@@ -203,9 +213,19 @@ export function CustomerFormDialog({
             />
           </div>
 
+          {state.warning ? (
+            <div className="rounded-md border border-[var(--warning)]/40 bg-[var(--warning)]/10 p-3 text-sm">
+              {state.warning}
+            </div>
+          ) : null}
+
           <DialogFooter>
             <Button type="submit" disabled={pending}>
-              {pending ? "Speichern …" : "Speichern"}
+              {pending
+                ? "Speichern …"
+                : force
+                  ? "Trotzdem anlegen"
+                  : "Speichern"}
             </Button>
           </DialogFooter>
         </form>

@@ -1,7 +1,13 @@
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 /** Einheitliches Ergebnis für Server-Actions (für useActionState). */
-export type ActionResult = { ok: boolean; error?: string };
+export type ActionResult = {
+  ok: boolean;
+  error?: string;
+  /** Optionale Duplikat-Warnung (z. B. ähnlicher Kunde). Nutzer kann erneut
+   *  mit force=true absenden. */
+  warning?: string;
+};
 
 export const OK: ActionResult = { ok: true };
 

@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
+import { findCustomerDuplicates } from "@/lib/data/customers";
 import { ensureConfigured, fail, OK, type ActionResult } from "@/lib/actions";
+import { customerName } from "@/lib/format";
 
 function s(fd: FormData, key: string): string | null {
   const v = fd.get(key);
@@ -40,6 +42,24 @@ export async function saveCustomer(
 
   if (!payload.last_name && !payload.company) {
     return fail("Bitte mindestens Nachname oder Firma angeben.");
+  }
+
+  // Duplikatscheck (nur beim Neuanlegen, überspringbar via force=1)
+  const force = s(fd, "force") === "1";
+  if (!id && !force) {
+    const dups = await findCustomerDuplicates({
+      company: payload.company,
+      lastName: payload.last_name,
+      zip: payload.zip,
+      city: payload.city,
+    });
+    if (dups.length > 0) {
+      const names = dups.map((d) => customerName(d)).join(", ");
+      return {
+        ok: false,
+        warning: `Möglicher Doppeleintrag gefunden: ${names}. Trotzdem anlegen?`,
+      };
+    }
   }
 
   const supabase = await createClient();
