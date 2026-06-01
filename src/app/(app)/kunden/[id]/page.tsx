@@ -30,10 +30,11 @@ export default async function CustomerDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const customer = await getCustomer(id);
+  const [customer, activities] = await Promise.all([
+    getCustomer(id),
+    getCustomerActivities(id),
+  ]);
   if (!customer) notFound();
-
-  const activities = await getCustomerActivities(id);
   const address = [
     customer.street,
     [customer.zip, customer.city].filter(Boolean).join(" "),
