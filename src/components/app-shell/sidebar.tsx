@@ -3,13 +3,7 @@ import { NavLinks } from "@/components/app-shell/nav-links";
 import { SidebarFooter } from "@/components/app-shell/sidebar-footer";
 
 /** Feste Desktop-Sidebar (ab `lg` sichtbar). Mobil → siehe MobileNav (Sheet). */
-export function Sidebar({
-  supabaseConfigured,
-  userEmail,
-}: {
-  supabaseConfigured: boolean;
-  userEmail: string | null;
-}) {
+export function Sidebar() {
   return (
     <aside
       data-app-shell-chrome
@@ -19,10 +13,7 @@ export function Sidebar({
         <BrandLogo />
       </div>
       <NavLinks />
-      <SidebarFooter
-        supabaseConfigured={supabaseConfigured}
-        userEmail={userEmail}
-      />
+      <SidebarFooter />
     </aside>
   );
 }
