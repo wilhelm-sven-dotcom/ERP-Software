@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "import:legacy": "tsx scripts/import-legacy.ts",
-    "test:calc": "tsx src/lib/calc/engine.test.ts"
+    "test:calc": "tsx src/lib/calc/engine.test.ts",
+    "test:wirtschaft": "tsx src/lib/calc/wirtschaft.test.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
