@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Plus, FolderTree } from "lucide-react";
+import { Plus, FolderTree, Upload } from "lucide-react";
 
 import { PageHeader } from "@/components/shared/page-header";
 import { SupabaseNotice } from "@/components/shared/supabase-notice";
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table";
 import { ProductFormDialog } from "@/components/produkte/product-form-dialog";
 import { GroupManager } from "@/components/produkte/group-manager";
+import { CsvImportDialog } from "@/components/produkte/csv-import-dialog";
 import { getProducts, getProductGroups } from "@/lib/data/products";
 import { formatCurrency } from "@/lib/format";
 
@@ -42,6 +43,13 @@ export default async function ProduktePage() {
   return (
     <div>
       <PageHeader title="Produkte" description="Produktkatalog und Gruppen.">
+        <CsvImportDialog
+          trigger={
+            <Button variant="outline">
+              <Upload className="size-4" /> CSV-Import
+            </Button>
+          }
+        />
         <GroupManager
           groups={groups}
           trigger={

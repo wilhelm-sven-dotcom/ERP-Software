@@ -82,3 +82,87 @@ export async function deleteGroup(fd: FormData): Promise<void> {
   await supabase.from("product_groups").delete().eq("id", id);
   revalidatePath("/produkte");
 }
+
+export interface CsvProductRow {
+  name?: string;
+  hersteller?: string;
+  kategorie?: string;
+  artikelnr?: string;
+  einheit?: string;
+  ek?: string;
+  vk?: string;
+  gruppe?: string;
+}
+
+export interface ImportResult extends ActionResult {
+  imported?: number;
+  skipped?: number;
+}
+
+function toNum(v: string | undefined): number | null {
+  if (!v) return null;
+  const x = Number(String(v).replace(/\./g, "").replace(",", "."));
+  return Number.isFinite(x) ? x : null;
+}
+
+/** Produkte aus geparsten CSV-Zeilen importieren (Batch). Gruppen per Name auflösen/anlegen. */
+export async function importProducts(
+  rows: CsvProductRow[],
+): Promise<ImportResult> {
+  const guard = ensureConfigured();
+  if (guard) return guard;
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return fail("Keine Zeilen zum Importieren.");
+  }
+
+  const supabase = await createClient();
+
+  // Bestehende Gruppen laden (Name → id)
+  const { data: groups } = await supabase
+    .from("product_groups")
+    .select("id, name");
+  const groupMap = new Map<string, string>(
+    (groups ?? []).map((g) => [g.name.toLowerCase(), g.id]),
+  );
+
+  async function ensureGroup(name: string | undefined): Promise<string | null> {
+    const n = (name ?? "").trim();
+    if (!n) return null;
+    const existing = groupMap.get(n.toLowerCase());
+    if (existing) return existing;
+    const { data, error } = await supabase
+      .from("product_groups")
+      .insert({ name: n })
+      .select("id")
+      .single();
+    if (error || !data) return null;
+    groupMap.set(n.toLowerCase(), data.id);
+    return data.id;
+  }
+
+  let imported = 0;
+  let skipped = 0;
+  for (const r of rows) {
+    const name = (r.name ?? "").trim();
+    if (!name) {
+      skipped++;
+      continue;
+    }
+    const group_id = await ensureGroup(r.gruppe);
+    const { error } = await supabase.from("products").insert({
+      name,
+      manufacturer: r.hersteller?.trim() || null,
+      category: r.kategorie?.trim() || null,
+      sku: r.artikelnr?.trim() || null,
+      unit: r.einheit?.trim() || null,
+      price_purchase: toNum(r.ek),
+      price_sell: toNum(r.vk),
+      group_id,
+    });
+    if (error) skipped++;
+    else imported++;
+  }
+
+  revalidatePath("/produkte");
+  return { ok: true, imported, skipped };
+}

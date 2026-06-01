@@ -1,0 +1,5 @@
+name,hersteller,kategorie,artikelnr,einheit,ek,vk,gruppe
+PV-Modul 450W,Trina Solar,Modul,TSM-450,Stk,95.00,145.00,PV-Anlage
+Wechselrichter 10kW,SMA,Wechselrichter,STP-10,Stk,1200.00,1850.00,PV-Anlage
+Batteriespeicher 10kWh,BYD,Speicher,HVS-10,Stk,4200.00,6500.00,Speicher
+Wallbox 11kW,go-e,Wallbox,GO-11,Stk,450.00,790.00,Wallbox
