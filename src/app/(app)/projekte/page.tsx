@@ -24,17 +24,24 @@ import { statusVariant } from "@/lib/constants";
 
 export const metadata: Metadata = { title: "Projekte" };
 
-export default async function ProjektePage() {
-  const [projects, customers, employees] = await Promise.all([
+export default async function ProjektePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ neu?: string }>;
+}) {
+  const [{ neu }, projects, customers, employees] = await Promise.all([
+    searchParams,
     getProjects(),
     getCustomers(),
     getEmployees(),
   ]);
+  const openOnMount = neu === "1";
 
   const newButton = (
     <ProjectFormDialog
       customers={customers}
       employees={employees}
+      openOnMount={openOnMount}
       trigger={
         <Button>
           <Plus className="size-4" /> Neues Projekt

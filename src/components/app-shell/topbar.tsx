@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Plus } from "lucide-react";
 
@@ -30,10 +31,13 @@ export function Topbar() {
       <Breadcrumb />
       <div className="flex-1" />
       <ThemeToggle />
-      <Button size="sm" className="gap-1.5" title="Neues Projekt anlegen">
-        <Plus className="size-4" />
-        <span className="hidden sm:inline">Neues Projekt</span>
+      <Button size="sm" className="gap-1.5" title="Neues Projekt anlegen" asChild>
+        <Link href="/projekte?neu=1">
+          <Plus className="size-4" />
+          <span className="hidden sm:inline">Neues Projekt</span>
+        </Link>
       </Button>
     </header>
   );
 }
+

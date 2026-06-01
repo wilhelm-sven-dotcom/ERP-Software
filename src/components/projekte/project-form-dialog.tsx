@@ -43,16 +43,19 @@ export function ProjectFormDialog({
   customers,
   employees,
   defaultCustomerId,
+  openOnMount = false,
   trigger,
 }: {
   project?: Project;
   customers: CustomerOption[];
   employees: Employee[];
   defaultCustomerId?: string;
+  /** Dialog beim ersten Rendern automatisch öffnen (z. B. via ?neu=1). */
+  openOnMount?: boolean;
   trigger: React.ReactNode;
 }) {
   const router = useRouter();
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = React.useState(openOnMount);
   const [state, action, pending] = useActionState(saveProject, initial);
   const isEdit = Boolean(project);
 
