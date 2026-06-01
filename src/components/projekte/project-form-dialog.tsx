@@ -25,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { AddressAutocomplete } from "@/components/shared/address-autocomplete";
 import { saveProject } from "@/app/(app)/projekte/actions";
 import { type ActionResult } from "@/lib/actions";
 import { PROJECT_STATUSES } from "@/lib/constants";
@@ -58,6 +59,11 @@ export function ProjectFormDialog({
   const [open, setOpen] = React.useState(openOnMount);
   const [state, action, pending] = useActionState(saveProject, initial);
   const isEdit = Boolean(project);
+
+  // Adressfelder controlled für die Autovervollständigung.
+  const [street, setStreet] = React.useState(project?.street ?? "");
+  const [zip, setZip] = React.useState(project?.zip ?? "");
+  const [city, setCity] = React.useState(project?.city ?? "");
 
   React.useEffect(() => {
     if (state.ok && open) {
@@ -169,19 +175,36 @@ export function ProjectFormDialog({
           <div className="grid gap-2 sm:grid-cols-[2fr_1fr_2fr]">
             <div className="grid gap-2">
               <Label htmlFor="street">Straße (Montageort)</Label>
-              <Input
+              <AddressAutocomplete
                 id="street"
                 name="street"
-                defaultValue={project?.street ?? ""}
+                value={street}
+                onChange={setStreet}
+                onSelect={(p) => {
+                  setStreet(p.street);
+                  setZip(p.zip);
+                  setCity(p.city);
+                }}
+                placeholder="Straße eingeben für Vorschläge …"
               />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="zip">PLZ</Label>
-              <Input id="zip" name="zip" defaultValue={project?.zip ?? ""} />
+              <Input
+                id="zip"
+                name="zip"
+                value={zip}
+                onChange={(e) => setZip(e.target.value)}
+              />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="city">Ort</Label>
-              <Input id="city" name="city" defaultValue={project?.city ?? ""} />
+              <Input
+                id="city"
+                name="city"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+              />
             </div>
           </div>
 

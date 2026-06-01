@@ -25,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { AddressAutocomplete } from "@/components/shared/address-autocomplete";
 import { saveCustomer } from "@/app/(app)/kunden/actions";
 import { type ActionResult } from "@/lib/actions";
 import type { Customer } from "@/lib/types";
@@ -42,6 +43,11 @@ export function CustomerFormDialog({
   const [open, setOpen] = React.useState(false);
   const [state, action, pending] = useActionState(saveCustomer, initial);
   const isEdit = Boolean(customer);
+
+  // Adressfelder controlled, damit die Autovervollständigung sie füllen kann.
+  const [street, setStreet] = React.useState(customer?.street ?? "");
+  const [zip, setZip] = React.useState(customer?.zip ?? "");
+  const [city, setCity] = React.useState(customer?.city ?? "");
 
   React.useEffect(() => {
     if (state.ok && open) {
@@ -155,19 +161,36 @@ export function CustomerFormDialog({
           <div className="grid gap-2 sm:grid-cols-[2fr_1fr_2fr]">
             <div className="grid gap-2">
               <Label htmlFor="street">Straße</Label>
-              <Input
+              <AddressAutocomplete
                 id="street"
                 name="street"
-                defaultValue={customer?.street ?? ""}
+                value={street}
+                onChange={setStreet}
+                onSelect={(p) => {
+                  setStreet(p.street);
+                  setZip(p.zip);
+                  setCity(p.city);
+                }}
+                placeholder="Straße eingeben für Vorschläge …"
               />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="zip">PLZ</Label>
-              <Input id="zip" name="zip" defaultValue={customer?.zip ?? ""} />
+              <Input
+                id="zip"
+                name="zip"
+                value={zip}
+                onChange={(e) => setZip(e.target.value)}
+              />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="city">Ort</Label>
-              <Input id="city" name="city" defaultValue={customer?.city ?? ""} />
+              <Input
+                id="city"
+                name="city"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+              />
             </div>
           </div>
 
