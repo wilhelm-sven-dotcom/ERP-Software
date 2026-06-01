@@ -11,7 +11,8 @@
     "parse:preisliste": "tsx scripts/parse-preisliste.ts",
     "import:preisliste": "tsx scripts/import-preisliste.ts",
     "test:calc": "tsx src/lib/calc/engine.test.ts",
-    "test:wirtschaft": "tsx src/lib/calc/wirtschaft.test.ts"
+    "test:wirtschaft": "tsx src/lib/calc/wirtschaft.test.ts",
+    "gen:preisliste-sql": "tsx scripts/generate-preisliste-sql.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
