@@ -13,7 +13,10 @@ export function Topbar() {
   const router = useRouter();
 
   return (
-    <header className="bg-background/80 supports-[backdrop-filter]:bg-background/60 sticky top-0 z-30 flex h-14 items-center gap-1 border-b px-3 backdrop-blur">
+    <header
+      data-app-shell-chrome
+      className="bg-background/80 supports-[backdrop-filter]:bg-background/60 sticky top-0 z-30 flex h-14 items-center gap-1 border-b px-3 backdrop-blur"
+    >
       <MobileNav />
       <Button
         variant="ghost"

@@ -160,3 +160,17 @@
     font-family: var(--font-sans), Arial, Helvetica, sans-serif;
   }
 }
+
+/*
+  Druck: App-Shell (Sidebar/Topbar) ausblenden, nur Inhalt drucken.
+  Elemente mit `print:hidden` (Tailwind) verschwinden ohnehin; zusätzlich
+  blenden wir die Shell-Container per data-Attribut aus.
+*/
+@media print {
+  [data-app-shell-chrome] {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+}

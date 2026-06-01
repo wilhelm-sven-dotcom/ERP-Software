@@ -11,7 +11,10 @@ export function Sidebar({
   userEmail: string | null;
 }) {
   return (
-    <aside className="bg-sidebar text-sidebar-foreground border-sidebar-border hidden w-64 shrink-0 flex-col border-r lg:flex">
+    <aside
+      data-app-shell-chrome
+      className="bg-sidebar text-sidebar-foreground border-sidebar-border hidden w-64 shrink-0 flex-col border-r lg:flex"
+    >
       <div className="border-sidebar-border flex h-14 items-center border-b px-5">
         <BrandLogo />
       </div>
