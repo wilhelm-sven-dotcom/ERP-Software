@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "import:legacy": "tsx scripts/import-legacy.ts",
+    "parse:preisliste": "tsx scripts/parse-preisliste.ts",
+    "import:preisliste": "tsx scripts/import-preisliste.ts",
     "test:calc": "tsx src/lib/calc/engine.test.ts",
     "test:wirtschaft": "tsx src/lib/calc/wirtschaft.test.ts"
   },
@@ -41,6 +43,7 @@
     "eslint-config-next": "16.2.6",
     "tailwindcss": "^4",
     "tsx": "^4.22.4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "xlsx": "^0.18.5"
   }
 }

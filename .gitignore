@@ -40,3 +40,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Geschäftsdaten (Preisliste mit EK-Preisen/Margen) — nur lokal!
+scripts/ip_Preisliste.xlsm
+scripts/*.xlsm
+scripts/preisliste.json
+scripts/legacy-backup.json
