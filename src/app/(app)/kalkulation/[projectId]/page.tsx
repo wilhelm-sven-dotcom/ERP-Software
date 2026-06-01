@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { CalcEditor } from "@/components/kalkulation/calc-editor";
 import { getProject } from "@/lib/data/projects";
 import { getProducts } from "@/lib/data/products";
+import { getCalcTemplates } from "@/lib/data/templates";
 import {
   getCalculationByProject,
   readMeta,
@@ -27,9 +28,10 @@ export default async function KalkulationEditorPage({
   const project = await getProject(projectId);
   if (!project) notFound();
 
-  const [calc, products] = await Promise.all([
+  const [calc, products, templates] = await Promise.all([
     getCalculationByProject(projectId),
     getProducts(),
+    getCalcTemplates(),
   ]);
   const meta = readMeta(calc);
   const positions = readPositions(calc);
@@ -60,6 +62,7 @@ export default async function KalkulationEditorPage({
         initialMwst={meta.mwstPercent}
         initialSkonto={meta.skontoPercent}
         products={products}
+        templates={templates}
       />
     </div>
   );

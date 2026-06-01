@@ -83,27 +83,38 @@ export default async function VorlagenPage() {
             {calcTemplates.length === 0 ? (
               <EmptyState
                 title="Keine Kalkulationsvorlagen"
-                description="Vorlagen werden mit dem Kalkulationsmodul erstellt."
+                description="Vorlagen werden mit dem Kalkulationsmodul erstellt oder per Preislisten-Import angelegt."
               />
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead className="w-24">Standard</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {calcTemplates.map((t) => (
-                    <TableRow key={t.id}>
-                      <TableCell className="font-medium">{t.name}</TableCell>
-                      <TableCell>
-                        {t.is_default ? <Badge>Standard</Badge> : "–"}
-                      </TableCell>
+              <>
+                <p className="text-muted-foreground mb-3 text-sm">
+                  In der <strong>Kalkulation</strong> eines Projekts oben
+                  „Vorlage übernehmen" wählen — die Positionen werden geladen,
+                  du trägst nur die Mengen ein.
+                </p>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead className="text-right">Positionen</TableHead>
+                      <TableHead className="w-24">Standard</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {calcTemplates.map((t) => (
+                      <TableRow key={t.id}>
+                        <TableCell className="font-medium">{t.name}</TableCell>
+                        <TableCell className="text-muted-foreground text-right">
+                          {Array.isArray(t.positions) ? t.positions.length : 0}
+                        </TableCell>
+                        <TableCell>
+                          {t.is_default ? <Badge>Standard</Badge> : "–"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </>
             )}
           </CardContent>
         </Card>

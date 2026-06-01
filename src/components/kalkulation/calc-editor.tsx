@@ -27,7 +27,7 @@ import { calculate } from "@/lib/calc/engine";
 import { POSITION_GROUPS, type CalcPosition, type PositionGroup } from "@/lib/calc/types";
 import { saveCalculation } from "@/app/(app)/kalkulation/actions";
 import { formatCurrency, formatNumber } from "@/lib/format";
-import type { Product } from "@/lib/types";
+import type { CalcTemplate, Product } from "@/lib/types";
 
 let rowSeq = 0;
 function newRow(): CalcPosition {
@@ -53,6 +53,7 @@ export function CalcEditor({
   initialMwst,
   initialSkonto,
   products,
+  templates = [],
 }: {
   projectId: string;
   calcId: string | null;
@@ -62,6 +63,7 @@ export function CalcEditor({
   initialMwst: number;
   initialSkonto: number;
   products: Product[];
+  templates?: CalcTemplate[];
 }) {
   const router = useRouter();
   const [positions, setPositions] = React.useState<CalcPosition[]>(
@@ -106,15 +108,52 @@ export function CalcEditor({
     });
   }
 
+  /** Eine Kalkulationsvorlage laden: Positionen + Default-Rabatte/MwSt. */
+  function loadTemplate(templateId: string) {
+    const tpl = templates.find((t) => t.id === templateId);
+    if (!tpl) return;
+    const tplPositions = (Array.isArray(tpl.positions) ? tpl.positions : []) as CalcPosition[];
+    if (tplPositions.length === 0) {
+      toast.error("Diese Vorlage enthält keine Positionen.");
+      return;
+    }
+    // Frische IDs vergeben, Menge auf 0 als Vorschlag (Nutzer trägt Mengen ein)
+    const loaded: CalcPosition[] = tplPositions.map((p) => {
+      rowSeq += 1;
+      return {
+        ...p,
+        id: `tpl-${Date.now()}-${rowSeq}`,
+        menge: typeof p.menge === "number" ? p.menge : 0,
+      };
+    });
+    setPositions(loaded);
+
+    const d = (tpl.defaults ?? {}) as Record<string, unknown>;
+    if (typeof d.mwstPercent === "number") setMwst(String(d.mwstPercent));
+    if (typeof d.skontoPercent === "number") setSkonto(String(d.skontoPercent));
+    if (typeof d.pauschalRabattPercent === "number")
+      setPauschal(String(d.pauschalRabattPercent));
+    if (typeof d.nachlass === "number") setNachlass(String(d.nachlass));
+
+    toast.success(
+      `Vorlage „${tpl.name}" geladen (${loaded.length} Positionen). Bitte Mengen eintragen.`,
+    );
+  }
+
   async function onSave() {
     setSaving(true);
+    // Vorlagen-Zeilen ohne Menge (0) werden beim Speichern verworfen, damit nur
+    // die tatsächlich gewählten Positionen im Angebot landen.
+    const toSave = positions.filter(
+      (p) => (Number(p.menge) || 0) > 0 && p.bezeichnung.trim() !== "",
+    );
     const fd = new FormData();
     fd.set("project_id", projectId);
     if (calcId) fd.set("calc_id", calcId);
     fd.set(
       "payload",
       JSON.stringify({
-        positions,
+        positions: toSave,
         pauschalRabattPercent: Number(pauschal) || 0,
         nachlass: Number(nachlass) || 0,
         mwstPercent: Number(mwst) || 0,
@@ -250,9 +289,30 @@ export function CalcEditor({
         </Table>
       </div>
 
-      <Button variant="outline" size="sm" onClick={addRow}>
-        <Plus className="size-4" /> Position
-      </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="outline" size="sm" onClick={addRow}>
+          <Plus className="size-4" /> Position
+        </Button>
+        {templates.length > 0 ? (
+          <Select onValueChange={loadTemplate}>
+            <SelectTrigger size="sm" className="w-64">
+              <SelectValue placeholder="Vorlage übernehmen …" />
+            </SelectTrigger>
+            <SelectContent>
+              {templates.map((t) => (
+                <SelectItem key={t.id} value={t.id}>
+                  {t.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : null}
+        {positions.length > 0 ? (
+          <span className="text-muted-foreground text-xs">
+            {positions.length} Positionen
+          </span>
+        ) : null}
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
         <div className="grid h-fit grid-cols-2 gap-4 sm:grid-cols-4">
