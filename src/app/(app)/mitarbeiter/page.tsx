@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
+import { UserPlus } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import { InviteDialog } from "@/components/mitarbeiter/invite-dialog";
 import { PageHeader } from "@/components/shared/page-header";
 import { SupabaseNotice } from "@/components/shared/supabase-notice";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -29,10 +32,20 @@ export default async function MitarbeiterPage() {
         title="Mitarbeiter"
         description={
           isAdmin
-            ? "Rollen verwalten. Neue Mitarbeiter melden sich per Login an und erscheinen automatisch hier."
+            ? "Rollen verwalten und neue Mitarbeiter per E-Mail einladen."
             : "Übersicht der Mitarbeiter. Verwaltung nur für Administratoren."
         }
-      />
+      >
+        {isAdmin ? (
+          <InviteDialog
+            trigger={
+              <Button>
+                <UserPlus className="size-4" /> Mitarbeiter einladen
+              </Button>
+            }
+          />
+        ) : null}
+      </PageHeader>
 
       <SupabaseNotice />
 
