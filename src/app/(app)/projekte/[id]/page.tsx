@@ -23,6 +23,8 @@ import { getDocumentsByProject } from "@/lib/data/documents";
 import { getProjectTasks, getTaskCandidatesByProject } from "@/lib/data/workflow";
 import { getCurrentEmployee } from "@/lib/supabase/auth";
 import { getTimeEntriesByProject } from "@/lib/data/time";
+import { getProjectFiles } from "@/lib/data/project-files";
+import { ProjectFileDrop } from "@/components/projekte/project-file-drop";
 import { getLaborRate } from "@/lib/data/settings";
 import { TaskList } from "@/components/projekte/task-list";
 import { RueckfrageDialog } from "@/components/projekte/rueckfrage-dialog";
@@ -71,13 +73,15 @@ export default async function ProjectDetailPage({
     getDocumentsByProject(id, "auftragsbestaetigung"),
     getDocumentsByProject(id, "lieferschein"),
   ]);
-  const [tasks, taskCandidates, timeEntries, laborRate, me] = await Promise.all([
-    getProjectTasks(id),
-    getTaskCandidatesByProject(id),
-    getTimeEntriesByProject(id),
-    getLaborRate(),
-    getCurrentEmployee(),
-  ]);
+  const [tasks, taskCandidates, timeEntries, laborRate, me, projectFiles] =
+    await Promise.all([
+      getProjectTasks(id),
+      getTaskCandidatesByProject(id),
+      getTimeEntriesByProject(id),
+      getLaborRate(),
+      getCurrentEmployee(),
+      getProjectFiles(id),
+    ]);
   // Kandidaten je Aufgabe (für „angeboten an …" und „Annehmen").
   const candidatesByTask: Record<string, string[]> = {};
   for (const c of taskCandidates) {
@@ -303,6 +307,16 @@ export default async function ProjectDetailPage({
             candidatesByTask={candidatesByTask}
             currentEmployeeId={me?.id ?? null}
           />
+        </CardContent>
+      </Card>
+
+      {/* Projekt-Dateien (Datenblätter, Handbücher, Pläne) */}
+      <Card className="mb-4">
+        <CardHeader>
+          <CardTitle className="text-base">Dateien</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ProjectFileDrop projectId={id} files={projectFiles} />
         </CardContent>
       </Card>
 

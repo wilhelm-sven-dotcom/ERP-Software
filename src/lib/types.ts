@@ -295,6 +295,18 @@ export type TaskMessageWithAuthor = TaskMessage & {
   author?: { name: string | null } | null;
 };
 
+export interface ProjectFile {
+  id: string;
+  project_id: string;
+  name: string;
+  storage_path: string;
+  mime: string | null;
+  kind: string;
+  size: number | null;
+  uploaded_by: string | null;
+  created_at: string;
+}
+
 export type DocumentKind = "auftragsbestaetigung" | "lieferschein";
 
 export interface DocumentRecord {

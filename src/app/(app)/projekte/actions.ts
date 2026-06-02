@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/supabase/auth";
+import { logActivity } from "@/lib/data/activities";
 import { ensureConfigured, fail, OK, type ActionResult } from "@/lib/actions";
 
 function s(fd: FormData, key: string): string | null {
@@ -187,4 +188,46 @@ export async function addProjectActivity(
 
   revalidatePath(`/projekte/${projectId}`);
   return OK;
+}
+
+/** Metadaten einer hochgeladenen Projekt-Datei speichern. */
+export async function registerProjectFile(input: {
+  projectId: string;
+  name: string;
+  storagePath: string;
+  mime: string | null;
+  size: number | null;
+}): Promise<ActionResult> {
+  const guard = ensureConfigured();
+  if (guard) return guard;
+  if (!input.projectId || !input.storagePath) return fail("Ungültige Daten.");
+  const me = await getCurrentEmployee();
+  const supabase = await createClient();
+  const { error } = await supabase.from("project_files").insert({
+    project_id: input.projectId,
+    name: input.name,
+    storage_path: input.storagePath,
+    mime: input.mime,
+    size: input.size,
+    uploaded_by: me?.id ?? null,
+  });
+  if (error) return fail(error.message);
+  await logActivity({
+    projectId: input.projectId,
+    type: "datei",
+    title: `Datei hochgeladen: ${input.name}`,
+  });
+  revalidatePath(`/projekte/${input.projectId}`);
+  return OK;
+}
+
+export async function deleteProjectFile(fd: FormData): Promise<void> {
+  const id = String(fd.get("id") ?? "");
+  const path = String(fd.get("path") ?? "");
+  const projectId = String(fd.get("project_id") ?? "");
+  if (!id || ensureConfigured()) return;
+  const supabase = await createClient();
+  if (path) await supabase.storage.from("project-files").remove([path]);
+  await supabase.from("project_files").delete().eq("id", id);
+  if (projectId) revalidatePath(`/projekte/${projectId}`);
 }
