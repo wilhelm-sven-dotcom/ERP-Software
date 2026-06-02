@@ -40,9 +40,10 @@ export function VariantBar({
             <Star className="size-3.5 fill-current text-amber-500" />
           ) : null}
           <span>{v.name ?? "Variante"}</span>
-          {v.system_size_kwp ? (
+          {v.system_size_kwp || v.storage_kwh ? (
             <span className="text-muted-foreground text-xs">
-              {formatNumber(v.system_size_kwp)} kWp
+              {v.system_size_kwp ? `${formatNumber(v.system_size_kwp)} kWp` : ""}
+              {v.storage_kwh ? ` / ${formatNumber(v.storage_kwh)} kWh` : ""}
             </span>
           ) : null}
         </Link>

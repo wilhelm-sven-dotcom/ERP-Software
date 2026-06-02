@@ -65,6 +65,26 @@ export async function getCalculationsByProject(
   return (data ?? []) as Calculation[];
 }
 
+export type CalcSummary = Pick<
+  Calculation,
+  "id" | "project_id" | "name" | "is_selected" | "system_size_kwp" | "storage_kwh"
+>;
+
+/** Schlanke Varianten-Übersicht aller Projekte (für die Kalkulations-Liste). */
+export async function getAllCalculations(): Promise<CalcSummary[]> {
+  if (!isSupabaseConfigured()) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("calculations")
+    .select("id, project_id, name, is_selected, system_size_kwp, storage_kwh")
+    .order("created_at", { ascending: true });
+  if (error) {
+    console.error("getAllCalculations:", error.message);
+    return [];
+  }
+  return (data ?? []) as CalcSummary[];
+}
+
 export async function getCalculation(id: string): Promise<Calculation | null> {
   if (!isSupabaseConfigured()) return null;
   const supabase = await createClient();
