@@ -31,6 +31,7 @@ import { getSiteLog } from "@/lib/data/site-log";
 import { SiteLogCard } from "@/components/projekte/site-log-card";
 import { getLaborRate } from "@/lib/data/settings";
 import { TaskList } from "@/components/projekte/task-list";
+import { ProgressBar } from "@/components/projekte/progress-bar";
 import { InvoiceActions } from "@/components/dokumente/invoice-actions";
 import { RueckfrageDialog } from "@/components/projekte/rueckfrage-dialog";
 import { deleteProject } from "@/app/(app)/projekte/actions";
@@ -318,9 +319,26 @@ export default async function ProjectDetailPage({
 
       {/* Projektablauf / Aufgaben */}
       <Card className="mb-4">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Projektablauf</CardTitle>
-          <RueckfrageDialog projectId={id} employees={employees} />
+        <CardHeader className="gap-2">
+          <div className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">Projektablauf</CardTitle>
+            <RueckfrageDialog projectId={id} employees={employees} />
+          </div>
+          {tasks.length > 0 ? (
+            <ProgressBar
+              done={tasks.filter((t) => t.status === "erledigt").length}
+              total={tasks.length}
+              overdue={
+                tasks.filter(
+                  (t) =>
+                    t.status !== "erledigt" &&
+                    t.due_date != null &&
+                    t.due_date < new Date().toISOString().slice(0, 10),
+                ).length
+              }
+              showLabel
+            />
+          ) : null}
         </CardHeader>
         <CardContent>
           <TaskList

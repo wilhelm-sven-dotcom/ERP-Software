@@ -17,9 +17,11 @@ import {
 } from "@/components/ui/table";
 import { ProjectFormDialog } from "@/components/projekte/project-form-dialog";
 import { ClickableRow } from "@/components/projekte/clickable-row";
+import { ProgressBar } from "@/components/projekte/progress-bar";
 import { getProjects } from "@/lib/data/projects";
 import { getCustomers } from "@/lib/data/customers";
 import { getEmployees } from "@/lib/data/employees";
+import { getProjectsProgress } from "@/lib/data/workflow";
 import { customerName, formatNumber } from "@/lib/format";
 import { statusVariant } from "@/lib/constants";
 
@@ -36,6 +38,7 @@ export default async function ProjektePage({
     getCustomers(),
     getEmployees(),
   ]);
+  const progress = await getProjectsProgress(projects.map((p) => p.id));
   const openOnMount = neu === "1";
 
   const newButton = (
@@ -74,6 +77,7 @@ export default async function ProjektePage({
                 <TableHead>Titel</TableHead>
                 <TableHead>Kunde</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead className="w-40">Fortschritt</TableHead>
                 <TableHead className="text-right">kWp</TableHead>
                 <TableHead>Ort</TableHead>
               </TableRow>
@@ -96,6 +100,14 @@ export default async function ProjektePage({
                     <Badge variant={statusVariant(p.status)}>
                       {p.status ?? "–"}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <ProgressBar
+                      done={progress[p.id]?.done ?? 0}
+                      total={progress[p.id]?.total ?? 0}
+                      overdue={progress[p.id]?.overdue ?? 0}
+                      showLabel
+                    />
                   </TableCell>
                   <TableCell className="text-right">
                     {formatNumber(p.system_size_kwp)}

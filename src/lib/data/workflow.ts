@@ -145,6 +145,37 @@ export type TaskWithProject = ProjectTask & {
   project: { id: string; title: string | null } | null;
 };
 
+export interface ProjectProgress {
+  total: number;
+  done: number;
+  overdue: number;
+}
+
+/** Aufgaben-Fortschritt je Projekt (erledigt/gesamt + überfällig), gebündelt. */
+export async function getProjectsProgress(
+  projectIds: string[],
+): Promise<Record<string, ProjectProgress>> {
+  const out: Record<string, ProjectProgress> = {};
+  if (!isSupabaseConfigured() || projectIds.length === 0) return out;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("project_tasks")
+    .select("project_id, status, due_date")
+    .in("project_id", projectIds);
+  if (error) {
+    console.error("getProjectsProgress:", error.message);
+    return out;
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  for (const t of data ?? []) {
+    const p = (out[t.project_id] ??= { total: 0, done: 0, overdue: 0 });
+    p.total += 1;
+    if (t.status === "erledigt") p.done += 1;
+    else if (t.due_date && t.due_date < today) p.overdue += 1;
+  }
+  return out;
+}
+
 /** Offene Aufgaben des aktuellen Mitarbeiters (für das Dashboard). */
 export async function getMyOpenTasks(
   employeeId: string,

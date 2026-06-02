@@ -6,6 +6,7 @@ import { PipelineBoard } from "@/components/pipeline/pipeline-board";
 import { LeadIntakeDialog } from "@/components/vertrieb/lead-intake-dialog";
 import { getProjects } from "@/lib/data/projects";
 import { getSalesEmployees } from "@/lib/data/employees";
+import { getProjectsProgress } from "@/lib/data/workflow";
 
 export const metadata: Metadata = { title: "Pipeline" };
 
@@ -14,6 +15,7 @@ export default async function PipelinePage() {
     getProjects(),
     getSalesEmployees(),
   ]);
+  const progress = await getProjectsProgress(projects.map((p) => p.id));
 
   return (
     <div>
@@ -26,7 +28,7 @@ export default async function PipelinePage() {
 
       <SupabaseNotice />
 
-      <PipelineBoard projects={projects} />
+      <PipelineBoard projects={projects} progress={progress} />
     </div>
   );
 }

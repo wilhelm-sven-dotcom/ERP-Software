@@ -17,17 +17,21 @@ import {
 } from "@dnd-kit/core";
 
 import { moveProjectStatus } from "@/app/(app)/projekte/actions";
+import { ProgressBar } from "@/components/projekte/progress-bar";
 import { PROJECT_STATUSES } from "@/lib/constants";
 import { customerName, formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { ProjectWithCustomer } from "@/lib/data/projects";
+import type { ProjectProgress } from "@/lib/data/workflow";
 
 const OTHER = "Sonstige";
 
 export function PipelineBoard({
   projects,
+  progress = {},
 }: {
   projects: ProjectWithCustomer[];
+  progress?: Record<string, ProjectProgress>;
 }) {
   const router = useRouter();
   const known = React.useMemo(() => new Set<string>(PROJECT_STATUSES), []);
@@ -105,7 +109,7 @@ export function PipelineBoard({
           return (
             <Column key={status} status={status} count={items.length}>
               {items.map((p) => (
-                <Card key={p.id} project={p} />
+                <Card key={p.id} project={p} prog={progress[p.id]} />
               ))}
             </Column>
           );
@@ -113,7 +117,9 @@ export function PipelineBoard({
       </div>
 
       <DragOverlay>
-        {activeCard ? <CardShell project={activeCard} dragging /> : null}
+        {activeCard ? (
+          <CardShell project={activeCard} prog={progress[activeCard.id]} dragging />
+        ) : null}
       </DragOverlay>
     </DndContext>
   );
@@ -155,7 +161,13 @@ function Column({
   );
 }
 
-function Card({ project }: { project: ProjectWithCustomer }) {
+function Card({
+  project,
+  prog,
+}: {
+  project: ProjectWithCustomer;
+  prog?: ProjectProgress;
+}) {
   const { setNodeRef, attributes, listeners, isDragging } = useDraggable({
     id: project.id,
   });
@@ -166,16 +178,18 @@ function Card({ project }: { project: ProjectWithCustomer }) {
       {...listeners}
       className={cn("touch-none", isDragging && "opacity-40")}
     >
-      <CardShell project={project} />
+      <CardShell project={project} prog={prog} />
     </div>
   );
 }
 
 function CardShell({
   project: p,
+  prog,
   dragging,
 }: {
   project: ProjectWithCustomer;
+  prog?: ProjectProgress;
   dragging?: boolean;
 }) {
   return (
@@ -213,6 +227,14 @@ function CardShell({
             </span>
           ) : null}
         </div>
+      ) : null}
+      {prog && prog.total > 0 ? (
+        <ProgressBar
+          done={prog.done}
+          total={prog.total}
+          overdue={prog.overdue}
+          className="mt-2"
+        />
       ) : null}
     </div>
   );
