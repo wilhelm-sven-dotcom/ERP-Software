@@ -46,3 +46,36 @@ export async function getCalculationByProject(
   }
   return (data as Calculation) ?? null;
 }
+
+/** Alle Kalkulations-Varianten eines Projekts (älteste zuerst). */
+export async function getCalculationsByProject(
+  projectId: string,
+): Promise<Calculation[]> {
+  if (!isSupabaseConfigured()) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("calculations")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: true });
+  if (error) {
+    console.error("getCalculationsByProject:", error.message);
+    return [];
+  }
+  return (data ?? []) as Calculation[];
+}
+
+export async function getCalculation(id: string): Promise<Calculation | null> {
+  if (!isSupabaseConfigured()) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("calculations")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) {
+    console.error("getCalculation:", error.message);
+    return null;
+  }
+  return (data as Calculation) ?? null;
+}

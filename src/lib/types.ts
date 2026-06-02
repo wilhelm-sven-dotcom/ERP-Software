@@ -185,6 +185,10 @@ export interface CalcTemplate {
 export interface Calculation {
   id: string;
   project_id: string | null;
+  name: string | null;
+  is_selected: boolean;
+  system_size_kwp: number | null;
+  storage_kwh: number | null;
   positions: unknown[];
   totals: Record<string, unknown>;
   margin: number | null;

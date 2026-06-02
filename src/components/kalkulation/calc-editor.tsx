@@ -48,6 +48,7 @@ function newRow(): CalcPosition {
 export function CalcEditor({
   projectId,
   calcId,
+  calcName = "Standard",
   initialPositions,
   initialPauschalRabatt,
   initialNachlass,
@@ -61,6 +62,7 @@ export function CalcEditor({
 }: {
   projectId: string;
   calcId: string | null;
+  calcName?: string;
   initialPositions: CalcPosition[];
   initialPauschalRabatt: number;
   initialNachlass: number;
@@ -73,6 +75,7 @@ export function CalcEditor({
   templates?: CalcTemplate[];
 }) {
   const router = useRouter();
+  const [name, setName] = React.useState(calcName);
   const [positions, setPositions] = React.useState<CalcPosition[]>(
     initialPositions.length ? initialPositions : [newRow()],
   );
@@ -195,6 +198,7 @@ export function CalcEditor({
     const fd = new FormData();
     fd.set("project_id", projectId);
     if (calcId) fd.set("calc_id", calcId);
+    fd.set("name", name.trim() || "Standard");
     fd.set(
       "payload",
       JSON.stringify({
@@ -226,6 +230,19 @@ export function CalcEditor({
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Label htmlFor="calc-name" className="text-muted-foreground text-sm">
+          Variante
+        </Label>
+        <Input
+          id="calc-name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="h-8 max-w-xs"
+          placeholder="Name der Variante"
+        />
+      </div>
+
       <div className="bg-card overflow-x-auto rounded-lg border">
         <Table>
           <TableHeader>
