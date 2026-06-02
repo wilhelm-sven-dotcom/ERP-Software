@@ -29,7 +29,12 @@ export async function saveCompanySettings(
     zip: s(fd, "zip"),
     city: s(fd, "city"),
     phone: s(fd, "phone"),
+    fax: s(fd, "fax"),
     email: s(fd, "email"),
+    website: s(fd, "website"),
+    register: s(fd, "register"),
+    ceo: s(fd, "ceo"),
+    bank: s(fd, "bank"),
     logo_url: s(fd, "logo_url") || null,
   };
 

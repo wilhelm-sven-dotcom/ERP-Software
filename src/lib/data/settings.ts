@@ -9,7 +9,15 @@ export interface CompanySettings {
   zip: string;
   city: string;
   phone: string;
+  fax: string;
   email: string;
+  website: string;
+  /** Registereintrag, z. B. „Amtsgericht Weiden HRB 5725". */
+  register: string;
+  /** Geschäftsführung / Vertretungsberechtigte (für Unterschrift & Footer). */
+  ceo: string;
+  /** Bankverbindung (für Footer/Zahlungsbedingungen). */
+  bank: string;
   logo_url: string | null;
 }
 
@@ -19,7 +27,12 @@ const EMPTY_COMPANY: CompanySettings = {
   zip: "",
   city: "",
   phone: "",
+  fax: "",
   email: "",
+  website: "",
+  register: "",
+  ceo: "",
+  bank: "",
   logo_url: null,
 };
 
