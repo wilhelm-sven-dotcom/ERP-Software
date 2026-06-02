@@ -19,6 +19,8 @@ import { getProjects } from "@/lib/data/projects";
 import { getCustomers } from "@/lib/data/customers";
 import { getAdminStats } from "@/lib/data/stats";
 import { getMyOpenTasks } from "@/lib/data/workflow";
+import { getSalesEmployees } from "@/lib/data/employees";
+import { LeadIntakeDialog } from "@/components/vertrieb/lead-intake-dialog";
 import { getInbox, type InboxItem } from "@/lib/data/notifications";
 import { listUpcomingEvents } from "@/lib/google/calendar";
 import { getCurrentEmployee } from "@/lib/supabase/auth";
@@ -62,7 +64,10 @@ function Kpi({
 }
 
 export default async function DashboardPage() {
-  const me = await getCurrentEmployee();
+  const [me, salesEmployees] = await Promise.all([
+    getCurrentEmployee(),
+    getSalesEmployees(),
+  ]);
   const isAdmin = me?.role === "admin";
 
   return (
@@ -74,7 +79,9 @@ export default async function DashboardPage() {
             ? "Umsatz, verkaufte Leistung und Pipeline."
             : "Deine Aufgaben und Projekte."
         }
-      />
+      >
+        <LeadIntakeDialog salesEmployees={salesEmployees} />
+      </PageHeader>
       <SupabaseNotice />
       <div className="mb-4">
         <GlobalSearch variant="dashboard" />

@@ -7,9 +7,11 @@ export type ProjectWithCustomer = Project & {
     Customer,
     "id" | "first_name" | "last_name" | "company"
   > | null;
+  assignee?: { name: string | null } | null;
 };
 
-const SELECT = "*, customer:customers(id, first_name, last_name, company)";
+const SELECT =
+  "*, customer:customers(id, first_name, last_name, company), assignee:employees!assigned_employee_id(name)";
 
 export async function getProjects(): Promise<ProjectWithCustomer[]> {
   if (!isSupabaseConfigured()) return [];

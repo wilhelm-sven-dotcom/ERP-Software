@@ -200,6 +200,20 @@ function CardShell({
           {formatNumber(p.system_size_kwp)} kWp
         </p>
       ) : null}
+      {p.source || p.assignee?.name ? (
+        <div className="mt-1 flex flex-wrap items-center gap-1">
+          {p.source ? (
+            <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px]">
+              {p.source}
+            </span>
+          ) : null}
+          {p.assignee?.name ? (
+            <span className="text-muted-foreground text-[10px]">
+              · {p.assignee.name}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
