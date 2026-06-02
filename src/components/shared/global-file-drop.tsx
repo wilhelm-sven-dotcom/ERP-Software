@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Upload, Check, X, Search } from "lucide-react";
+import { Upload, Check, X, Search, Images } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import { createClient } from "@/lib/supabase/client";
 import { registerProjectFile } from "@/app/(app)/projekte/actions";
 import { registerProductAsset } from "@/app/(app)/produkte/actions";
 import { rankProductsForFilename } from "@/lib/asset-match";
+import { extractImagesFromPdf, type ExtractedImage } from "@/lib/pdf/extract-images";
 import { cn } from "@/lib/utils";
 import type { Product } from "@/lib/types";
 
@@ -29,11 +30,16 @@ type Target = "produkt" | "projekt";
 type Row = {
   uid: string;
   file: File;
+  isPdf: boolean;
   target: Target;
   productIds: string[];
   suggestedIds: string[];
   projectId: string;
   kind: string;
+  extracted: ExtractedImage[];
+  selectedImageIds: string[];
+  extracting: boolean;
+  extractDone: boolean;
   done: boolean;
   busy: boolean;
 };
@@ -64,12 +70,17 @@ export function GlobalFileDrop({
       return {
         uid: `f${++seq}`,
         file,
+        isPdf,
         target: strong.length > 0 ? "produkt" : "projekt",
         // Vorschlag: nur den besten Treffer vorauswählen — der Rest ist 1-Klick.
         productIds: strong.length > 0 ? [strong[0]] : [],
         suggestedIds: strong,
         projectId: "",
         kind: strong.length > 0 ? (isPdf ? "datasheet" : "image") : isPdf ? "datenblatt" : "dokument",
+        extracted: [],
+        selectedImageIds: [],
+        extracting: false,
+        extractDone: false,
         done: false,
         busy: false,
       };
@@ -93,6 +104,40 @@ export function GlobalFileDrop({
           productIds: has
             ? x.productIds.filter((id) => id !== productId)
             : [...x.productIds, productId],
+        };
+      }),
+    );
+  }
+
+  async function extractImages(row: Row) {
+    patch(row.uid, { extracting: true });
+    try {
+      const imgs = await extractImagesFromPdf(row.file);
+      patch(row.uid, {
+        extracted: imgs,
+        // größtes Bild vorausgewählt (Liste ist nach Fläche sortiert)
+        selectedImageIds: imgs.length > 0 ? [imgs[0].id] : [],
+        extracting: false,
+        extractDone: true,
+      });
+      if (imgs.length === 0) toast.info("Keine extrahierbaren Bilder gefunden.");
+    } catch (e) {
+      console.error(e);
+      patch(row.uid, { extracting: false, extractDone: true });
+      toast.error("Bilder konnten nicht extrahiert werden.");
+    }
+  }
+
+  function toggleImage(uid: string, imgId: string) {
+    setRows((r) =>
+      r.map((x) => {
+        if (x.uid !== uid) return x;
+        const has = x.selectedImageIds.includes(imgId);
+        return {
+          ...x,
+          selectedImageIds: has
+            ? x.selectedImageIds.filter((id) => id !== imgId)
+            : [...x.selectedImageIds, imgId],
         };
       }),
     );
@@ -123,7 +168,6 @@ export function GlobalFileDrop({
       }
       let ok = 0;
       for (const productId of row.productIds) {
-        // eslint-disable-next-line no-await-in-loop
         const res = await registerProductAsset({
           productId,
           kind: row.kind === "image" ? "image" : "datasheet",
@@ -138,7 +182,32 @@ export function GlobalFileDrop({
         patch(row.uid, { busy: false });
         return;
       }
-      toast.success(`„${row.file.name}" ${ok} Produkt(en) zugeordnet`);
+
+      // Aus dem PDF ausgewählte Bilder als Produktbild(er) mit ablegen.
+      const chosenImages = row.extracted.filter((img) => row.selectedImageIds.includes(img.id));
+      const baseName = row.file.name.replace(/\.pdf$/i, "");
+      for (const img of chosenImages) {
+        const imgPath = `shared/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.png`;
+        const up = await supabase.storage
+          .from(PRODUCT_BUCKET)
+          .upload(imgPath, img.blob, { contentType: "image/png" });
+        if (up.error) continue;
+        for (const productId of row.productIds) {
+          await registerProductAsset({
+            productId,
+            kind: "image",
+            name: `${baseName} (Bild)`,
+            storagePath: imgPath,
+            mime: "image/png",
+          });
+        }
+      }
+
+      toast.success(
+        `„${row.file.name}" ${ok} Produkt(en) zugeordnet${
+          chosenImages.length > 0 ? ` · ${chosenImages.length} Bild(er) übernommen` : ""
+        }`,
+      );
     } else {
       const path = `${row.projectId}/${Date.now()}-${rand}.${ext}`;
       const { error } = await supabase.storage.from(PROJECT_BUCKET).upload(path, row.file);
@@ -246,16 +315,69 @@ export function GlobalFileDrop({
           </div>
 
           {row.done ? null : row.target === "produkt" ? (
-            <ProductChooser
-              products={products}
-              suggestedIds={row.suggestedIds}
-              selectedIds={row.productIds}
-              kind={row.kind}
-              onToggle={(id) => toggleProduct(row.uid, id)}
-              onKind={(k) => patch(row.uid, { kind: k })}
-              productById={productById}
-              onClearSuggest={() => patch(row.uid, { productIds: row.suggestedIds })}
-            />
+            <>
+              <ProductChooser
+                products={products}
+                suggestedIds={row.suggestedIds}
+                selectedIds={row.productIds}
+                kind={row.kind}
+                onToggle={(id) => toggleProduct(row.uid, id)}
+                onKind={(k) => patch(row.uid, { kind: k })}
+                productById={productById}
+                onClearSuggest={() => patch(row.uid, { productIds: row.suggestedIds })}
+              />
+              {row.isPdf ? (
+                <div className="mt-2 border-t pt-2">
+                  {!row.extractDone ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={row.extracting}
+                      onClick={() => extractImages(row)}
+                    >
+                      <Images className="size-4" />
+                      {row.extracting ? "Bilder werden gelesen …" : "Bilder aus PDF extrahieren"}
+                    </Button>
+                  ) : row.extracted.length === 0 ? (
+                    <p className="text-muted-foreground text-xs">
+                      Keine extrahierbaren Bilder im PDF gefunden.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-muted-foreground text-xs">
+                        Bilder fürs Produktbild auswählen ({row.selectedImageIds.length} gewählt) —
+                        größtes ist vorausgewählt.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {row.extracted.map((img) => {
+                          const sel = row.selectedImageIds.includes(img.id);
+                          return (
+                            <button
+                              key={img.id}
+                              type="button"
+                              onClick={() => toggleImage(row.uid, img.id)}
+                              className={cn(
+                                "relative overflow-hidden rounded-md border-2 transition-colors",
+                                sel ? "border-primary" : "border-transparent hover:border-muted-foreground/40",
+                              )}
+                              title={`${img.width}×${img.height}`}
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={img.dataUrl} alt="" className="size-20 bg-white object-contain" />
+                              {sel ? (
+                                <span className="bg-primary text-primary-foreground absolute top-0.5 right-0.5 rounded-full p-0.5">
+                                  <Check className="size-3" />
+                                </span>
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </>
           ) : (
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Select value={row.projectId} onValueChange={(v) => patch(row.uid, { projectId: v })}>
@@ -293,7 +415,6 @@ export function GlobalFileDrop({
           size="sm"
           onClick={async () => {
             for (const row of rows.filter((r) => !r.done)) {
-              // eslint-disable-next-line no-await-in-loop
               await commit(row);
             }
           }}
