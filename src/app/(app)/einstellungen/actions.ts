@@ -45,6 +45,11 @@ export async function saveCompanySettings(
     register: s(fd, "register"),
     ceo: s(fd, "ceo"),
     bank: s(fd, "bank"),
+    iban: s(fd, "iban"),
+    bic: s(fd, "bic"),
+    tax_number: s(fd, "tax_number"),
+    vat_id: s(fd, "vat_id"),
+    tax_office: s(fd, "tax_office"),
     logo_url: s(fd, "logo_url") || null,
   };
 

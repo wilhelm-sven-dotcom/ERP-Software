@@ -8,6 +8,7 @@ import {
   FileText,
   ClipboardCheck,
   PackageCheck,
+  Receipt,
   ListChecks,
   Clock,
   TrendingUp,
@@ -61,6 +62,7 @@ export const navItems: NavItem[] = [
     href: "/lieferschein",
     icon: PackageCheck,
   },
+  { key: "rechnung", label: "Rechnungen", href: "/rechnung", icon: Receipt },
   {
     key: "wirtschaft",
     label: "Wirtschaftlichkeit",

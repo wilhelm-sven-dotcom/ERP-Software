@@ -27,6 +27,7 @@ import { getProjectFiles } from "@/lib/data/project-files";
 import { ProjectFileDrop } from "@/components/projekte/project-file-drop";
 import { getLaborRate } from "@/lib/data/settings";
 import { TaskList } from "@/components/projekte/task-list";
+import { InvoiceActions } from "@/components/dokumente/invoice-actions";
 import { RueckfrageDialog } from "@/components/projekte/rueckfrage-dialog";
 import { deleteProject } from "@/app/(app)/projekte/actions";
 import { createOfferFromCalculation } from "@/app/(app)/angebot/actions";
@@ -63,6 +64,7 @@ export default async function ProjectDetailPage({
     offers,
     auftraege,
     lieferscheine,
+    rechnungen,
   ] = await Promise.all([
     getProjectActivities(id),
     getCustomers(),
@@ -72,6 +74,7 @@ export default async function ProjectDetailPage({
     getOffersByProject(id),
     getDocumentsByProject(id, "auftragsbestaetigung"),
     getDocumentsByProject(id, "lieferschein"),
+    getDocumentsByProject(id, "rechnung"),
   ]);
   const [tasks, taskCandidates, timeEntries, laborRate, me, projectFiles] =
     await Promise.all([
@@ -366,8 +369,11 @@ export default async function ProjectDetailPage({
         </CardContent>
       </Card>
 
-      {/* Folgedokumente: Auftragsbestätigungen & Lieferscheine */}
-      {offers.length > 0 || auftraege.length > 0 || lieferscheine.length > 0 ? (
+      {/* Folgedokumente: Auftragsbestätigungen, Lieferscheine & Rechnungen */}
+      {offers.length > 0 ||
+      auftraege.length > 0 ||
+      lieferscheine.length > 0 ||
+      rechnungen.length > 0 ? (
         <div className="mb-4 grid gap-4 lg:grid-cols-2">
           <Card>
             <CardHeader>
@@ -392,8 +398,9 @@ export default async function ProjectDetailPage({
                       >
                         AB Nr. {d.doc_number ?? "–"}
                       </Link>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
                         <Badge variant="outline">{d.status}</Badge>
+                        <InvoiceActions sourceId={d.id} />
                         <form action={createDeliveryNote}>
                           <input type="hidden" name="document_id" value={d.id} />
                           <Button variant="ghost" size="sm" type="submit">
@@ -433,6 +440,57 @@ export default async function ProjectDetailPage({
                       <Badge variant="outline">{d.status}</Badge>
                     </li>
                   ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Rechnungen</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {rechnungen.length === 0 ? (
+                <p className="text-muted-foreground text-sm">
+                  Noch keine Rechnungen. Bei einer Auftragsbestätigung oben über
+                  „Rechnung“ eine Abschlags-, Schluss- oder Vollrechnung erstellen.
+                </p>
+              ) : (
+                <ul className="divide-y">
+                  {rechnungen.map((d) => {
+                    const overdue =
+                      d.payment_status !== "bezahlt" &&
+                      d.due_date != null &&
+                      d.due_date < new Date().toISOString().slice(0, 10);
+                    return (
+                      <li
+                        key={d.id}
+                        className="flex items-center justify-between gap-2 py-2"
+                      >
+                        <Link
+                          href={`/rechnung/${d.id}`}
+                          className="text-sm font-medium hover:underline"
+                        >
+                          {d.title ?? "Rechnung"} Nr. {d.doc_number ?? "–"}
+                        </Link>
+                        <Badge
+                          variant={
+                            d.payment_status === "bezahlt"
+                              ? "default"
+                              : overdue
+                                ? "destructive"
+                                : "outline"
+                          }
+                        >
+                          {d.payment_status === "bezahlt"
+                            ? "bezahlt"
+                            : overdue
+                              ? "überfällig"
+                              : "offen"}
+                        </Badge>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </CardContent>

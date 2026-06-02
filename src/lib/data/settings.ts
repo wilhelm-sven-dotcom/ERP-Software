@@ -16,8 +16,16 @@ export interface CompanySettings {
   register: string;
   /** Geschäftsführung / Vertretungsberechtigte (für Unterschrift & Footer). */
   ceo: string;
-  /** Bankverbindung (für Footer/Zahlungsbedingungen). */
+  /** Bankverbindung (Freitext, z. B. Bankname). */
   bank: string;
+  /** IBAN/BIC für den Rechnungsfuß. */
+  iban: string;
+  bic: string;
+  /** Steuernummer und USt-IdNr. (Pflichtangaben auf Rechnungen). */
+  tax_number: string;
+  vat_id: string;
+  /** Zuständiges Finanzamt (optional). */
+  tax_office: string;
   logo_url: string | null;
 }
 
@@ -33,6 +41,11 @@ const EMPTY_COMPANY: CompanySettings = {
   register: "",
   ceo: "",
   bank: "",
+  iban: "",
+  bic: "",
+  tax_number: "",
+  vat_id: "",
+  tax_office: "",
   logo_url: null,
 };
 

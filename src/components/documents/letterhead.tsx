@@ -114,7 +114,15 @@ export function DocumentFooter({ company }: { company: CompanySettings }) {
   ]
     .filter(Boolean)
     .join(" · ");
-  const line3 = [company.ceo ? `Geschäftsführung: ${company.ceo}` : "", company.register, company.bank]
+  const line3 = [company.ceo ? `Geschäftsführung: ${company.ceo}` : "", company.register]
+    .filter(Boolean)
+    .join(" · ");
+  const line4 = [
+    company.tax_number ? `Steuernr. ${company.tax_number}` : "",
+    company.vat_id ? `USt-IdNr. ${company.vat_id}` : "",
+    company.iban ? `IBAN ${company.iban}` : "",
+    company.bic ? `BIC ${company.bic}` : "",
+  ]
     .filter(Boolean)
     .join(" · ");
   return (
@@ -122,6 +130,7 @@ export function DocumentFooter({ company }: { company: CompanySettings }) {
       {line1 ? <p>{line1}</p> : null}
       {line2 ? <p>{line2}</p> : null}
       {line3 ? <p>{line3}</p> : null}
+      {line4 ? <p>{line4}</p> : null}
     </footer>
   );
 }

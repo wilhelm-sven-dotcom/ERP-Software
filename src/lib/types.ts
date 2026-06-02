@@ -327,7 +327,14 @@ export interface ProjectFile {
   created_at: string;
 }
 
-export type DocumentKind = "auftragsbestaetigung" | "lieferschein";
+export type DocumentKind =
+  | "auftragsbestaetigung"
+  | "lieferschein"
+  | "rechnung"
+  | "mahnung";
+
+/** Rechnungstyp (in document.meta.invoice_type). */
+export type InvoiceType = "voll" | "abschlag" | "schluss";
 
 export interface DocumentRecord {
   id: string;
@@ -342,6 +349,13 @@ export interface DocumentRecord {
   totals: Record<string, unknown>;
   meta: Record<string, unknown>;
   commission: string | null;
+  /** Rechnungs-Felder (nur bei kind='rechnung'/'mahnung'). */
+  invoice_date: string | null;
+  due_date: string | null;
+  paid_at: string | null;
+  payment_status: string | null;
+  paid_amount: number | null;
+  percentage: number | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;

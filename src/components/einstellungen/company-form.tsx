@@ -111,8 +111,32 @@ export function CompanyForm({
           <Input id="register" name="register" defaultValue={company.register} disabled={disabled} placeholder="Amtsgericht … HRB …" />
         </div>
         <div className="grid gap-2">
-          <Label htmlFor="bank">Bankverbindung</Label>
-          <Input id="bank" name="bank" defaultValue={company.bank} disabled={disabled} placeholder="IBAN / Bank" />
+          <Label htmlFor="bank">Bank</Label>
+          <Input id="bank" name="bank" defaultValue={company.bank} disabled={disabled} placeholder="Name der Bank" />
+        </div>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <Label htmlFor="iban">IBAN</Label>
+          <Input id="iban" name="iban" defaultValue={company.iban} disabled={disabled} placeholder="DE.. .... .... .... .... .." />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="bic">BIC</Label>
+          <Input id="bic" name="bic" defaultValue={company.bic} disabled={disabled} />
+        </div>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-3">
+        <div className="grid gap-2">
+          <Label htmlFor="tax_number">Steuernummer</Label>
+          <Input id="tax_number" name="tax_number" defaultValue={company.tax_number} disabled={disabled} />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="vat_id">USt-IdNr.</Label>
+          <Input id="vat_id" name="vat_id" defaultValue={company.vat_id} disabled={disabled} placeholder="DE…" />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="tax_office">Finanzamt</Label>
+          <Input id="tax_office" name="tax_office" defaultValue={company.tax_office} disabled={disabled} />
         </div>
       </div>
 

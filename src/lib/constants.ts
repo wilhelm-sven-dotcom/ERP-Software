@@ -41,6 +41,24 @@ export const DOCUMENT_STATUSES = [
   "Abgeschlossen",
 ] as const;
 
+/** Zahlungsstatus einer Rechnung. */
+export const PAYMENT_STATUSES = [
+  "offen",
+  "teilbezahlt",
+  "bezahlt",
+] as const;
+
+/**
+ * Standard-Zahlungsplan PV (Abschläge) — abgeleitet aus dem Textbaustein
+ * „Zahlungsbedingungen" (30/35/30/5). Die ersten drei sind Abschläge,
+ * der Rest (5 %) wird als Schlussrechnung automatisch ermittelt.
+ */
+export const INVOICE_SCHEME_PV = [
+  { label: "1. Abschlag bei Auftragserteilung", percent: 30 },
+  { label: "2. Abschlag bei Materiallieferung", percent: 35 },
+  { label: "3. Abschlag bei Montagebeginn", percent: 30 },
+] as const;
+
 /** Vorgabe-Einheiten und -Kategorien für den Produktkatalog (client-sicher). */
 export const DEFAULT_UNITS = [
   "Stk",
