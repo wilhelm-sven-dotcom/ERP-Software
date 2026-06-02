@@ -77,9 +77,20 @@ export function CalcEditor({
 }) {
   const router = useRouter();
   const [name, setName] = React.useState(calcName);
-  const [positions, setPositions] = React.useState<CalcPosition[]>(
-    initialPositions.length ? initialPositions : [newRow()],
-  );
+  const [positions, setPositions] = React.useState<CalcPosition[]>(() => {
+    if (!initialPositions.length) return [newRow()];
+    // Eindeutige IDs sicherstellen: doppelte IDs würden dazu führen, dass eine
+    // Änderung (z. B. Hybrid-Aufteilung) scheinbar mehrere Zeilen trifft.
+    const seen = new Set<string>();
+    return initialPositions.map((p) => {
+      if (!p.id || seen.has(p.id)) {
+        rowSeq += 1;
+        return { ...p, id: `pos-${Date.now()}-${rowSeq}` };
+      }
+      seen.add(p.id);
+      return p;
+    });
+  });
   const [pauschal, setPauschal] = React.useState(String(initialPauschalRabatt));
   const [nachlass, setNachlass] = React.useState(String(initialNachlass));
   const [mwst, setMwst] = React.useState(String(initialMwst));
