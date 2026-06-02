@@ -100,8 +100,12 @@ from (values
   ('Marktstammdatenregister',         'Abschluss'),
   ('Dokumentation & Übergabe',        'Abschluss')
 ) as m(title, grp)
-join public.workflow_templates wt on wt.id = ws.template_id and wt.phase = 'projekt'
-where ws.title = m.title and ws.group_label is null;
+where ws.title = m.title
+  and ws.group_label is null
+  and exists (
+    select 1 from public.workflow_templates wt
+    where wt.id = ws.template_id and wt.phase = 'projekt'
+  );
 
 -- ── Seed: Vorgänger der Standard-Projektschritte (Titel-Matching je Vorlage) ──
 -- Ergibt eine Mischung aus Reihenfolge und Parallelität, z. B. nach „Planung"

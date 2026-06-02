@@ -1,7 +1,7 @@
 -- ============================================================================
--- ip3 PV-Tool — NEUE Migrationen (Pakete 9 + 11–18) zum einmaligen Einspielen
--- Im Supabase SQL-Editor komplett ausführen. Alle Anweisungen sind idempotent
--- (if not exists / drop policy if exists), mehrfaches Ausführen ist unkritisch.
+-- ip3 PV-Tool — NEUE Migrationen (Pakete 9 + 11-18) zum einmaligen Einspielen
+-- Im Supabase SQL-Editor komplett ausfuehren. Alle Anweisungen sind idempotent
+-- (if not exists / drop policy if exists), mehrfaches Ausfuehren ist unkritisch.
 -- NICHT setup_all.sql verwenden, wenn das Grundschema bereits existiert.
 -- ============================================================================
 
@@ -108,8 +108,12 @@ from (values
   ('Marktstammdatenregister',         'Abschluss'),
   ('Dokumentation & Übergabe',        'Abschluss')
 ) as m(title, grp)
-join public.workflow_templates wt on wt.id = ws.template_id and wt.phase = 'projekt'
-where ws.title = m.title and ws.group_label is null;
+where ws.title = m.title
+  and ws.group_label is null
+  and exists (
+    select 1 from public.workflow_templates wt
+    where wt.id = ws.template_id and wt.phase = 'projekt'
+  );
 
 -- ── Seed: Vorgänger der Standard-Projektschritte (Titel-Matching je Vorlage) ──
 -- Ergibt eine Mischung aus Reihenfolge und Parallelität, z. B. nach „Planung"
