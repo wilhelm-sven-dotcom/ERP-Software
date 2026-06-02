@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { Plus } from "lucide-react";
 
 import { PageHeader } from "@/components/shared/page-header";
 import { SupabaseNotice } from "@/components/shared/supabase-notice";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { createCalcTemplate } from "@/app/(app)/vorlagen/actions";
 import {
   Card,
   CardContent,
@@ -33,7 +37,13 @@ export default async function VorlagenPage() {
       <PageHeader
         title="Vorlagen"
         description="Angebots- und Kalkulationsvorlagen."
-      />
+      >
+        <form action={createCalcTemplate}>
+          <Button type="submit">
+            <Plus className="size-4" /> Neue Kalkulationsvorlage
+          </Button>
+        </form>
+      </PageHeader>
 
       <SupabaseNotice />
 
@@ -98,17 +108,30 @@ export default async function VorlagenPage() {
                       <TableHead>Name</TableHead>
                       <TableHead className="text-right">Positionen</TableHead>
                       <TableHead className="w-24">Standard</TableHead>
+                      <TableHead className="w-24" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {calcTemplates.map((t) => (
                       <TableRow key={t.id}>
-                        <TableCell className="font-medium">{t.name}</TableCell>
+                        <TableCell className="font-medium">
+                          <Link
+                            href={`/vorlagen/${t.id}`}
+                            className="hover:underline"
+                          >
+                            {t.name}
+                          </Link>
+                        </TableCell>
                         <TableCell className="text-muted-foreground text-right">
                           {Array.isArray(t.positions) ? t.positions.length : 0}
                         </TableCell>
                         <TableCell>
                           {t.is_default ? <Badge>Standard</Badge> : "–"}
+                        </TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="sm" asChild>
+                            <Link href={`/vorlagen/${t.id}`}>Bearbeiten</Link>
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}

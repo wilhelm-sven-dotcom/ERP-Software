@@ -29,3 +29,20 @@ export async function getCalcTemplates(): Promise<CalcTemplate[]> {
   }
   return (data ?? []) as CalcTemplate[];
 }
+
+export async function getCalcTemplate(
+  id: string,
+): Promise<CalcTemplate | null> {
+  if (!isSupabaseConfigured()) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("calc_templates")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) {
+    console.error("getCalcTemplate:", error.message);
+    return null;
+  }
+  return (data as CalcTemplate) ?? null;
+}
