@@ -103,6 +103,11 @@ export interface Activity {
   created_at: string;
 }
 
+/** Aktivität samt eingebettetem Mitarbeiternamen (für die Timeline). */
+export type ActivityWithEmployee = Activity & {
+  employee?: { name: string | null } | null;
+};
+
 export interface Product {
   id: string;
   group_id: string | null;

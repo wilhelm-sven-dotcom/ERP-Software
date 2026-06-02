@@ -1,8 +1,12 @@
 import { Badge } from "@/components/ui/badge";
 import { formatDateTime } from "@/lib/format";
-import type { Activity } from "@/lib/types";
+import type { ActivityWithEmployee } from "@/lib/types";
 
-export function ActivityTimeline({ activities }: { activities: Activity[] }) {
+export function ActivityTimeline({
+  activities,
+}: {
+  activities: ActivityWithEmployee[];
+}) {
   if (activities.length === 0) {
     return (
       <p className="text-muted-foreground text-sm">
@@ -25,6 +29,7 @@ export function ActivityTimeline({ activities }: { activities: Activity[] }) {
             <span className="font-medium">{a.title}</span>
             <span className="text-muted-foreground text-xs">
               {formatDateTime(a.occurred_at ?? a.created_at)}
+              {a.employee?.name ? ` · ${a.employee.name}` : ""}
             </span>
           </div>
           {a.body ? (

@@ -1,6 +1,6 @@
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
-import type { Activity, Customer, Project } from "@/lib/types";
+import type { ActivityWithEmployee, Customer, Project } from "@/lib/types";
 
 export type ProjectWithCustomer = Project & {
   customer: Pick<
@@ -61,17 +61,17 @@ export async function getProjectsByCustomer(
 
 export async function getProjectActivities(
   projectId: string,
-): Promise<Activity[]> {
+): Promise<ActivityWithEmployee[]> {
   if (!isSupabaseConfigured()) return [];
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("activities")
-    .select("*")
+    .select("*, employee:employees(name)")
     .eq("project_id", projectId)
     .order("created_at", { ascending: false });
   if (error) {
     console.error("getProjectActivities:", error.message);
     return [];
   }
-  return (data ?? []) as Activity[];
+  return (data ?? []) as unknown as ActivityWithEmployee[];
 }

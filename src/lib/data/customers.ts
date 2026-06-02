@@ -1,6 +1,6 @@
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
-import type { Activity, Customer } from "@/lib/types";
+import type { ActivityWithEmployee, Customer } from "@/lib/types";
 
 /** Alle Kunden (nach Kundennummer). Leer, wenn Supabase nicht konfiguriert. */
 export async function getCustomers(): Promise<Customer[]> {
@@ -68,17 +68,17 @@ export async function findCustomerDuplicates(opts: {
 
 export async function getCustomerActivities(
   customerId: string,
-): Promise<Activity[]> {
+): Promise<ActivityWithEmployee[]> {
   if (!isSupabaseConfigured()) return [];
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("activities")
-    .select("*")
+    .select("*, employee:employees(name)")
     .eq("customer_id", customerId)
     .order("created_at", { ascending: false });
   if (error) {
     console.error("getCustomerActivities:", error.message);
     return [];
   }
-  return (data ?? []) as Activity[];
+  return (data ?? []) as unknown as ActivityWithEmployee[];
 }
