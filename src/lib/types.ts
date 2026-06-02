@@ -388,6 +388,19 @@ export interface OfferTextBlock {
   updated_at: string;
 }
 
+export interface Measurement {
+  id: string;
+  project_id: string;
+  label: string;
+  quantity: number | null;
+  unit: string | null;
+  area: number | null;
+  note: string | null;
+  sort: number;
+  created_by: string | null;
+  created_at: string;
+}
+
 export interface ServiceContract {
   id: string;
   customer_id: string | null;

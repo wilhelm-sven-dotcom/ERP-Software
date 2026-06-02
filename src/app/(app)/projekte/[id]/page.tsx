@@ -25,6 +25,8 @@ import { getCurrentEmployee } from "@/lib/supabase/auth";
 import { getTimeEntriesByProject } from "@/lib/data/time";
 import { getProjectFiles } from "@/lib/data/project-files";
 import { ProjectFileDrop } from "@/components/projekte/project-file-drop";
+import { getMeasurements } from "@/lib/data/measurements";
+import { AufmassCard } from "@/components/projekte/aufmass-card";
 import { getLaborRate } from "@/lib/data/settings";
 import { TaskList } from "@/components/projekte/task-list";
 import { InvoiceActions } from "@/components/dokumente/invoice-actions";
@@ -76,7 +78,7 @@ export default async function ProjectDetailPage({
     getDocumentsByProject(id, "lieferschein"),
     getDocumentsByProject(id, "rechnung"),
   ]);
-  const [tasks, taskCandidates, timeEntries, laborRate, me, projectFiles] =
+  const [tasks, taskCandidates, timeEntries, laborRate, me, projectFiles, measurements] =
     await Promise.all([
       getProjectTasks(id),
       getTaskCandidatesByProject(id),
@@ -84,6 +86,7 @@ export default async function ProjectDetailPage({
       getLaborRate(),
       getCurrentEmployee(),
       getProjectFiles(id),
+      getMeasurements(id),
     ]);
   // Kandidaten je Aufgabe (für „angeboten an …" und „Annehmen").
   const candidatesByTask: Record<string, string[]> = {};
@@ -325,6 +328,16 @@ export default async function ProjectDetailPage({
             predsByTask={predsByTask}
             currentEmployeeId={me?.id ?? null}
           />
+        </CardContent>
+      </Card>
+
+      {/* Aufmaß */}
+      <Card className="mb-4">
+        <CardHeader>
+          <CardTitle className="text-base">Aufmaß</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <AufmassCard projectId={id} measurements={measurements} />
         </CardContent>
       </Card>
 
