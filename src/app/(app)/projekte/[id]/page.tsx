@@ -20,7 +20,7 @@ import { getEmployees } from "@/lib/data/employees";
 import { getCalculationsByProject } from "@/lib/data/calculations";
 import { getOffersByProject } from "@/lib/data/offers";
 import { getDocumentsByProject } from "@/lib/data/documents";
-import { getProjectTasks, getTaskCandidatesByProject } from "@/lib/data/workflow";
+import { getProjectTasks, getTaskCandidatesByProject, getTaskDeps } from "@/lib/data/workflow";
 import { getCurrentEmployee } from "@/lib/supabase/auth";
 import { getTimeEntriesByProject } from "@/lib/data/time";
 import { getProjectFiles } from "@/lib/data/project-files";
@@ -86,6 +86,20 @@ export default async function ProjectDetailPage({
   const candidatesByTask: Record<string, string[]> = {};
   for (const c of taskCandidates) {
     (candidatesByTask[c.task_id] ??= []).push(c.employee_id);
+  }
+
+  // Vorgänger je Aufgabe (für „wartet auf …" und die Blockierung).
+  const taskDeps = await getTaskDeps(tasks.map((t) => t.id));
+  const taskById = new Map(tasks.map((t) => [t.id, t]));
+  const predsByTask: Record<string, { id: string; title: string; done: boolean }[]> = {};
+  for (const d of taskDeps) {
+    const pred = taskById.get(d.depends_on_task_id);
+    if (pred)
+      (predsByTask[d.task_id] ??= []).push({
+        id: pred.id,
+        title: pred.title,
+        done: pred.status === "erledigt",
+      });
   }
 
   // Nachkalkulation: Ist-Arbeitskosten aus erfassten Stunden × Satz
@@ -305,6 +319,7 @@ export default async function ProjectDetailPage({
             tasks={tasks}
             employees={employees}
             candidatesByTask={candidatesByTask}
+            predsByTask={predsByTask}
             currentEmployeeId={me?.id ?? null}
           />
         </CardContent>

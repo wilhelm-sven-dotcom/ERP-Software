@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { MessageSquare, Plus, Trash2, UserPlus, Undo2 } from "lucide-react";
+import { MessageSquare, Plus, Trash2, UserPlus, Undo2, Lock, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -40,11 +40,14 @@ import type { Employee, ProjectTask } from "@/lib/types";
 
 const UNASSIGNED = "__none__";
 
+type Pred = { id: string; title: string; done: boolean };
+
 export function TaskList({
   projectId,
   tasks,
   employees,
   candidatesByTask = {},
+  predsByTask = {},
   currentEmployeeId = null,
 }: {
   projectId: string;
@@ -52,13 +55,14 @@ export function TaskList({
   employees: Employee[];
   /** Mitarbeiter-IDs, denen die jeweilige Aufgabe angeboten wurde. */
   candidatesByTask?: Record<string, string[]>;
+  /** Vorgänger je Aufgabe (für „wartet auf …"). */
+  predsByTask?: Record<string, Pred[]>;
   currentEmployeeId?: string | null;
 }) {
   const router = useRouter();
   const [adding, setAdding] = React.useState(false);
   const [newTitle, setNewTitle] = React.useState("");
 
-  const open = tasks.filter((t) => t.status !== "erledigt").length;
   const empName = (id: string | null) =>
     id ? employees.find((e) => e.id === id)?.name ?? "Mitarbeiter" : "—";
 
@@ -77,6 +81,15 @@ export function TaskList({
 
   async function toggle(task: ProjectTask) {
     await run(() => toggleTask(fd(task, { done: String(task.status !== "erledigt") })));
+  }
+  async function revise(task: ProjectTask) {
+    if (
+      !window.confirm(
+        "Diesen Schritt revidieren? Abhängige, bereits erledigte Schritte werden wieder fällig.",
+      )
+    )
+      return;
+    await toggle(task);
   }
   async function changeAssignee(task: ProjectTask, value: string) {
     if (value === UNASSIGNED) {
@@ -136,106 +149,168 @@ export function TaskList({
     );
   }
 
-  // Nach group_label bündeln (parallele Aufgaben), Reihenfolge wie geliefert.
+  const active = tasks.filter((t) => t.status === "offen" || t.status === "angeboten");
+  const waiting = tasks.filter((t) => t.status === "wartet");
+  const done = tasks.filter((t) => t.status === "erledigt");
+
+  // Aktive Aufgaben nach Phase (group_label) bündeln → Parallelität sichtbar.
   const groups = new Map<string, ProjectTask[]>();
-  for (const t of tasks) {
+  for (const t of active) {
     const key = t.group_label?.trim() || "Aufgaben";
     (groups.get(key) ?? groups.set(key, []).get(key)!).push(t);
   }
 
+  const ActiveRow = (t: ProjectTask) => {
+    const offered = t.status === "angeboten";
+    const candidates = candidatesByTask[t.id] ?? [];
+    const iAmCandidate = currentEmployeeId ? candidates.includes(currentEmployeeId) : false;
+    const overdue = t.due_date && new Date(t.due_date) < new Date();
+    return (
+      <li key={t.id} className="flex flex-wrap items-center gap-2 py-2">
+        <input
+          type="checkbox"
+          checked={false}
+          onChange={() => toggle(t)}
+          className="size-4 shrink-0"
+          title="Erledigt"
+        />
+        <span className="min-w-40 flex-1 text-sm">
+          {t.title}
+          {offered ? (
+            <Badge variant="secondary" className="ml-2 align-middle">
+              angeboten an {candidates.map(empName).join(", ") || "—"}
+            </Badge>
+          ) : null}
+          {t.description ? (
+            <span className="text-muted-foreground block text-xs">{t.description}</span>
+          ) : null}
+        </span>
+
+        {iAmCandidate ? (
+          <Button size="sm" onClick={() => claim(t)}>
+            Annehmen
+          </Button>
+        ) : null}
+
+        <Input
+          type="date"
+          value={t.due_date ?? ""}
+          onChange={(e) => changeDue(t, e.target.value)}
+          className={cn("h-8 w-36", overdue && "border-destructive text-destructive")}
+        />
+
+        <Select
+          value={offered ? UNASSIGNED : t.assignee_employee_id ?? UNASSIGNED}
+          onValueChange={(v) => changeAssignee(t, v)}
+        >
+          <SelectTrigger size="sm" className="h-8 w-40">
+            <SelectValue placeholder="Verantwortlich" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={UNASSIGNED}>—</SelectItem>
+            {employees.map((e) => (
+              <SelectItem key={e.id} value={e.id}>
+                {e.name ?? e.email ?? "Mitarbeiter"}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <OfferDialog
+          employees={employees}
+          onOffer={(ids) => run(() => offerTask(fd(t, { employee_ids: ids.join(",") })))}
+          trigger={
+            <Button variant="ghost" size="icon" className="size-8" title="Anbieten an mehrere">
+              <UserPlus className="size-4" />
+            </Button>
+          }
+        />
+
+        <TaskThread
+          taskId={t.id}
+          taskTitle={t.title}
+          currentEmployeeId={currentEmployeeId}
+          trigger={
+            <Button variant="ghost" size="icon" className="size-8" title="Verlauf / Chat">
+              <MessageSquare className="size-4" />
+            </Button>
+          }
+        />
+
+        {t.assignee_employee_id ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            title="Zurückgeben"
+            onClick={() => handBack(t)}
+          >
+            <Undo2 className="size-4" />
+          </Button>
+        ) : null}
+
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8"
+          title="Aufgabe löschen"
+          onClick={() => remove(t)}
+        >
+          <Trash2 className="size-4" />
+        </Button>
+      </li>
+    );
+  };
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <p className="text-muted-foreground text-xs">
-        {open} von {tasks.length} Aufgaben offen
+        {done.length} von {tasks.length} erledigt
+        {waiting.length > 0 ? ` · ${waiting.length} wartet` : ""}
       </p>
 
-      {[...groups.entries()].map(([label, list]) => (
-        <div key={label}>
-          {groups.size > 1 ? (
-            <p className="text-muted-foreground mb-1 text-xs font-semibold">{label}</p>
-          ) : null}
+      {/* Jetzt fällig — aktive Aufgaben, nach Phase gebündelt */}
+      <section>
+        <h4 className="mb-1 text-sm font-semibold">Jetzt fällig ({active.length})</h4>
+        {active.length === 0 ? (
+          <p className="text-muted-foreground text-sm">Aktuell nichts zu tun. 🎉</p>
+        ) : (
+          [...groups.entries()].map(([label, list]) => (
+            <div key={label} className="mb-2">
+              {groups.size > 1 ? (
+                <p className="text-muted-foreground mb-0.5 text-xs font-semibold">{label}</p>
+              ) : null}
+              <ul className="divide-y">{list.map(ActiveRow)}</ul>
+            </div>
+          ))
+        )}
+      </section>
+
+      {/* Wartet — durch Vorgänger blockiert */}
+      {waiting.length > 0 ? (
+        <section>
+          <h4 className="text-muted-foreground mb-1 text-sm font-semibold">
+            Wartet ({waiting.length})
+          </h4>
           <ul className="divide-y">
-            {list.map((t) => {
-              const done = t.status === "erledigt";
-              const offered = t.status === "angeboten";
-              const candidates = candidatesByTask[t.id] ?? [];
-              const iAmCandidate = currentEmployeeId
-                ? candidates.includes(currentEmployeeId)
-                : false;
-              const overdue = !done && t.due_date && new Date(t.due_date) < new Date();
+            {waiting.map((t) => {
+              const preds = predsByTask[t.id] ?? [];
+              const blocking = preds.filter((p) => !p.done);
               return (
-                <li key={t.id} className="flex flex-wrap items-center gap-2 py-2">
-                  <input
-                    type="checkbox"
-                    checked={done}
-                    onChange={() => toggle(t)}
-                    className="size-4 shrink-0"
-                    title="Erledigt"
-                  />
-                  <span
-                    className={cn(
-                      "min-w-40 flex-1 text-sm",
-                      done && "text-muted-foreground line-through",
-                    )}
-                  >
+                <li
+                  key={t.id}
+                  className="text-muted-foreground flex flex-wrap items-center gap-2 py-2 text-sm"
+                >
+                  <Lock className="size-4 shrink-0" />
+                  <span className="min-w-40 flex-1">
                     {t.title}
-                    {offered ? (
-                      <Badge variant="secondary" className="ml-2 align-middle">
-                        angeboten an {candidates.map(empName).join(", ") || "—"}
-                      </Badge>
-                    ) : null}
-                    {t.description ? (
-                      <span className="text-muted-foreground block text-xs">
-                        {t.description}
-                      </span>
-                    ) : null}
+                    <span className="block text-xs">
+                      wartet auf:{" "}
+                      {(blocking.length > 0 ? blocking : preds)
+                        .map((p) => p.title)
+                        .join(", ") || "Vorgänger"}
+                    </span>
                   </span>
-
-                  {iAmCandidate ? (
-                    <Button size="sm" onClick={() => claim(t)}>
-                      Annehmen
-                    </Button>
-                  ) : null}
-
-                  <Input
-                    type="date"
-                    value={t.due_date ?? ""}
-                    onChange={(e) => changeDue(t, e.target.value)}
-                    className={cn(
-                      "h-8 w-36",
-                      overdue && "border-destructive text-destructive",
-                    )}
-                  />
-
-                  <Select
-                    value={offered ? UNASSIGNED : t.assignee_employee_id ?? UNASSIGNED}
-                    onValueChange={(v) => changeAssignee(t, v)}
-                  >
-                    <SelectTrigger size="sm" className="h-8 w-40">
-                      <SelectValue placeholder="Verantwortlich" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={UNASSIGNED}>—</SelectItem>
-                      {employees.map((e) => (
-                        <SelectItem key={e.id} value={e.id}>
-                          {e.name ?? e.email ?? "Mitarbeiter"}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  <OfferDialog
-                    employees={employees}
-                    onOffer={(ids) =>
-                      run(() => offerTask(fd(t, { employee_ids: ids.join(",") })))
-                    }
-                    trigger={
-                      <Button variant="ghost" size="icon" className="size-8" title="Anbieten an mehrere">
-                        <UserPlus className="size-4" />
-                      </Button>
-                    }
-                  />
-
                   <TaskThread
                     taskId={t.id}
                     taskTitle={t.title}
@@ -246,19 +321,6 @@ export function TaskList({
                       </Button>
                     }
                   />
-
-                  {t.assignee_employee_id ? (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-8"
-                      title="Zurückgeben"
-                      onClick={() => handBack(t)}
-                    >
-                      <Undo2 className="size-4" />
-                    </Button>
-                  ) : null}
-
                   <Button
                     variant="ghost"
                     size="icon"
@@ -272,8 +334,45 @@ export function TaskList({
               );
             })}
           </ul>
-        </div>
-      ))}
+        </section>
+      ) : null}
+
+      {/* Erledigt — eingeklappt, mit Revidieren */}
+      {done.length > 0 ? (
+        <details>
+          <summary className="text-muted-foreground cursor-pointer text-sm font-semibold">
+            Erledigt ({done.length})
+          </summary>
+          <ul className="mt-1 divide-y">
+            {done.map((t) => (
+              <li key={t.id} className="flex flex-wrap items-center gap-2 py-2">
+                <span className="text-muted-foreground min-w-40 flex-1 text-sm line-through">
+                  {t.title}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8"
+                  title="Revidieren (wieder öffnen)"
+                  onClick={() => revise(t)}
+                >
+                  <RotateCcw className="size-4" /> Revidieren
+                </Button>
+                <TaskThread
+                  taskId={t.id}
+                  taskTitle={t.title}
+                  currentEmployeeId={currentEmployeeId}
+                  trigger={
+                    <Button variant="ghost" size="icon" className="size-8" title="Verlauf / Chat">
+                      <MessageSquare className="size-4" />
+                    </Button>
+                  }
+                />
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
 
       {adding ? (
         <div className="flex gap-2">
