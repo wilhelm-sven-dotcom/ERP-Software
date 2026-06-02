@@ -4,7 +4,7 @@ import * as React from "react";
 import { useActionState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, CalendarClock } from "lucide-react";
 import { toast } from "sonner";
 import {
   DndContext,
@@ -37,6 +37,7 @@ import { saveDispoEntry, moveDispoEntry, deleteDispoEntry } from "@/app/(app)/pl
 import { type ActionResult } from "@/lib/actions";
 import { cn } from "@/lib/utils";
 import type { DispoEntryWithProject } from "@/lib/types";
+import type { CalendarEvent } from "@/lib/google/calendar";
 
 const NONE = "none";
 const initial: ActionResult = { ok: false };
@@ -54,11 +55,13 @@ export function PlantafelBoard({
   projects,
   days,
   entries,
+  calendarByEmployee = {},
 }: {
   employees: Person[];
   projects: Proj[];
   days: string[];
   entries: DispoEntryWithProject[];
+  calendarByEmployee?: Record<string, CalendarEvent[]>;
 }) {
   const router = useRouter();
   const [items, setItems] = React.useState(entries);
@@ -77,6 +80,12 @@ export function PlantafelBoard({
   function cellEntries(employeeId: string, date: string) {
     return items.filter(
       (e) => (e.employee_id ?? NONE) === employeeId && e.date === date,
+    );
+  }
+
+  function cellEvents(employeeId: string, date: string) {
+    return (calendarByEmployee[employeeId] ?? []).filter(
+      (ev) => ev.start && ev.start.slice(0, 10) === date,
     );
   }
 
@@ -132,6 +141,9 @@ export function PlantafelBoard({
                     >
                       {cellEntries(p.id, d).map((entry) => (
                         <DispoCard key={entry.id} entry={entry} />
+                      ))}
+                      {cellEvents(p.id, d).map((ev) => (
+                        <CalendarChip key={ev.id} event={ev} />
                       ))}
                     </Cell>
                   ))}
@@ -210,6 +222,28 @@ function DispoCard({ entry }: { entry: DispoEntryWithProject }) {
           {entry.project.title}
         </Link>
       ) : null}
+    </div>
+  );
+}
+
+/** Read-only Chip für einen Google-Kalender-Termin (nicht ziehbar). */
+function CalendarChip({ event }: { event: CalendarEvent }) {
+  const time =
+    event.start && !event.allDay
+      ? new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit" }).format(
+          new Date(event.start),
+        )
+      : null;
+  return (
+    <div
+      className="bg-muted text-muted-foreground flex items-start gap-1 rounded-md px-1.5 py-1 text-[11px]"
+      title={`Google-Kalender${time ? ` · ${time}` : ""}`}
+    >
+      <CalendarClock className="mt-0.5 size-3 shrink-0" />
+      <span className="truncate">
+        {time ? <span className="font-medium">{time} </span> : null}
+        {event.summary}
+      </span>
     </div>
   );
 }

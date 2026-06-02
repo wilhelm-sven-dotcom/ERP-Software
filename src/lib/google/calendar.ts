@@ -158,6 +158,46 @@ export interface CalendarEvent {
   allDay: boolean;
 }
 
+/** Termine eines Mitarbeiters in einem Zeitraum (read-only, z. B. für die Plantafel). */
+export async function listEventsByRange(
+  employeeId: string,
+  fromISODate: string,
+  toISODate: string,
+  max = 100,
+): Promise<CalendarEvent[]> {
+  if (!isGoogleConfigured() || !employeeId) return [];
+  const token = await ensureAccessToken(employeeId);
+  if (!token) return [];
+
+  const timeMin = new Date(`${fromISODate}T00:00:00`).toISOString();
+  const timeMax = new Date(`${toISODate}T23:59:59`).toISOString();
+  const params = new URLSearchParams({
+    timeMin,
+    timeMax,
+    singleEvents: "true",
+    orderBy: "startTime",
+    maxResults: String(max),
+  });
+  const res = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params.toString()}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!res.ok) return [];
+  const json = (await res.json()) as {
+    items?: {
+      id: string;
+      summary?: string;
+      start?: { dateTime?: string; date?: string };
+    }[];
+  };
+  return (json.items ?? []).map((e) => ({
+    id: e.id,
+    summary: e.summary ?? "(ohne Titel)",
+    start: e.start?.dateTime ?? e.start?.date ?? null,
+    allDay: Boolean(e.start?.date && !e.start?.dateTime),
+  }));
+}
+
 /** Kommende Termine des Mitarbeiters (read-only). */
 export async function listUpcomingEvents(
   employeeId: string,

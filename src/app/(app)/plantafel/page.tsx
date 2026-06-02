@@ -9,6 +9,7 @@ import { PlantafelBoard } from "@/components/plantafel/plantafel-board";
 import { getEmployees } from "@/lib/data/employees";
 import { getProjects } from "@/lib/data/projects";
 import { getDispoEntries } from "@/lib/data/dispo";
+import { isGoogleConfigured, listEventsByRange, type CalendarEvent } from "@/lib/google/calendar";
 import { customerName } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Plantafel" };
@@ -51,6 +52,19 @@ export default async function PlantafelPage({
   const employeeOptions = employees
     .filter((e) => e.active)
     .map((e) => ({ id: e.id, name: e.name ?? e.email ?? "Mitarbeiter" }));
+
+  // Google-Kalender-Termine je Mitarbeiter für die Woche (read-only einblenden).
+  const calendarByEmployee: Record<string, CalendarEvent[]> = {};
+  if (isGoogleConfigured()) {
+    const results = await Promise.all(
+      employeeOptions.map((e) =>
+        listEventsByRange(e.id, from, to).then((evs) => [e.id, evs] as const),
+      ),
+    );
+    for (const [empId, evs] of results) {
+      if (evs.length > 0) calendarByEmployee[empId] = evs;
+    }
+  }
   const projectOptions = projects.map((p) => ({
     id: p.id,
     title: p.title
@@ -88,6 +102,7 @@ export default async function PlantafelPage({
         projects={projectOptions}
         days={days}
         entries={entries}
+        calendarByEmployee={calendarByEmployee}
       />
     </div>
   );
