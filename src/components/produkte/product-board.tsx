@@ -35,6 +35,7 @@ import { Input } from "@/components/ui/input";
 import { ProductFormDialog } from "@/components/produkte/product-form-dialog";
 import { reorderGroups, reorderProducts } from "@/app/(app)/produkte/actions";
 import { formatCurrency } from "@/lib/format";
+import { productMatches } from "@/lib/search";
 import { cn } from "@/lib/utils";
 import type { Product, ProductAsset, ProductGroup } from "@/lib/types";
 
@@ -212,12 +213,9 @@ export function ProductBoard({
   }
 
   // ── Suche: gefilterte, nicht-ziehbare Ansicht ────────────────────────────
-  const q = query.trim().toLowerCase();
+  const q = query.trim();
   const filtering = q.length > 0;
-  const matches = (p: Product) =>
-    [p.name, p.manufacturer, p.sku, p.category]
-      .filter(Boolean)
-      .some((v) => String(v).toLowerCase().includes(q));
+  const matches = (p: Product) => productMatches(p, q);
 
   const activeProduct =
     activeType === "item" && activeId

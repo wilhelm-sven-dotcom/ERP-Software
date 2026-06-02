@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/format";
+import { productMatches } from "@/lib/search";
 import type { Product, ProductGroup } from "@/lib/types";
 
 /**
@@ -38,16 +39,10 @@ export function ProductPicker({
     [groups],
   );
 
-  // Nach Suche filtern und nach Gruppe gliedern.
+  // Nach Suche filtern (tokenisiert) und nach Gruppe gliedern.
   const grouped = React.useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const filtered = q
-      ? products.filter((p) =>
-          [p.name, p.manufacturer, p.sku, p.category]
-            .filter(Boolean)
-            .some((v) => String(v).toLowerCase().includes(q)),
-        )
-      : products;
+    const q = query.trim();
+    const filtered = q ? products.filter((p) => productMatches(p, q)) : products;
 
     const map = new Map<string, Product[]>();
     for (const p of filtered) {
