@@ -89,6 +89,61 @@ export async function createOfferFromCalculation(fd: FormData): Promise<void> {
   if (inserted) redirect(`/angebot/${inserted.id}`);
 }
 
+/** Angebot bearbeiten: Positionen (Reihenfolge/Inline) + Textbausteine speichern. */
+export async function updateOffer(fd: FormData): Promise<{ ok: boolean; error?: string }> {
+  if (ensureConfigured()) return { ok: false, error: "Supabase nicht konfiguriert." };
+  const id = String(fd.get("id") ?? "");
+  if (!id) return { ok: false, error: "Angebot fehlt." };
+
+  let payload: {
+    positions?: CalcPosition[];
+    blocks?: { kind: string; title: string | null; body: string | null }[];
+  };
+  try {
+    payload = JSON.parse(String(fd.get("payload") ?? "{}"));
+  } catch {
+    return { ok: false, error: "Ungültige Daten." };
+  }
+
+  const supabase = await createClient();
+  const { data: offerRow } = await supabase
+    .from("offers")
+    .select("meta, project_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!offerRow) return { ok: false, error: "Angebot nicht gefunden." };
+
+  const m = (offerRow.meta as Record<string, unknown>) ?? {};
+  const num = (v: unknown, d = 0) => (typeof v === "number" ? v : d);
+  const mwstPerGroup =
+    m.mwstPerGroup && typeof m.mwstPerGroup === "object"
+      ? (m.mwstPerGroup as Record<string, number>)
+      : undefined;
+  const positions = (payload.positions ?? []) as CalcPosition[];
+  const result = calculate({
+    positions,
+    pauschalRabattPercent: num(m.pauschalRabattPercent),
+    nachlass: num(m.nachlass),
+    mwstPercent: mwstPerGroup?.["Sonstiges"] ?? 19,
+    mwstPerGroup,
+    skontoPercent: num(m.skontoPercent),
+  });
+
+  const { error } = await supabase
+    .from("offers")
+    .update({
+      positions,
+      totals: result.totals,
+      meta: { ...m, blocks: payload.blocks ?? m.blocks ?? null },
+    })
+    .eq("id", id);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/angebot/${id}`);
+  if (offerRow.project_id) revalidatePath(`/projekte/${offerRow.project_id}`);
+  return { ok: true };
+}
+
 export async function setOfferStatus(fd: FormData): Promise<void> {
   const id = String(fd.get("id") ?? "");
   const status = String(fd.get("status") ?? "");

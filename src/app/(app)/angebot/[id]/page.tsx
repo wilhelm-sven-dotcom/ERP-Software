@@ -27,7 +27,13 @@ import { getProject } from "@/lib/data/projects";
 import { getCustomer } from "@/lib/data/customers";
 import { getCompanySettings } from "@/lib/data/settings";
 import { getTextBlocksFor } from "@/lib/data/text-blocks";
-import { getAllProductAssets, PRODUCT_ASSETS_BUCKET } from "@/lib/data/products";
+import {
+  getAllProductAssets,
+  PRODUCT_ASSETS_BUCKET,
+  getProducts,
+  getProductGroups,
+} from "@/lib/data/products";
+import { OfferEditor, type OfferBlock } from "@/components/angebot/offer-editor";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { deleteOffer } from "@/app/(app)/angebot/actions";
@@ -52,11 +58,36 @@ export default async function AngebotPage({
     getProject(offer.project_id),
     getCompanySettings(),
   ]);
-  const [customer, blocks, assetsByProduct] = await Promise.all([
+  const [customer, defaultBlocks, assetsByProduct, products, productGroups] = await Promise.all([
     project?.customer_id ? getCustomer(project.customer_id) : Promise.resolve(null),
     getTextBlocksFor(project?.project_type ?? null),
     getAllProductAssets(),
+    getProducts(),
+    getProductGroups(),
   ]);
+
+  // Bausteine: pro Angebot gespeicherte Reihenfolge (meta.blocks) bevorzugen,
+  // sonst aus den Vorlagen in kanonischer Reihenfolge ableiten.
+  const CANON = [
+    "intro",
+    "art_der_anlage",
+    "leistung",
+    "nicht_enthalten",
+    "optionale_leistungen",
+    "zahlungsbedingungen",
+    "gewaehrleistung",
+    "gueltigkeit",
+    "liefertermin",
+    "schluss",
+  ];
+  const savedBlocks = Array.isArray((offer.meta as Record<string, unknown>)?.blocks)
+    ? ((offer.meta as Record<string, unknown>).blocks as OfferBlock[])
+    : null;
+  const blockList: OfferBlock[] =
+    savedBlocks ??
+    [...defaultBlocks]
+      .sort((a, b) => CANON.indexOf(a.kind) - CANON.indexOf(b.kind))
+      .map((b) => ({ kind: b.kind, title: b.title, body: b.body }));
 
   const m = offer.meta as Record<string, unknown>;
   const num = (v: unknown, d = 0) => (typeof v === "number" ? v : d);
@@ -80,11 +111,15 @@ export default async function AngebotPage({
   const t = result.totals;
 
   // Bausteine nach Art gruppieren; Leistungsbausteine per Titel (Gruppe/Kategorie).
-  const block = (kind: string) => blocks.find((b) => b.kind === kind) ?? null;
+  const block = (kind: string) => blockList.find((b) => b.kind === kind) ?? null;
   const leistungByTitle = new Map(
-    blocks
+    blockList
       .filter((b) => b.kind === "leistung" && b.title)
       .map((b) => [b.title!.toLowerCase(), b.body ?? ""]),
+  );
+  // Textbausteine in gespeicherter Reihenfolge (ohne intro/leistung → Sondernutzung).
+  const orderedTextBlocks = blockList.filter(
+    (b) => b.kind !== "intro" && b.kind !== "leistung" && (b.title || b.body),
   );
 
   // Produktbilder je Position (öffentliche URL).
@@ -142,9 +177,17 @@ export default async function AngebotPage({
           description={project?.title ?? undefined}
         />
         <SupabaseNotice />
+        <OfferEditor
+          offerId={offer.id}
+          initialPositions={offer.positions as CalcPosition[]}
+          initialBlocks={blockList}
+          products={products}
+          productGroups={productGroups}
+          meta={meta}
+        />
       </div>
 
-      <article className="bg-card mx-auto max-w-3xl rounded-lg border p-8 print:border-0 print:p-0 print:shadow-none">
+      <article className="bg-card mx-auto max-w-3xl rounded-xl border p-8 print:border-0 print:p-0 print:shadow-none">
         <DocumentHeader
           company={company}
           rightTitle={`Angebot Nr. ${offer.offer_number ?? "–"}`}
@@ -185,12 +228,6 @@ export default async function AngebotPage({
           <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">
             {block("intro")!.body}
           </p>
-        ) : null}
-
-        {block("art_der_anlage") ? (
-          <Section title={block("art_der_anlage")!.title || "Art der Anlage"}>
-            <p className="whitespace-pre-wrap">{block("art_der_anlage")!.body}</p>
-          </Section>
         ) : null}
 
         {/* Lieferungen und Leistungen, nummeriert je Gruppe */}
@@ -236,12 +273,6 @@ export default async function AngebotPage({
             })}
           </ol>
         </Section>
-
-        {block("nicht_enthalten") ? (
-          <Section title={block("nicht_enthalten")!.title || "Explizit nicht enthalten"}>
-            <p className="whitespace-pre-wrap">{block("nicht_enthalten")!.body}</p>
-          </Section>
-        ) : null}
 
         {/* Preisübersicht */}
         <div className="mt-8">
@@ -342,27 +373,18 @@ export default async function AngebotPage({
           </p>
         ) : null}
 
-        {block("optionale_leistungen") ? (
-          <Section title={block("optionale_leistungen")!.title || "Optionale Leistungen"}>
-            <p className="whitespace-pre-wrap">{block("optionale_leistungen")!.body}</p>
-          </Section>
-        ) : null}
-
-        {/* Bedingungen */}
-        {(["zahlungsbedingungen", "gewaehrleistung", "gueltigkeit", "liefertermin"] as const).map(
-          (k) =>
-            block(k) ? (
-              <Section key={k} title={block(k)!.title || k}>
-                <p className="whitespace-pre-wrap">{block(k)!.body}</p>
-              </Section>
-            ) : null,
+        {/* Textbausteine in gespeicherter (per Drag & Drop änderbarer) Reihenfolge */}
+        {orderedTextBlocks.map((b, i) =>
+          b.kind === "schluss" && !b.title ? (
+            <p key={i} className="mt-6 whitespace-pre-wrap text-sm leading-relaxed">
+              {b.body}
+            </p>
+          ) : (
+            <Section key={i} title={b.title || b.kind}>
+              <p className="whitespace-pre-wrap">{b.body}</p>
+            </Section>
+          ),
         )}
-
-        {block("schluss") ? (
-          <p className="mt-6 whitespace-pre-wrap text-sm leading-relaxed">
-            {block("schluss")!.body}
-          </p>
-        ) : null}
 
         {/* Unterschrift */}
         <div className="mt-10 text-sm">
