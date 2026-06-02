@@ -1,6 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Users, FolderKanban, TrendingUp, Sun, Euro, BatteryCharging } from "lucide-react";
+import {
+  Users,
+  FolderKanban,
+  TrendingUp,
+  Sun,
+  Euro,
+  BatteryCharging,
+  UserPlus,
+  MessageSquare,
+} from "lucide-react";
 
 import { PageHeader } from "@/components/shared/page-header";
 import { SupabaseNotice } from "@/components/shared/supabase-notice";
@@ -10,6 +19,7 @@ import { getProjects } from "@/lib/data/projects";
 import { getCustomers } from "@/lib/data/customers";
 import { getAdminStats } from "@/lib/data/stats";
 import { getMyOpenTasks } from "@/lib/data/workflow";
+import { getInbox, type InboxItem } from "@/lib/data/notifications";
 import { listUpcomingEvents } from "@/lib/google/calendar";
 import { getCurrentEmployee } from "@/lib/supabase/auth";
 import { GlobalSearch } from "@/components/shared/global-search";
@@ -155,10 +165,11 @@ async function AdminDashboard() {
 }
 
 async function EmployeeDashboard({ employeeId }: { employeeId: string | null }) {
-  const [projects, tasks, events] = await Promise.all([
+  const [projects, tasks, events, inbox] = await Promise.all([
     getProjects(),
     employeeId ? getMyOpenTasks(employeeId) : Promise.resolve([]),
     employeeId ? listUpcomingEvents(employeeId) : Promise.resolve([]),
+    employeeId ? getInbox(employeeId) : Promise.resolve({ offered: [], unread: [], total: 0 }),
   ]);
   const myProjects = projects.filter((p) => p.assigned_employee_id === employeeId);
 
@@ -169,11 +180,28 @@ async function EmployeeDashboard({ employeeId }: { employeeId: string | null }) 
 
   return (
     <>
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-4">
         <Kpi label="Offene Aufgaben" value={formatNumber(tasks.length, 0)} icon={TrendingUp} />
-        <Kpi label="Überfällig" value={formatNumber(overdue.length, 0)} icon={TrendingUp} />
+        <Kpi label="Dir angeboten" value={formatNumber(inbox.offered.length, 0)} icon={UserPlus} />
+        <Kpi label="Ungelesen" value={formatNumber(inbox.unread.length, 0)} icon={MessageSquare} />
         <Kpi label="Meine Projekte" value={formatNumber(myProjects.length, 0)} icon={FolderKanban} href="/projekte" />
       </div>
+
+      {inbox.offered.length > 0 || inbox.unread.length > 0 ? (
+        <Card className="mt-4">
+          <CardHeader>
+            <CardTitle className="text-base">Posteingang</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {inbox.offered.length > 0 ? (
+              <InboxGroup title="Dir angeboten" items={inbox.offered} />
+            ) : null}
+            {inbox.unread.length > 0 ? (
+              <InboxGroup title="Ungelesene Nachrichten" items={inbox.unread} />
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Card>
@@ -221,6 +249,31 @@ async function EmployeeDashboard({ employeeId }: { employeeId: string | null }) 
         ) : null}
       </div>
     </>
+  );
+}
+
+function InboxGroup({ title, items }: { title: string; items: InboxItem[] }) {
+  return (
+    <div>
+      <p className="text-muted-foreground mb-1 text-xs font-semibold">
+        {title} ({items.length})
+      </p>
+      <ul className="divide-y">
+        {items.map((it) => (
+          <li key={`${it.reason}-${it.task_id}`} className="py-2 text-sm">
+            <Link
+              href={it.project_id ? `/projekte/${it.project_id}` : "/dashboard"}
+              className="font-medium hover:underline"
+            >
+              {it.title}
+            </Link>
+            <span className="text-muted-foreground ml-2 text-xs">
+              {it.reason === "angeboten" ? "annehmen?" : "neue Nachricht"}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
