@@ -18,7 +18,9 @@ import { SupabaseNotice } from "@/components/shared/supabase-notice";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getProjects, getMyLeads } from "@/lib/data/projects";
+import { getProducts } from "@/lib/data/products";
 import { getCustomers } from "@/lib/data/customers";
+import { GlobalFileDrop } from "@/components/shared/global-file-drop";
 import { getAdminStats } from "@/lib/data/stats";
 import { getMyOpenTasks } from "@/lib/data/workflow";
 import { getSalesEmployees } from "@/lib/data/employees";
@@ -66,11 +68,17 @@ function Kpi({
 }
 
 export default async function DashboardPage() {
-  const [me, salesEmployees] = await Promise.all([
+  const [me, salesEmployees, dropProjects, dropProducts] = await Promise.all([
     getCurrentEmployee(),
     getSalesEmployees(),
+    getProjects(),
+    getProducts(),
   ]);
   const isAdmin = me?.role === "admin";
+  const projectOptions = dropProjects.map((p) => ({
+    id: p.id,
+    title: p.title ?? "Ohne Titel",
+  }));
 
   return (
     <div>
@@ -88,6 +96,14 @@ export default async function DashboardPage() {
       <div className="mb-4">
         <GlobalSearch variant="dashboard" />
       </div>
+      <Card className="mb-4">
+        <CardHeader>
+          <CardTitle className="text-base">Dateien ablegen</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <GlobalFileDrop projects={projectOptions} products={dropProducts} />
+        </CardContent>
+      </Card>
       {isAdmin ? (
         <AdminDashboard />
       ) : me?.is_sales ? (

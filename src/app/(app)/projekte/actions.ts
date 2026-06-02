@@ -197,6 +197,7 @@ export async function registerProjectFile(input: {
   storagePath: string;
   mime: string | null;
   size: number | null;
+  kind?: string;
 }): Promise<ActionResult> {
   const guard = ensureConfigured();
   if (guard) return guard;
@@ -209,6 +210,7 @@ export async function registerProjectFile(input: {
     storage_path: input.storagePath,
     mime: input.mime,
     size: input.size,
+    kind: input.kind ?? "dokument",
     uploaded_by: me?.id ?? null,
   });
   if (error) return fail(error.message);
