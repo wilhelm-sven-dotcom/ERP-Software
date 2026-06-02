@@ -2,6 +2,8 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import type {
   ProjectTask,
+  TaskCandidate,
+  TaskMessageWithAuthor,
   WorkflowStep,
   WorkflowTemplate,
 } from "@/lib/types";
@@ -67,6 +69,45 @@ export async function getProjectTasks(
     return [];
   }
   return (data ?? []) as ProjectTask[];
+}
+
+/** Kandidaten (angebotene Mitarbeiter) zu den Aufgaben eines Projekts. */
+export async function getTaskCandidatesByProject(
+  projectId: string,
+): Promise<TaskCandidate[]> {
+  if (!isSupabaseConfigured()) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("task_candidates")
+    .select("task_id, employee_id, created_at, project_tasks!inner(project_id)")
+    .eq("project_tasks.project_id", projectId);
+  if (error) {
+    console.error("getTaskCandidatesByProject:", error.message);
+    return [];
+  }
+  return (data ?? []).map((r) => ({
+    task_id: r.task_id,
+    employee_id: r.employee_id,
+    created_at: r.created_at,
+  })) as TaskCandidate[];
+}
+
+/** Nachrichten-Thread einer Aufgabe (Chat + Ereignisse), mit Autorname. */
+export async function getTaskMessages(
+  taskId: string,
+): Promise<TaskMessageWithAuthor[]> {
+  if (!isSupabaseConfigured()) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("task_messages")
+    .select("*, author:employees(name)")
+    .eq("task_id", taskId)
+    .order("created_at", { ascending: true });
+  if (error) {
+    console.error("getTaskMessages:", error.message);
+    return [];
+  }
+  return (data ?? []) as unknown as TaskMessageWithAuthor[];
 }
 
 export type TaskWithProject = ProjectTask & {

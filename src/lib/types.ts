@@ -266,13 +266,34 @@ export interface ProjectTask {
   description: string | null;
   assignee_employee_id: string | null;
   due_date: string | null;
-  status: "offen" | "erledigt" | string;
+  status: "offen" | "angeboten" | "erledigt" | string;
+  /** Optionale Bündelung paralleler Aufgaben (z. B. „Vorbereitung"). */
+  group_label: string | null;
   sort: number;
   done_at: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
 }
+
+export interface TaskCandidate {
+  task_id: string;
+  employee_id: string;
+  created_at: string;
+}
+
+export interface TaskMessage {
+  id: string;
+  task_id: string;
+  author_employee_id: string | null;
+  body: string;
+  kind: "message" | "event" | string;
+  created_at: string;
+}
+
+export type TaskMessageWithAuthor = TaskMessage & {
+  author?: { name: string | null } | null;
+};
 
 export type DocumentKind = "auftragsbestaetigung" | "lieferschein";
 
