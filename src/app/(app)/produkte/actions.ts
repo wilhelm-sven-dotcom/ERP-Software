@@ -3,7 +3,33 @@
 import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
+import { getList } from "@/lib/data/settings";
+import { DEFAULT_CATEGORIES, DEFAULT_UNITS } from "@/lib/constants";
 import { ensureConfigured, fail, OK, type ActionResult } from "@/lib/actions";
+
+/** Einen neuen Wert zu einer definierten Liste (Einheiten/Kategorien) hinzufügen. */
+export async function addListValue(
+  kind: "units" | "categories",
+  value: string,
+): Promise<ActionResult & { list?: string[] }> {
+  const guard = ensureConfigured();
+  if (guard) return guard;
+  const v = value.trim();
+  if (!v) return fail("Bitte einen Wert eingeben.");
+  const defaults = kind === "units" ? DEFAULT_UNITS : DEFAULT_CATEGORIES;
+  const current = await getList(kind, defaults);
+  if (current.some((x) => x.toLowerCase() === v.toLowerCase())) {
+    return { ok: true, list: current };
+  }
+  const next = [...current, v];
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("settings")
+    .upsert({ key: kind, value: next }, { onConflict: "key" });
+  if (error) return fail(error.message);
+  revalidatePath("/produkte");
+  return { ok: true, list: next };
+}
 
 function s(fd: FormData, key: string): string | null {
   const v = fd.get(key);

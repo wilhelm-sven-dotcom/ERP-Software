@@ -18,6 +18,8 @@ import {
   getWholesalers,
   getAllProductWholesalers,
 } from "@/lib/data/wholesalers";
+import { getList } from "@/lib/data/settings";
+import { DEFAULT_CATEGORIES, DEFAULT_UNITS } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import type { Product } from "@/lib/types";
@@ -27,14 +29,23 @@ export const metadata: Metadata = { title: "Produkte" };
 const NONE = "__none__";
 
 export default async function ProduktePage() {
-  const [products, groups, assetsByProduct, wholesalers, wholesalersByProduct] =
-    await Promise.all([
-      getProducts(),
-      getProductGroups(),
-      getAllProductAssets(),
-      getWholesalers(),
-      getAllProductWholesalers(),
-    ]);
+  const [
+    products,
+    groups,
+    assetsByProduct,
+    wholesalers,
+    wholesalersByProduct,
+    units,
+    categories,
+  ] = await Promise.all([
+    getProducts(),
+    getProductGroups(),
+    getAllProductAssets(),
+    getWholesalers(),
+    getAllProductWholesalers(),
+    getList("units", DEFAULT_UNITS),
+    getList("categories", DEFAULT_CATEGORIES),
+  ]);
 
   // Gruppen-Reihenfolge nach `sort`, dann Name (alle Gruppen = Drop-Ziele).
   const sortedGroups = [...groups].sort(
@@ -42,13 +53,23 @@ export default async function ProduktePage() {
   );
   const groupOrder = sortedGroups.map((g) => g.id);
 
-  // Produkte je Container; getProducts liefert bereits nach sort/Name geordnet.
+  // Produkte je Container; innerhalb der Gruppe nach Kategorie gegliedert
+  // (Kategorie → manuelle Sortierung → Name), damit das Board Unterabschnitte zeigt.
   const items: Record<string, Product[]> = {};
   for (const id of groupOrder) items[id] = [];
   items[NONE] = [];
   for (const p of products) {
     const key = p.group_id && items[p.group_id] ? p.group_id : NONE;
     items[key].push(p);
+  }
+  const catKey = (p: Product) => p.category?.trim() || "￿"; // ohne Kategorie ans Ende
+  for (const key of Object.keys(items)) {
+    items[key].sort(
+      (a, b) =>
+        catKey(a).localeCompare(catKey(b)) ||
+        a.sort - b.sort ||
+        a.name.localeCompare(b.name),
+    );
   }
 
   // Öffentliche URLs der Thumbnails serverseitig auflösen.
@@ -67,6 +88,8 @@ export default async function ProduktePage() {
   const newButton = (
     <ProductFormDialog
       groups={groups}
+      units={units}
+      categories={categories}
       trigger={
         <Button>
           <Plus className="size-4" /> Neues Produkt
@@ -117,6 +140,8 @@ export default async function ProduktePage() {
           assetsByProduct={assetsByProduct}
           wholesalers={wholesalers}
           wholesalersByProduct={wholesalersByProduct}
+          units={units}
+          categories={categories}
         />
       )}
     </div>

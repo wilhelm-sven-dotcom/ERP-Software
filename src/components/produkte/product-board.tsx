@@ -51,6 +51,35 @@ type Thumbs = Record<string, string | null>;
 type AssetsMap = Record<string, ProductAsset[]>;
 type WholesalerLinks = Record<string, ProductWholesaler[]>;
 
+type BoardEntry = { header?: string; product?: Product };
+
+/**
+ * Produktliste mit Kategorie-Zwischenüberschriften anreichern: vor dem ersten
+ * Produkt einer Kategorie (bei Wechsel gegenüber dem vorigen) wird ein Header
+ * eingeschoben. Die Produktreihenfolge selbst bleibt unverändert (DnD-kompatibel).
+ */
+function withSubHeaders(products: Product[]): BoardEntry[] {
+  const out: BoardEntry[] = [];
+  let last: string | null = null;
+  for (const p of products) {
+    const cat = p.category?.trim() || "Ohne Kategorie";
+    if (cat !== last) {
+      out.push({ header: cat });
+      last = cat;
+    }
+    out.push({ product: p });
+  }
+  return out;
+}
+
+function SubHeader({ label }: { label: string }) {
+  return (
+    <div className="bg-muted/30 text-muted-foreground px-3 py-1 text-xs font-semibold">
+      {label}
+    </div>
+  );
+}
+
 export function ProductBoard({
   groups,
   initialGroupOrder,
@@ -59,6 +88,8 @@ export function ProductBoard({
   assetsByProduct,
   wholesalers,
   wholesalersByProduct,
+  units,
+  categories,
 }: {
   groups: ProductGroup[];
   /** Reihenfolge der echten Gruppen-Container (group_id). */
@@ -69,6 +100,8 @@ export function ProductBoard({
   assetsByProduct: AssetsMap;
   wholesalers: Wholesaler[];
   wholesalersByProduct: WholesalerLinks;
+  units: string[];
+  categories: string[];
 }) {
   const router = useRouter();
   const [groupOrder, setGroupOrder] =
@@ -277,6 +310,8 @@ export function ProductBoard({
                     assets={assetsByProduct[p.id] ?? []}
                     wholesalers={wholesalers}
                     links={wholesalersByProduct[p.id] ?? []}
+                    units={units}
+                    categories={categories}
                     thumb={thumbs[p.id] ?? null}
                   />
                 ))}
@@ -310,17 +345,23 @@ export function ProductBoard({
                     items={(items[c] ?? []).map((p) => p.id)}
                     strategy={verticalListSortingStrategy}
                   >
-                    {(items[c] ?? []).map((p) => (
-                      <SortableItem
-                        key={p.id}
-                        product={p}
-                        groups={groups}
-                        assets={assetsByProduct[p.id] ?? []}
-                        wholesalers={wholesalers}
-                        links={wholesalersByProduct[p.id] ?? []}
-                        thumb={thumbs[p.id] ?? null}
-                      />
-                    ))}
+                    {withSubHeaders(items[c] ?? []).map((entry) =>
+                      entry.header ? (
+                        <SubHeader key={`h-${entry.header}`} label={entry.header} />
+                      ) : (
+                        <SortableItem
+                          key={entry.product!.id}
+                          product={entry.product!}
+                          groups={groups}
+                          assets={assetsByProduct[entry.product!.id] ?? []}
+                          wholesalers={wholesalers}
+                          links={wholesalersByProduct[entry.product!.id] ?? []}
+                          units={units}
+                          categories={categories}
+                          thumb={thumbs[entry.product!.id] ?? null}
+                        />
+                      ),
+                    )}
                   </SortableContext>
                 </SortableGroup>
               ))}
@@ -335,17 +376,23 @@ export function ProductBoard({
                   items={(items[NONE] ?? []).map((p) => p.id)}
                   strategy={verticalListSortingStrategy}
                 >
-                  {(items[NONE] ?? []).map((p) => (
-                    <SortableItem
-                      key={p.id}
-                      product={p}
-                      groups={groups}
-                      assets={assetsByProduct[p.id] ?? []}
-                      wholesalers={wholesalers}
-                      links={wholesalersByProduct[p.id] ?? []}
-                      thumb={thumbs[p.id] ?? null}
-                    />
-                  ))}
+                  {withSubHeaders(items[NONE] ?? []).map((entry) =>
+                    entry.header ? (
+                      <SubHeader key={`h-${entry.header}`} label={entry.header} />
+                    ) : (
+                      <SortableItem
+                        key={entry.product!.id}
+                        product={entry.product!}
+                        groups={groups}
+                        assets={assetsByProduct[entry.product!.id] ?? []}
+                        wholesalers={wholesalers}
+                        links={wholesalersByProduct[entry.product!.id] ?? []}
+                        units={units}
+                        categories={categories}
+                        thumb={thumbs[entry.product!.id] ?? null}
+                      />
+                    ),
+                  )}
                 </SortableContext>
               </DroppableNone>
             </div>
@@ -524,6 +571,8 @@ function SortableItem({
   assets,
   wholesalers,
   links,
+  units,
+  categories,
   thumb,
 }: {
   product: Product;
@@ -531,6 +580,8 @@ function SortableItem({
   assets: ProductAsset[];
   wholesalers: Wholesaler[];
   links: ProductWholesaler[];
+  units: string[];
+  categories: string[];
   thumb: string | null;
 }) {
   const { setNodeRef, transform, transition, isDragging, attributes, listeners } =
@@ -563,6 +614,8 @@ function SortableItem({
             assets={assets}
             wholesalers={wholesalers}
             productWholesalers={links}
+            units={units}
+            categories={categories}
             trigger={
               <Button variant="ghost" size="sm">
                 Bearbeiten
@@ -582,6 +635,8 @@ function ProductRow({
   assets,
   wholesalers,
   links,
+  units,
+  categories,
   thumb,
 }: {
   product: Product;
@@ -589,6 +644,8 @@ function ProductRow({
   assets: ProductAsset[];
   wholesalers: Wholesaler[];
   links: ProductWholesaler[];
+  units: string[];
+  categories: string[];
   thumb: string | null;
 }) {
   return (
@@ -602,6 +659,8 @@ function ProductRow({
           assets={assets}
           wholesalers={wholesalers}
           productWholesalers={links}
+          units={units}
+          categories={categories}
           trigger={
             <Button variant="ghost" size="sm">
               Bearbeiten

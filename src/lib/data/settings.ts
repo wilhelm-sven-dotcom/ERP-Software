@@ -54,3 +54,22 @@ export async function getCompanySettings(): Promise<CompanySettings> {
 export async function getDefaults(): Promise<{ vat_percent: number }> {
   return getSetting("defaults", { vat_percent: 19 });
 }
+
+/** Eine in settings hinterlegte Stringliste (oder Defaults). */
+export async function getList(
+  key: "units" | "categories",
+  defaults: string[],
+): Promise<string[]> {
+  const value = await getSetting<string[]>(key, defaults);
+  return Array.isArray(value) && value.length > 0 ? value : defaults;
+}
+
+/** MwSt-Vorbelegung je Produktgruppe (§ 12 Abs. 3 UStG: PV+Speicher 0 %). */
+export async function getVatPerGroup(): Promise<Record<string, number>> {
+  return getSetting<Record<string, number>>("vat_per_group", {
+    "PV-Anlage": 0,
+    Speicher: 0,
+    Wallbox: 19,
+    Sonstiges: 19,
+  });
+}

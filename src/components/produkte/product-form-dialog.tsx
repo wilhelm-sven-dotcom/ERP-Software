@@ -28,6 +28,8 @@ import { saveProduct } from "@/app/(app)/produkte/actions";
 import { type ActionResult } from "@/lib/actions";
 import { AssetUpload } from "@/components/produkte/asset-upload";
 import { ProductWholesalerManager } from "@/components/produkte/product-wholesaler-manager";
+import { ListSelect } from "@/components/produkte/list-select";
+import { DEFAULT_CATEGORIES, DEFAULT_UNITS } from "@/lib/constants";
 import type {
   Product,
   ProductAsset,
@@ -44,6 +46,8 @@ export function ProductFormDialog({
   assets = [],
   wholesalers = [],
   productWholesalers = [],
+  units = DEFAULT_UNITS,
+  categories = DEFAULT_CATEGORIES,
   trigger,
 }: {
   product?: Product;
@@ -51,6 +55,8 @@ export function ProductFormDialog({
   assets?: ProductAsset[];
   wholesalers?: Wholesaler[];
   productWholesalers?: ProductWholesaler[];
+  units?: string[];
+  categories?: string[];
   trigger: React.ReactNode;
 }) {
   const router = useRouter();
@@ -126,11 +132,13 @@ export function ProductFormDialog({
 
           <div className="grid gap-2 sm:grid-cols-3">
             <div className="grid gap-2">
-              <Label htmlFor="category">Kategorie</Label>
-              <Input
-                id="category"
+              <Label>Kategorie</Label>
+              <ListSelect
                 name="category"
-                defaultValue={product?.category ?? ""}
+                kind="categories"
+                options={categories}
+                defaultValue={product?.category ?? null}
+                placeholder="Kategorie wählen"
               />
             </div>
             <div className="grid gap-2">
@@ -138,12 +146,13 @@ export function ProductFormDialog({
               <Input id="sku" name="sku" defaultValue={product?.sku ?? ""} />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="unit">Einheit</Label>
-              <Input
-                id="unit"
+              <Label>Einheit</Label>
+              <ListSelect
                 name="unit"
-                defaultValue={product?.unit ?? ""}
-                placeholder="Stk"
+                kind="units"
+                options={units}
+                defaultValue={product?.unit ?? null}
+                placeholder="Einheit wählen"
               />
             </div>
           </div>

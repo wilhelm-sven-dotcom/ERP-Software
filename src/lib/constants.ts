@@ -10,6 +10,30 @@ export const PROJECT_STATUSES: ProjectStatus[] = [
   "verloren",
 ];
 
+/** Vorgabe-Einheiten und -Kategorien für den Produktkatalog (client-sicher). */
+export const DEFAULT_UNITS = [
+  "Stk",
+  "m",
+  "m²",
+  "kg",
+  "kWp",
+  "kWh",
+  "Pauschale",
+  "Std",
+  "km",
+];
+export const DEFAULT_CATEGORIES = [
+  "Modul",
+  "Wechselrichter",
+  "Speicher",
+  "Unterkonstruktion",
+  "Kabel/Leitung",
+  "Wallbox",
+  "Montage",
+  "Planung",
+  "Sonstiges",
+];
+
 /** Farbliche Einordnung je Status (Badge-Variante). */
 export function statusVariant(
   status: string | null,
