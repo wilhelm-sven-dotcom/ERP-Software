@@ -64,6 +64,14 @@ export async function getList(
   return Array.isArray(value) && value.length > 0 ? value : defaults;
 }
 
+/** Default-Aufschläge (Sicherheit/Marge in %) für die Preisbildung neuer Produkte. */
+export async function getPriceDefaults(): Promise<{
+  safety_pct: number;
+  margin_pct: number;
+}> {
+  return getSetting("price_defaults", { safety_pct: 0, margin_pct: 20 });
+}
+
 /** MwSt-Vorbelegung je Produktgruppe (§ 12 Abs. 3 UStG: PV+Speicher 0 %). */
 export async function getVatPerGroup(): Promise<Record<string, number>> {
   return getSetting<Record<string, number>>("vat_per_group", {

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Plus, FolderTree, Upload } from "lucide-react";
+import { Plus, FolderTree, Tag, Upload } from "lucide-react";
 
 import { PageHeader } from "@/components/shared/page-header";
 import { SupabaseNotice } from "@/components/shared/supabase-notice";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ProductFormDialog } from "@/components/produkte/product-form-dialog";
 import { ProductBoard } from "@/components/produkte/product-board";
 import { GroupManager } from "@/components/produkte/group-manager";
+import { CategoryManager } from "@/components/produkte/category-manager";
 import { CsvImportDialog } from "@/components/produkte/csv-import-dialog";
 import {
   getProducts,
@@ -18,7 +19,7 @@ import {
   getWholesalers,
   getAllProductWholesalers,
 } from "@/lib/data/wholesalers";
-import { getList } from "@/lib/data/settings";
+import { getList, getPriceDefaults } from "@/lib/data/settings";
 import { DEFAULT_CATEGORIES, DEFAULT_UNITS } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
@@ -37,6 +38,7 @@ export default async function ProduktePage() {
     wholesalersByProduct,
     units,
     categories,
+    priceDefaults,
   ] = await Promise.all([
     getProducts(),
     getProductGroups(),
@@ -45,7 +47,15 @@ export default async function ProduktePage() {
     getAllProductWholesalers(),
     getList("units", DEFAULT_UNITS),
     getList("categories", DEFAULT_CATEGORIES),
+    getPriceDefaults(),
   ]);
+
+  // Kategorie-Reihenfolge aus den Einstellungen → Sortier-Index je Kategorie.
+  const catRank = new Map(categories.map((c, i) => [c, i]));
+  const rankOf = (p: Product) => {
+    const c = p.category?.trim();
+    return c && catRank.has(c) ? catRank.get(c)! : Number.MAX_SAFE_INTEGER;
+  };
 
   // Gruppen-Reihenfolge nach `sort`, dann Name (alle Gruppen = Drop-Ziele).
   const sortedGroups = [...groups].sort(
@@ -62,11 +72,13 @@ export default async function ProduktePage() {
     const key = p.group_id && items[p.group_id] ? p.group_id : NONE;
     items[key].push(p);
   }
-  const catKey = (p: Product) => p.category?.trim() || "￿"; // ohne Kategorie ans Ende
+  // Innerhalb jeder Gruppe nach Kategorie-Reihenfolge (Einstellungen), dann
+  // manueller Sortierung, dann Name gliedern.
   for (const key of Object.keys(items)) {
     items[key].sort(
       (a, b) =>
-        catKey(a).localeCompare(catKey(b)) ||
+        rankOf(a) - rankOf(b) ||
+        (a.category ?? "").localeCompare(b.category ?? "") ||
         a.sort - b.sort ||
         a.name.localeCompare(b.name),
     );
@@ -90,6 +102,7 @@ export default async function ProduktePage() {
       groups={groups}
       units={units}
       categories={categories}
+      priceDefaults={priceDefaults}
       trigger={
         <Button>
           <Plus className="size-4" /> Neues Produkt
@@ -119,6 +132,14 @@ export default async function ProduktePage() {
             </Button>
           }
         />
+        <CategoryManager
+          categories={categories}
+          trigger={
+            <Button variant="outline">
+              <Tag className="size-4" /> Kategorien
+            </Button>
+          }
+        />
         {newButton}
       </PageHeader>
 
@@ -142,6 +163,7 @@ export default async function ProduktePage() {
           wholesalersByProduct={wholesalersByProduct}
           units={units}
           categories={categories}
+          priceDefaults={priceDefaults}
         />
       )}
     </div>

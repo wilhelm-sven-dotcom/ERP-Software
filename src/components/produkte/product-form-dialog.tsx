@@ -29,7 +29,8 @@ import { type ActionResult } from "@/lib/actions";
 import { AssetUpload } from "@/components/produkte/asset-upload";
 import { ProductWholesalerManager } from "@/components/produkte/product-wholesaler-manager";
 import { ListSelect } from "@/components/produkte/list-select";
-import { DEFAULT_CATEGORIES, DEFAULT_UNITS } from "@/lib/constants";
+import { DEFAULT_CATEGORIES, DEFAULT_UNITS, PRICE_DEFAULTS } from "@/lib/constants";
+import { formatCurrency } from "@/lib/format";
 import type {
   Product,
   ProductAsset,
@@ -48,6 +49,7 @@ export function ProductFormDialog({
   productWholesalers = [],
   units = DEFAULT_UNITS,
   categories = DEFAULT_CATEGORIES,
+  priceDefaults = PRICE_DEFAULTS,
   trigger,
 }: {
   product?: Product;
@@ -57,6 +59,7 @@ export function ProductFormDialog({
   productWholesalers?: ProductWholesaler[];
   units?: string[];
   categories?: string[];
+  priceDefaults?: { safety_pct: number; margin_pct: number };
   trigger: React.ReactNode;
 }) {
   const router = useRouter();
@@ -73,6 +76,38 @@ export function ProductFormDialog({
   const [isService, setIsService] = React.useState(
     Boolean(product?.specs?.is_service),
   );
+
+  // Preisbildung: Basis-EK + Sicherheitsaufschlag % → EK, + Margenaufschlag % → VK.
+  // Bestandsprodukte ohne hinterlegte Formel (kein margin_pct) starten im
+  // manuellen Modus, damit ihre EK/VK-Werte unverändert bleiben.
+  const specNum = (k: string): number | null =>
+    typeof product?.specs?.[k] === "number" ? (product.specs[k] as number) : null;
+  const hasFormula = specNum("margin_pct") !== null;
+  const [basePurchase, setBasePurchase] = React.useState(
+    String(specNum("base_purchase") ?? product?.price_purchase ?? ""),
+  );
+  const [safetyPct, setSafetyPct] = React.useState(
+    String(specNum("safety_pct") ?? priceDefaults.safety_pct),
+  );
+  const [marginPct, setMarginPct] = React.useState(
+    String(specNum("margin_pct") ?? priceDefaults.margin_pct),
+  );
+  const [priceOverride, setPriceOverride] = React.useState(
+    isEdit && !hasFormula ? true : Boolean(product?.specs?.price_override),
+  );
+  const [ekManual, setEkManual] = React.useState(
+    String(product?.price_purchase ?? ""),
+  );
+  const [vkManual, setVkManual] = React.useState(
+    String(product?.price_sell ?? ""),
+  );
+  const round2 = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
+  const computedEk = round2(
+    (Number(basePurchase) || 0) * (1 + (Number(safetyPct) || 0) / 100),
+  );
+  const computedVk = round2(computedEk * (1 + (Number(marginPct) || 0) / 100));
+  const effEk = priceOverride ? Number(ekManual) || 0 : computedEk;
+  const effVk = priceOverride ? Number(vkManual) || 0 : computedVk;
 
   React.useEffect(() => {
     if (state.ok && open) {
@@ -167,27 +202,102 @@ export function ProductFormDialog({
             </div>
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label htmlFor="price_purchase">EK-Preis (€)</Label>
-              <Input
-                id="price_purchase"
-                name="price_purchase"
-                type="number"
-                step="0.01"
-                defaultValue={product?.price_purchase ?? ""}
-              />
+          {/* Preisbildung über Aufschläge; EK/VK werden serverseitig berechnet. */}
+          <div className="grid gap-3 rounded-md border p-3">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="grid gap-1">
+                <Label htmlFor="base_purchase" className="text-xs">
+                  Basis-EK €
+                </Label>
+                <Input
+                  id="base_purchase"
+                  name="base_purchase"
+                  type="number"
+                  step="0.01"
+                  value={basePurchase}
+                  onChange={(e) => setBasePurchase(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-1">
+                <Label htmlFor="safety_pct" className="text-xs">
+                  Sicherheit %
+                </Label>
+                <Input
+                  id="safety_pct"
+                  name="safety_pct"
+                  type="number"
+                  step="0.1"
+                  value={safetyPct}
+                  onChange={(e) => setSafetyPct(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-1">
+                <Label htmlFor="margin_pct" className="text-xs">
+                  Marge %
+                </Label>
+                <Input
+                  id="margin_pct"
+                  name="margin_pct"
+                  type="number"
+                  step="0.1"
+                  value={marginPct}
+                  onChange={(e) => setMarginPct(e.target.value)}
+                />
+              </div>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="price_sell">VK-Preis (€)</Label>
-              <Input
-                id="price_sell"
-                name="price_sell"
-                type="number"
-                step="0.01"
-                defaultValue={product?.price_sell ?? ""}
+
+            <label className="flex items-center gap-2 text-xs font-medium">
+              <input
+                type="checkbox"
+                name="price_override"
+                checked={priceOverride}
+                onChange={(e) => setPriceOverride(e.target.checked)}
+                className="size-4"
               />
+              EK/VK manuell überschreiben
+            </label>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="grid gap-1">
+                <Label htmlFor="ek_manual" className="text-xs">
+                  EK € {priceOverride ? "" : "(berechnet)"}
+                </Label>
+                {priceOverride ? (
+                  <Input
+                    id="ek_manual"
+                    type="number"
+                    step="0.01"
+                    value={ekManual}
+                    onChange={(e) => setEkManual(e.target.value)}
+                  />
+                ) : (
+                  <div className="flex h-9 items-center rounded-md border bg-muted/40 px-3 text-sm">
+                    {formatCurrency(computedEk)}
+                  </div>
+                )}
+              </div>
+              <div className="grid gap-1">
+                <Label htmlFor="vk_manual" className="text-xs">
+                  VK € {priceOverride ? "" : "(berechnet)"}
+                </Label>
+                {priceOverride ? (
+                  <Input
+                    id="vk_manual"
+                    type="number"
+                    step="0.01"
+                    value={vkManual}
+                    onChange={(e) => setVkManual(e.target.value)}
+                  />
+                ) : (
+                  <div className="flex h-9 items-center rounded-md border bg-muted/40 px-3 text-sm font-medium">
+                    {formatCurrency(computedVk)}
+                  </div>
+                )}
+              </div>
             </div>
+            {/* Effektive Werte an die Action übergeben (computed oder manuell). */}
+            <input type="hidden" name="price_purchase" value={effEk} />
+            <input type="hidden" name="price_sell" value={effVk} />
           </div>
 
           <div className="grid gap-2 sm:grid-cols-2">

@@ -90,6 +90,7 @@ export function ProductBoard({
   wholesalersByProduct,
   units,
   categories,
+  priceDefaults,
 }: {
   groups: ProductGroup[];
   /** Reihenfolge der echten Gruppen-Container (group_id). */
@@ -102,6 +103,7 @@ export function ProductBoard({
   wholesalersByProduct: WholesalerLinks;
   units: string[];
   categories: string[];
+  priceDefaults?: { safety_pct: number; margin_pct: number };
 }) {
   const router = useRouter();
   const [groupOrder, setGroupOrder] =
@@ -312,6 +314,7 @@ export function ProductBoard({
                     links={wholesalersByProduct[p.id] ?? []}
                     units={units}
                     categories={categories}
+                    priceDefaults={priceDefaults}
                     thumb={thumbs[p.id] ?? null}
                   />
                 ))}
@@ -358,6 +361,7 @@ export function ProductBoard({
                           links={wholesalersByProduct[entry.product!.id] ?? []}
                           units={units}
                           categories={categories}
+                          priceDefaults={priceDefaults}
                           thumb={thumbs[entry.product!.id] ?? null}
                         />
                       ),
@@ -389,6 +393,7 @@ export function ProductBoard({
                         links={wholesalersByProduct[entry.product!.id] ?? []}
                         units={units}
                         categories={categories}
+                        priceDefaults={priceDefaults}
                         thumb={thumbs[entry.product!.id] ?? null}
                       />
                     ),
@@ -573,6 +578,7 @@ function SortableItem({
   links,
   units,
   categories,
+  priceDefaults,
   thumb,
 }: {
   product: Product;
@@ -582,6 +588,7 @@ function SortableItem({
   links: ProductWholesaler[];
   units: string[];
   categories: string[];
+  priceDefaults?: { safety_pct: number; margin_pct: number };
   thumb: string | null;
 }) {
   const { setNodeRef, transform, transition, isDragging, attributes, listeners } =
@@ -616,6 +623,7 @@ function SortableItem({
             productWholesalers={links}
             units={units}
             categories={categories}
+            priceDefaults={priceDefaults}
             trigger={
               <Button variant="ghost" size="sm">
                 Bearbeiten
@@ -637,6 +645,7 @@ function ProductRow({
   links,
   units,
   categories,
+  priceDefaults,
   thumb,
 }: {
   product: Product;
@@ -646,6 +655,7 @@ function ProductRow({
   links: ProductWholesaler[];
   units: string[];
   categories: string[];
+  priceDefaults?: { safety_pct: number; margin_pct: number };
   thumb: string | null;
 }) {
   return (
@@ -661,6 +671,7 @@ function ProductRow({
           productWholesalers={links}
           units={units}
           categories={categories}
+          priceDefaults={priceDefaults}
           trigger={
             <Button variant="ghost" size="sm">
               Bearbeiten

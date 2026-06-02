@@ -31,6 +31,79 @@ export async function addListValue(
   return { ok: true, list: next };
 }
 
+/** Kategorie umbenennen: settings-Liste + alle betroffenen Produkte aktualisieren. */
+export async function renameCategory(
+  oldName: string,
+  newName: string,
+): Promise<ActionResult & { list?: string[] }> {
+  const guard = ensureConfigured();
+  if (guard) return guard;
+  const from = oldName.trim();
+  const to = newName.trim();
+  if (!from || !to) return fail("Bitte alten und neuen Namen angeben.");
+  if (from === to) return OK;
+
+  const current = await getList("categories", DEFAULT_CATEGORIES);
+  // Duplikate vermeiden: vorhandenes „to" entfernen, „from" durch „to" ersetzen.
+  const next = current
+    .map((c) => (c === from ? to : c))
+    .filter((c, i, arr) => arr.indexOf(c) === i);
+
+  const supabase = await createClient();
+  const { error: e1 } = await supabase
+    .from("settings")
+    .upsert({ key: "categories", value: next }, { onConflict: "key" });
+  if (e1) return fail(e1.message);
+  const { error: e2 } = await supabase
+    .from("products")
+    .update({ category: to })
+    .eq("category", from);
+  if (e2) return fail(e2.message);
+  revalidatePath("/produkte");
+  return { ok: true, list: next };
+}
+
+/** Kategorie löschen: aus der Liste entfernen; betroffene Produkte → keine Kategorie. */
+export async function deleteCategory(
+  name: string,
+): Promise<ActionResult & { list?: string[] }> {
+  const guard = ensureConfigured();
+  if (guard) return guard;
+  const v = name.trim();
+  if (!v) return fail("Kein Name.");
+  const current = await getList("categories", DEFAULT_CATEGORIES);
+  const next = current.filter((c) => c !== v);
+
+  const supabase = await createClient();
+  const { error: e1 } = await supabase
+    .from("settings")
+    .upsert({ key: "categories", value: next }, { onConflict: "key" });
+  if (e1) return fail(e1.message);
+  const { error: e2 } = await supabase
+    .from("products")
+    .update({ category: null })
+    .eq("category", v);
+  if (e2) return fail(e2.message);
+  revalidatePath("/produkte");
+  return { ok: true, list: next };
+}
+
+/** Kategorie-Reihenfolge speichern (steuert die Gliederung innerhalb der Gruppen). */
+export async function reorderCategories(
+  list: string[],
+): Promise<ActionResult> {
+  const guard = ensureConfigured();
+  if (guard) return guard;
+  if (!Array.isArray(list)) return fail("Ungültige Liste.");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("settings")
+    .upsert({ key: "categories", value: list }, { onConflict: "key" });
+  if (error) return fail(error.message);
+  revalidatePath("/produkte");
+  return OK;
+}
+
 function s(fd: FormData, key: string): string | null {
   const v = fd.get(key);
   if (v === null) return null;
@@ -86,6 +159,22 @@ export async function saveProduct(
   const storageKwh = n(fd, "storage_kwh");
   if (storageKwh === null) delete specs.storage_kwh;
   else specs.storage_kwh = Math.max(storageKwh, 0);
+
+  // Preisbildung (Aufschläge) in specs ablegen; price_purchase/price_sell
+  // werden bereits effektiv (berechnet oder manuell) im Formular übergeben.
+  const basePurchase = n(fd, "base_purchase");
+  if (basePurchase === null) delete specs.base_purchase;
+  else specs.base_purchase = basePurchase;
+  const safetyPct = n(fd, "safety_pct");
+  if (safetyPct === null) delete specs.safety_pct;
+  else specs.safety_pct = safetyPct;
+  const marginPct = n(fd, "margin_pct");
+  if (marginPct === null) delete specs.margin_pct;
+  else specs.margin_pct = marginPct;
+  const priceOverride =
+    fd.get("price_override") === "on" || fd.get("price_override") === "true";
+  if (priceOverride) specs.price_override = true;
+  else delete specs.price_override;
 
   // Dienstleistung mit kWp-abhängigem Preis (marginal gestaffelt + Fixbetrag).
   const isService = fd.get("is_service") === "on" || fd.get("is_service") === "true";

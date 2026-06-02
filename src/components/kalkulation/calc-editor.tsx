@@ -275,17 +275,40 @@ export function CalcEditor({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <Label htmlFor="calc-name" className="text-muted-foreground text-sm">
-          Variante
-        </Label>
-        <Input
-          id="calc-name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="h-8 max-w-xs"
-          placeholder="Name der Variante"
-        />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-center gap-2 pt-1.5">
+          <Label htmlFor="calc-name" className="text-muted-foreground text-sm">
+            Variante
+          </Label>
+          <Input
+            id="calc-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="h-8 max-w-xs"
+            placeholder="Name der Variante"
+          />
+        </div>
+        {/* Anlagengröße/Speicher prominent oben rechts (statt unten in der Seitenspalte). */}
+        <div className="bg-primary/5 border-primary/20 flex gap-6 rounded-lg border px-4 py-2">
+          <div>
+            <p className="text-muted-foreground text-xs">Anlagengröße</p>
+            <p className="text-xl font-bold">{formatNumber(effKwp ?? 0)} kWp</p>
+            {t.spezifischPvProKwp !== null ? (
+              <p className="text-muted-foreground text-xs">
+                {formatCurrency(t.spezifischPvProKwp)} / kWp
+              </p>
+            ) : null}
+          </div>
+          <div>
+            <p className="text-muted-foreground text-xs">Speicher</p>
+            <p className="text-xl font-bold">{formatNumber(effKwh ?? 0)} kWh</p>
+            {t.spezifischSpeicherProKwh !== null ? (
+              <p className="text-muted-foreground text-xs">
+                {formatCurrency(t.spezifischSpeicherProKwh)} / kWh
+              </p>
+            ) : null}
+          </div>
+        </div>
       </div>
 
       <div className="bg-card overflow-x-auto rounded-lg border">
@@ -584,31 +607,6 @@ export function CalcEditor({
         </div>
 
         <div className="space-y-4">
-        <div className="bg-primary/5 border-primary/20 grid grid-cols-2 gap-3 rounded-lg border p-4">
-          <div>
-            <p className="text-muted-foreground text-xs">Anlagengröße</p>
-            <p className="text-lg font-semibold">
-              {formatNumber(effKwp ?? 0)} kWp
-            </p>
-            {t.spezifischPvProKwp !== null ? (
-              <p className="text-muted-foreground text-xs">
-                {formatCurrency(t.spezifischPvProKwp)} / kWp
-              </p>
-            ) : null}
-          </div>
-          <div>
-            <p className="text-muted-foreground text-xs">Speicher</p>
-            <p className="text-lg font-semibold">
-              {formatNumber(effKwh ?? 0)} kWh
-            </p>
-            {t.spezifischSpeicherProKwh !== null ? (
-              <p className="text-muted-foreground text-xs">
-                {formatCurrency(t.spezifischSpeicherProKwh)} / kWh
-              </p>
-            ) : null}
-          </div>
-        </div>
-
         <div className="bg-card space-y-1.5 rounded-lg border p-4 text-sm">
           <Row label="Zwischensumme" value={formatCurrency(t.nettoVorPauschal)} />
           {Number(pauschal) > 0 ? (

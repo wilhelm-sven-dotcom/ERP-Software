@@ -57,6 +57,20 @@ export const DEFAULT_CATEGORIES = [
   "Sonstiges",
 ];
 
+/** Default-Aufschläge für die Preisbildung (Basis-EK → EK → VK). */
+export const PRICE_DEFAULTS = { safety_pct: 0, margin_pct: 20 };
+
+/** Anlagentypen (für Angebots-Bausteine und Projektablauf-Vorlagen). */
+export const PROJECT_TYPES = [
+  "Dachanlage bis 10 kWp",
+  "Dachanlage bis 100 kWp",
+  "Dachanlage bis 300 kWp",
+  "Große Dachanlage",
+  "Freiflächenanlage",
+  "Speicherprojekt",
+] as const;
+export type ProjectType = (typeof PROJECT_TYPES)[number];
+
 /** Farbliche Einordnung je Status (Badge-Variante). */
 export function statusVariant(
   status: string | null,
