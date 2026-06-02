@@ -21,7 +21,7 @@ import { getAdminStats } from "@/lib/data/stats";
 import { getMyOpenTasks } from "@/lib/data/workflow";
 import { getSalesEmployees } from "@/lib/data/employees";
 import { LeadIntakeDialog } from "@/components/vertrieb/lead-intake-dialog";
-import { getInbox, type InboxItem } from "@/lib/data/notifications";
+import { getInbox, getOverdueTasks, type InboxItem } from "@/lib/data/notifications";
 import { listUpcomingEvents } from "@/lib/google/calendar";
 import { getCurrentEmployee } from "@/lib/supabase/auth";
 import { GlobalSearch } from "@/components/shared/global-search";
@@ -92,10 +92,11 @@ export default async function DashboardPage() {
 }
 
 async function AdminDashboard() {
-  const [projects, customers, stats] = await Promise.all([
+  const [projects, customers, stats, overdue] = await Promise.all([
     getProjects(),
     getCustomers(),
     getAdminStats(),
+    getOverdueTasks(),
   ]);
   const recent = projects.slice(0, 6);
   const maxRevenue = Math.max(1, ...stats.months.map((m) => m.revenue));
@@ -159,6 +160,36 @@ async function AdminDashboard() {
         </CardContent>
       </Card>
 
+      {overdue.length > 0 ? (
+        <Card className="border-destructive/40 mt-4">
+          <CardHeader>
+            <CardTitle className="text-destructive text-base">
+              Verzug — überfällige Aufgaben ({overdue.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="divide-y">
+              {overdue.slice(0, 12).map((t) => (
+                <li key={t.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                  <span>
+                    <Link href={`/projekte/${t.project_id}`} className="font-medium hover:underline">
+                      {t.title}
+                    </Link>
+                    <span className="text-muted-foreground ml-2 text-xs">
+                      {t.project_title ?? "Projekt"}
+                      {t.assignee_name ? ` · ${t.assignee_name}` : " · nicht zugewiesen"}
+                    </span>
+                  </span>
+                  <span className="text-destructive text-xs">
+                    {t.due_date ? formatDate(t.due_date) : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card className="mt-4">
         <CardHeader>
           <CardTitle className="text-base">Neueste Projekte</CardTitle>
@@ -176,7 +207,9 @@ async function EmployeeDashboard({ employeeId }: { employeeId: string | null }) 
     getProjects(),
     employeeId ? getMyOpenTasks(employeeId) : Promise.resolve([]),
     employeeId ? listUpcomingEvents(employeeId) : Promise.resolve([]),
-    employeeId ? getInbox(employeeId) : Promise.resolve({ offered: [], unread: [], total: 0 }),
+    employeeId
+      ? getInbox(employeeId)
+      : Promise.resolve({ offered: [], unread: [], overdue: [], total: 0 }),
   ]);
   const myProjects = projects.filter((p) => p.assigned_employee_id === employeeId);
 
@@ -194,12 +227,15 @@ async function EmployeeDashboard({ employeeId }: { employeeId: string | null }) 
         <Kpi label="Meine Projekte" value={formatNumber(myProjects.length, 0)} icon={FolderKanban} href="/projekte" />
       </div>
 
-      {inbox.offered.length > 0 || inbox.unread.length > 0 ? (
+      {inbox.total > 0 ? (
         <Card className="mt-4">
           <CardHeader>
             <CardTitle className="text-base">Posteingang</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {inbox.overdue.length > 0 ? (
+              <InboxGroup title="Überfällig" items={inbox.overdue} />
+            ) : null}
             {inbox.offered.length > 0 ? (
               <InboxGroup title="Dir angeboten" items={inbox.offered} />
             ) : null}
@@ -274,8 +310,17 @@ function InboxGroup({ title, items }: { title: string; items: InboxItem[] }) {
             >
               {it.title}
             </Link>
-            <span className="text-muted-foreground ml-2 text-xs">
-              {it.reason === "angeboten" ? "annehmen?" : "neue Nachricht"}
+            <span
+              className={
+                "ml-2 text-xs " +
+                (it.reason === "überfällig" ? "text-destructive" : "text-muted-foreground")
+              }
+            >
+              {it.reason === "angeboten"
+                ? "annehmen?"
+                : it.reason === "überfällig"
+                  ? "überfällig"
+                  : "neue Nachricht"}
             </span>
           </li>
         ))}

@@ -6,9 +6,9 @@ import { Bell } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
 import { fetchMyInbox } from "@/app/(app)/notifications/actions";
-import type { Inbox } from "@/lib/data/notifications";
+import type { Inbox, InboxItem } from "@/lib/data/notifications";
 
-const EMPTY: Inbox = { offered: [], unread: [], total: 0 };
+const EMPTY: Inbox = { offered: [], unread: [], overdue: [], total: 0 };
 
 /** Glocke in der Topbar: angebotene Aufgaben + ungelesene Nachrichten, live. */
 export function NotificationBell() {
@@ -37,7 +37,14 @@ export function NotificationBell() {
     };
   }, [reload]);
 
-  const items = [...inbox.offered, ...inbox.unread];
+  const items = [...inbox.overdue, ...inbox.offered, ...inbox.unread];
+
+  const reasonLabel = (reason: InboxItem["reason"]) =>
+    reason === "angeboten"
+      ? "Dir angeboten — annehmen?"
+      : reason === "überfällig"
+        ? "Überfällig — Termin überschritten"
+        : "Neue Nachricht";
 
   return (
     <div className="relative">
@@ -77,10 +84,15 @@ export function NotificationBell() {
                       className="hover:bg-muted block rounded-md px-2 py-1.5 text-sm"
                     >
                       <span className="font-medium">{it.title}</span>
-                      <span className="text-muted-foreground block text-xs">
-                        {it.reason === "angeboten"
-                          ? "Dir angeboten — annehmen?"
-                          : "Neue Nachricht"}
+                      <span
+                        className={
+                          "block text-xs " +
+                          (it.reason === "überfällig"
+                            ? "text-destructive"
+                            : "text-muted-foreground")
+                        }
+                      >
+                        {reasonLabel(it.reason)}
                       </span>
                     </Link>
                   </li>

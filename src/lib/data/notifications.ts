@@ -5,17 +5,18 @@ export interface InboxItem {
   task_id: string;
   title: string;
   project_id: string | null;
-  reason: "angeboten" | "nachricht";
+  reason: "angeboten" | "nachricht" | "überfällig";
   at: string;
 }
 
 export interface Inbox {
   offered: InboxItem[];
   unread: InboxItem[];
+  overdue: InboxItem[];
   total: number;
 }
 
-const EMPTY: Inbox = { offered: [], unread: [], total: 0 };
+const EMPTY: Inbox = { offered: [], unread: [], overdue: [], total: 0 };
 
 /**
  * Posteingang des aktuellen Mitarbeiters:
@@ -90,5 +91,69 @@ export async function getInbox(employeeId: string): Promise<Inbox> {
     }
   }
 
-  return { offered, unread, total: offered.length + unread.length };
+  // 3) Mir zugewiesene, überfällige (nicht erledigte) Aufgaben.
+  const today = new Date().toISOString().slice(0, 10);
+  const { data: overdueRows } = await supabase
+    .from("project_tasks")
+    .select("id, title, project_id, due_date, status")
+    .eq("assignee_employee_id", employeeId)
+    .neq("status", "erledigt")
+    .not("due_date", "is", null)
+    .lt("due_date", today)
+    .order("due_date", { ascending: true });
+  const overdue: InboxItem[] = (overdueRows ?? []).map((t) => ({
+    task_id: t.id,
+    title: t.title,
+    project_id: t.project_id,
+    reason: "überfällig" as const,
+    at: t.due_date as string,
+  }));
+
+  return {
+    offered,
+    unread,
+    overdue,
+    total: offered.length + unread.length + overdue.length,
+  };
+}
+
+export interface OverdueTask {
+  id: string;
+  title: string;
+  project_id: string;
+  due_date: string | null;
+  project_title: string | null;
+  assignee_name: string | null;
+}
+
+/** Alle überfälligen, nicht erledigten Aufgaben (projektübergreifend, Admin-Sicht). */
+export async function getOverdueTasks(): Promise<OverdueTask[]> {
+  if (!isSupabaseConfigured()) return [];
+  const supabase = await createClient();
+  const today = new Date().toISOString().slice(0, 10);
+  const { data, error } = await supabase
+    .from("project_tasks")
+    .select(
+      "id, title, project_id, due_date, project:projects(title), assignee:employees!assignee_employee_id(name)",
+    )
+    .neq("status", "erledigt")
+    .not("due_date", "is", null)
+    .lt("due_date", today)
+    .order("due_date", { ascending: true });
+  if (error) {
+    console.error("getOverdueTasks:", error.message);
+    return [];
+  }
+  return (data ?? []).map((t) => {
+    const project = t.project as unknown as { title: string | null } | null;
+    const assignee = t.assignee as unknown as { name: string | null } | null;
+    return {
+      id: t.id,
+      title: t.title,
+      project_id: t.project_id,
+      due_date: t.due_date,
+      project_title: project?.title ?? null,
+      assignee_name: assignee?.name ?? null,
+    };
+  });
 }
