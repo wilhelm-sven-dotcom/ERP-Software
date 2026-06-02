@@ -730,3 +730,10 @@ create policy "product_assets_delete" on storage.objects
     bucket_id = 'product-assets' and public.is_admin()
   );
 
+
+-- ============================================================================
+-- Projekt: Speicherkapazität + Geokoordinaten (Migration 20260531120700)
+-- ============================================================================
+alter table public.projects add column if not exists storage_kwh numeric;
+alter table public.projects add column if not exists lat numeric;
+alter table public.projects add column if not exists lon numeric;

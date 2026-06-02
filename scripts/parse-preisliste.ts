@@ -88,6 +88,11 @@ export interface PriceItem {
   art: string | null;
   supplier: string | null;
   is_service: boolean;
+  /**
+   * Hybrid-Aufteilung: Anteil PV in % (Rest = Speicher). null = normaler Artikel.
+   * Wird beim Zusammenführen doppelt gepflegter Hybrid-Wechselrichter gesetzt.
+   */
+  split_pv_pct: number | null;
   sizes: {
     alle: boolean;
     bis10: boolean;
@@ -95,6 +100,71 @@ export interface PriceItem {
     bis135: boolean;
     speicher: boolean;
   };
+}
+
+/** Name für Hybrid-Erkennung normalisieren (Whitespace/Case). */
+function normName(name: string): string {
+  return name.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Führt doppelt gepflegte Hybrid-Wechselrichter zusammen: derselbe (normalisierte)
+ * Name kommt **genau einmal in PV-Anlage** und **genau einmal in Speicher** vor.
+ * Ergebnis: EIN Artikel (Gruppe PV-Anlage), Preise summiert, split_pv_pct aus dem
+ * Preisverhältnis abgeleitet. Nur bei eindeutigem 1:1-Match — sonst unverändert.
+ * Gibt [zusammengeführte Liste, Anzahl Merges] zurück.
+ */
+function mergeHybrids(items: PriceItem[]): [PriceItem[], number] {
+  const byName = new Map<string, PriceItem[]>();
+  for (const it of items) {
+    const key = normName(it.name);
+    (byName.get(key) ?? byName.set(key, []).get(key)!).push(it);
+  }
+
+  const merged: PriceItem[] = [];
+  const consumed = new Set<PriceItem>();
+  let mergeCount = 0;
+
+  for (const it of items) {
+    if (consumed.has(it)) continue;
+    const group = byName.get(normName(it.name)) ?? [];
+    const pv = group.filter((g) => g.group === "PV-Anlage");
+    const sp = group.filter((g) => g.group === "Speicher");
+    // Eindeutiges Hybrid-Paar: je genau eine PV- und eine Speicher-Zeile.
+    if (group.length === 2 && pv.length === 1 && sp.length === 1) {
+      const pvItem = pv[0];
+      const spItem = sp[0];
+      const vkSum = pvItem.vk + spItem.vk;
+      const splitPv = vkSum > 0 ? Math.round((pvItem.vk / vkSum) * 100) : 50;
+      merged.push({
+        ...pvItem,
+        vk: round2(vkSum),
+        ek: pvItem.ek !== null || spItem.ek !== null
+          ? round2((pvItem.ek ?? 0) + (spItem.ek ?? 0))
+          : null,
+        group: "PV-Anlage",
+        split_pv_pct: splitPv,
+        sizes: {
+          alle: pvItem.sizes.alle || spItem.sizes.alle,
+          bis10: pvItem.sizes.bis10 || spItem.sizes.bis10,
+          bis30: pvItem.sizes.bis30 || spItem.sizes.bis30,
+          bis135: pvItem.sizes.bis135 || spItem.sizes.bis135,
+          speicher: pvItem.sizes.speicher || spItem.sizes.speicher,
+        },
+      });
+      consumed.add(pvItem);
+      consumed.add(spItem);
+      mergeCount += 1;
+    } else {
+      merged.push(it);
+      consumed.add(it);
+    }
+  }
+  return [merged, mergeCount];
+}
+
+function round2(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
 function main() {
@@ -123,6 +193,7 @@ function main() {
       art,
       supplier: str(r[COL.supplier]),
       is_service: art ? SERVICE_ARTS.has(art) : false,
+      split_pv_pct: null,
       sizes: {
         alle: flag(r[COL.alle]),
         bis10: flag(r[COL.bis10]),
@@ -148,18 +219,26 @@ function main() {
     }
   }
 
-  const out = { items, discounts, generated_at: new Date().toISOString() };
+  // Doppelt gepflegte Hybrid-Wechselrichter zu einem Artikel zusammenführen.
+  const [mergedItems, hybridCount] = mergeHybrids(items);
+
+  const out = {
+    items: mergedItems,
+    discounts,
+    generated_at: new Date().toISOString(),
+  };
   writeFileSync(OUT, JSON.stringify(out, null, 2), "utf8");
 
   // Kurzbericht
-  const byGroup = items.reduce<Record<string, number>>((m, i) => {
+  const byGroup = mergedItems.reduce<Record<string, number>>((m, i) => {
     m[i.group] = (m[i.group] ?? 0) + 1;
     return m;
   }, {});
-  const services = items.filter((i) => i.is_service).length;
-  console.log(`✅ ${items.length} Positionen → ${OUT}`);
+  const services = mergedItems.filter((i) => i.is_service).length;
+  console.log(`✅ ${mergedItems.length} Positionen → ${OUT}`);
   console.log("   Gruppen:", byGroup);
   console.log(`   davon Dienstleistungen: ${services}`);
+  console.log(`   Hybrid-Artikel zusammengeführt: ${hybridCount}`);
   console.log("   Nachlass/Skonto:", discounts);
 }
 

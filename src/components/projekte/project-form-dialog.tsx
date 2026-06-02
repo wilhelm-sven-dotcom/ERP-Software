@@ -160,15 +160,27 @@ export function ProjectFormDialog({
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="system_size_kwp">Anlagengröße (kWp)</Label>
-              <Input
-                id="system_size_kwp"
-                name="system_size_kwp"
-                type="number"
-                step="0.01"
-                defaultValue={project?.system_size_kwp ?? ""}
-              />
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="system_size_kwp">Anlagengröße (kWp)</Label>
+                <Input
+                  id="system_size_kwp"
+                  name="system_size_kwp"
+                  type="number"
+                  step="0.01"
+                  defaultValue={project?.system_size_kwp ?? ""}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="storage_kwh">Speicherkapazität (kWh)</Label>
+                <Input
+                  id="storage_kwh"
+                  name="storage_kwh"
+                  type="number"
+                  step="0.01"
+                  defaultValue={project?.storage_kwh ?? ""}
+                />
+              </div>
             </div>
           </div>
 

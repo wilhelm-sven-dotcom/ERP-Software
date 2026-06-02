@@ -165,6 +165,9 @@ async function main() {
           is_service: item.is_service,
           sizes: item.sizes,
           description: item.description,
+          ...(item.split_pv_pct !== null
+            ? { split_pv_pct: item.split_pv_pct }
+            : {}),
         },
       },
     }))

@@ -160,6 +160,28 @@ export function ProductFormDialog({
             </div>
           </div>
 
+          <div className="grid gap-2">
+            <Label htmlFor="split_pv_pct">Hybrid – Anteil PV (%)</Label>
+            <Input
+              id="split_pv_pct"
+              name="split_pv_pct"
+              type="number"
+              step="1"
+              min={0}
+              max={100}
+              defaultValue={
+                typeof product?.specs?.split_pv_pct === "number"
+                  ? (product.specs.split_pv_pct as number)
+                  : ""
+              }
+              placeholder="leer = normaler Artikel"
+            />
+            <p className="text-muted-foreground text-xs">
+              Nur für Hybrid-Wechselrichter: Anteil des Preises, der der PV-Anlage
+              zugerechnet wird (Rest = Speicher). Z. B. 50 für 50 % / 50 %.
+            </p>
+          </div>
+
           <DialogFooter>
             <Button type="submit" disabled={pending}>
               {pending ? "Speichern …" : "Speichern"}

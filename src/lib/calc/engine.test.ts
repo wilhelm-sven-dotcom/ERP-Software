@@ -68,4 +68,40 @@ import { calculate } from "./engine";
   assert.equal(r.totals.margeProzent, 0);
 }
 
+// 5) Hybrid-Split: ein Artikel anteilig PV/Speicher + spezifische Preise
+{
+  const r = calculate({
+    positions: [
+      { id: "1", bezeichnung: "Hybrid-WR", menge: 1, einzelpreis: 1000, ek: 0, splitPvPct: 50 },
+    ],
+    mwstPercent: 0,
+    systemSizeKwp: 10,
+    storageKwh: 20,
+  });
+  const t = r.totals;
+  // 50/50 auf die Töpfe, aber nur EINMAL gezählt
+  assert.equal(t.gruppenSummen["PV-Anlage"], 500);
+  assert.equal(t.gruppenSummen.Speicher, 500);
+  assert.equal(t.netto, 1000); // kein Doppelzählen
+  assert.equal(t.spezifischPvProKwp, 50); // 500 / 10 kWp
+  assert.equal(t.spezifischSpeicherProKwh, 25); // 500 / 20 kWh
+}
+
+// 6) Hybrid-Split mit Gruppenrabatt nur auf Speicher
+{
+  const r = calculate({
+    positions: [
+      { id: "1", bezeichnung: "Hybrid-WR", menge: 1, einzelpreis: 1000, ek: 0, splitPvPct: 50 },
+    ],
+    gruppenRabatte: { Speicher: 10 },
+    mwstPercent: 0,
+  });
+  const t = r.totals;
+  assert.equal(t.gruppenSummen["PV-Anlage"], 500); // PV-Anteil unverändert
+  assert.equal(t.gruppenSummen.Speicher, 450); // 500 - 10 %
+  assert.equal(t.netto, 950);
+  assert.equal(t.spezifischPvProKwp, null); // keine kWp hinterlegt
+  assert.equal(t.spezifischSpeicherProKwh, null);
+}
+
 console.log("✓ engine.test.ts: alle Assertions bestanden");

@@ -29,6 +29,25 @@ export async function saveProduct(
   const name = s(fd, "name");
   if (!name) return fail("Bitte einen Produktnamen angeben.");
 
+  const supabase = await createClient();
+
+  // Hybrid-Aufteilung (Anteil PV %) in specs.split_pv_pct mergen, ohne andere
+  // specs-Felder (z. B. aus dem Preislisten-Import) zu verlieren.
+  const splitPvPct = n(fd, "split_pv_pct");
+  let specs: Record<string, unknown> = {};
+  if (id) {
+    const { data: existing } = await supabase
+      .from("products")
+      .select("specs")
+      .eq("id", id)
+      .maybeSingle();
+    if (existing?.specs && typeof existing.specs === "object") {
+      specs = { ...(existing.specs as Record<string, unknown>) };
+    }
+  }
+  if (splitPvPct === null) delete specs.split_pv_pct;
+  else specs.split_pv_pct = Math.min(Math.max(splitPvPct, 0), 100);
+
   const payload = {
     name,
     group_id: s(fd, "group_id"),
@@ -38,9 +57,9 @@ export async function saveProduct(
     unit: s(fd, "unit"),
     price_purchase: n(fd, "price_purchase"),
     price_sell: n(fd, "price_sell"),
+    specs,
   };
 
-  const supabase = await createClient();
   const { error } = id
     ? await supabase.from("products").update(payload).eq("id", id)
     : await supabase.from("products").insert(payload);

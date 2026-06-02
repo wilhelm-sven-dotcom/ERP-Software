@@ -62,12 +62,23 @@ export function calculate(input: CalcInput): CalcResult {
   let ekGesamt = 0;
 
   for (const p of input.positions) {
-    const group = groupOf(p);
     const vkSum =
       num(p.menge) * num(p.einzelpreis) * (1 - clampPercent(p.rabatt) / 100);
-    const grRab = clampPercent(gruppenRabatte[group]);
-    const vkNachGroup = vkSum * (1 - grRab / 100);
-    gruppenSummen[group] += vkNachGroup;
+
+    if (p.splitPvPct !== null && p.splitPvPct !== undefined) {
+      // Hybrid: Position anteilig auf PV-Anlage und Speicher verteilen. Jeder
+      // Anteil bekommt den Gruppenrabatt SEINER Gruppe (konsistent zur Logik
+      // unten). Die Position wird nur einmal gezählt (Summe = vkSum).
+      const pvShare = clampPercent(p.splitPvPct) / 100;
+      const pvRab = clampPercent(gruppenRabatte["PV-Anlage"]);
+      const spRab = clampPercent(gruppenRabatte["Speicher"]);
+      gruppenSummen["PV-Anlage"] += vkSum * pvShare * (1 - pvRab / 100);
+      gruppenSummen["Speicher"] += vkSum * (1 - pvShare) * (1 - spRab / 100);
+    } else {
+      const group = groupOf(p);
+      const grRab = clampPercent(gruppenRabatte[group]);
+      gruppenSummen[group] += vkSum * (1 - grRab / 100);
+    }
     ekGesamt += num(p.menge) * num(p.ek);
   }
 
@@ -95,6 +106,14 @@ export function calculate(input: CalcInput): CalcResult {
   const marge = netto - ekGesamt;
   const margeProzent = netto > 0 ? (marge / netto) * 100 : 0;
 
+  // Spezifische Preise (netto-Basis = gruppenSummen, vor Pauschalrabatt).
+  const kwp = num(input.systemSizeKwp);
+  const kwh = num(input.storageKwh);
+  const spezifischPvProKwp =
+    kwp > 0 ? round2(gruppenSummen["PV-Anlage"] / kwp) : null;
+  const spezifischSpeicherProKwh =
+    kwh > 0 ? round2(gruppenSummen.Speicher / kwh) : null;
+
   const totals: CalcTotals = {
     nettoVorPauschal: round2(nettoVorPauschal),
     netto: round2(netto),
@@ -112,6 +131,8 @@ export function calculate(input: CalcInput): CalcResult {
       Wallbox: round2(gruppenSummen.Wallbox),
       Sonstiges: round2(gruppenSummen.Sonstiges),
     },
+    spezifischPvProKwp,
+    spezifischSpeicherProKwh,
   };
 
   return { positions: input.positions.map(computePosition), totals };

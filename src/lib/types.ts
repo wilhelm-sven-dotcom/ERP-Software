@@ -79,6 +79,11 @@ export interface Project {
   zip: string | null;
   city: string | null;
   system_size_kwp: number | null;
+  /** Speicherkapazität in kWh (für spezifischen Speicherpreis €/kWh). */
+  storage_kwh: number | null;
+  /** Geokoordinaten des Montageorts (für die Karten-Anzeige). */
+  lat: number | null;
+  lon: number | null;
   notes: string | null;
   details: Record<string, unknown>;
   created_by: string | null;

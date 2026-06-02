@@ -39,6 +39,7 @@ export async function saveProject(
     zip: s(fd, "zip"),
     city: s(fd, "city"),
     system_size_kwp: n(fd, "system_size_kwp"),
+    storage_kwh: n(fd, "storage_kwh"),
     notes: s(fd, "notes"),
   };
 

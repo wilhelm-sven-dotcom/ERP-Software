@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Minus, Plus, Split, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -23,7 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { calculate } from "@/lib/calc/engine";
+import { calculate, round2 } from "@/lib/calc/engine";
 import { POSITION_GROUPS, type CalcPosition, type PositionGroup } from "@/lib/calc/types";
 import { saveCalculation } from "@/app/(app)/kalkulation/actions";
 import { formatCurrency, formatNumber } from "@/lib/format";
@@ -52,6 +52,8 @@ export function CalcEditor({
   initialNachlass,
   initialMwst,
   initialSkonto,
+  systemSizeKwp,
+  storageKwh,
   products,
   templates = [],
 }: {
@@ -62,6 +64,8 @@ export function CalcEditor({
   initialNachlass: number;
   initialMwst: number;
   initialSkonto: number;
+  systemSizeKwp?: number | null;
+  storageKwh?: number | null;
   products: Product[];
   templates?: CalcTemplate[];
 }) {
@@ -83,8 +87,10 @@ export function CalcEditor({
         nachlass: Number(nachlass) || 0,
         mwstPercent: Number(mwst) || 0,
         skontoPercent: Number(skonto) || 0,
+        systemSizeKwp,
+        storageKwh,
       }),
-    [positions, pauschal, nachlass, mwst, skonto],
+    [positions, pauschal, nachlass, mwst, skonto, systemSizeKwp, storageKwh],
   );
 
   function update(id: string, patch: Partial<CalcPosition>) {
@@ -99,12 +105,17 @@ export function CalcEditor({
   function applyProduct(id: string, productId: string) {
     const p = products.find((x) => x.id === productId);
     if (!p) return;
+    // Hybrid-Aufteilung aus den Produkt-Specs übernehmen (z. B. Hybrid-WR).
+    const rawSplit = (p.specs as Record<string, unknown> | null)?.split_pv_pct;
+    const splitPvPct =
+      typeof rawSplit === "number" && Number.isFinite(rawSplit) ? rawSplit : null;
     update(id, {
       product_id: p.id,
       bezeichnung: p.name,
       einheit: p.unit ?? "Stk",
       ek: p.price_purchase ?? 0,
       einzelpreis: p.price_sell ?? 0,
+      splitPvPct,
     });
   }
 
@@ -144,9 +155,14 @@ export function CalcEditor({
     setSaving(true);
     // Vorlagen-Zeilen ohne Menge (0) werden beim Speichern verworfen, damit nur
     // die tatsächlich gewählten Positionen im Angebot landen.
-    const toSave = positions.filter(
-      (p) => (Number(p.menge) || 0) > 0 && p.bezeichnung.trim() !== "",
-    );
+    const toSave = positions
+      .filter((p) => (Number(p.menge) || 0) > 0 && p.bezeichnung.trim() !== "")
+      // Preise auf 2 Nachkommastellen normalisieren.
+      .map((p) => ({
+        ...p,
+        ek: p.ek === null || p.ek === undefined ? p.ek : round2(Number(p.ek)),
+        einzelpreis: round2(Number(p.einzelpreis)),
+      }));
     const fd = new FormData();
     fd.set("project_id", projectId);
     if (calcId) fd.set("calc_id", calcId);
@@ -180,8 +196,8 @@ export function CalcEditor({
             <TableRow>
               <TableHead className="min-w-44">Bezeichnung</TableHead>
               <TableHead className="w-36">Produkt</TableHead>
-              <TableHead className="w-32">Gruppe</TableHead>
-              <TableHead className="w-20 text-right">Menge</TableHead>
+              <TableHead className="w-44">Gruppe</TableHead>
+              <TableHead className="w-32 text-right">Menge</TableHead>
               <TableHead className="w-24 text-right">EK €</TableHead>
               <TableHead className="w-24 text-right">VK €</TableHead>
               <TableHead className="w-20 text-right">Rabatt %</TableHead>
@@ -214,32 +230,111 @@ export function CalcEditor({
                   </Select>
                 </TableCell>
                 <TableCell>
-                  <Select
-                    value={p.group ?? "Sonstiges"}
-                    onValueChange={(v) =>
-                      update(p.id, { group: v as PositionGroup })
-                    }
-                  >
-                    <SelectTrigger size="sm" className="h-8 w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {POSITION_GROUPS.map((g) => (
-                        <SelectItem key={g} value={g}>
-                          {g}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {p.splitPvPct === null || p.splitPvPct === undefined ? (
+                    <div className="flex items-center gap-1">
+                      <Select
+                        value={p.group ?? "Sonstiges"}
+                        onValueChange={(v) =>
+                          update(p.id, { group: v as PositionGroup })
+                        }
+                      >
+                        <SelectTrigger size="sm" className="h-8 w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {POSITION_GROUPS.map((g) => (
+                            <SelectItem key={g} value={g}>
+                              {g}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 shrink-0"
+                        title="Als Hybrid aufteilen (PV/Speicher)"
+                        onClick={() => update(p.id, { splitPvPct: 50 })}
+                      >
+                        <Split className="size-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 rounded-md border px-1.5">
+                        <span className="text-muted-foreground text-xs">PV</span>
+                        <Input
+                          type="number"
+                          step="1"
+                          min={0}
+                          max={100}
+                          value={p.splitPvPct}
+                          onChange={(e) =>
+                            update(p.id, {
+                              splitPvPct: Math.min(
+                                Math.max(Number(e.target.value) || 0, 0),
+                                100,
+                              ),
+                            })
+                          }
+                          className="h-7 w-12 border-0 px-1 text-right shadow-none focus-visible:ring-0"
+                        />
+                        <span className="text-muted-foreground text-xs">
+                          % / Sp {100 - (Number(p.splitPvPct) || 0)} %
+                        </span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 shrink-0"
+                        title="Aufteilung entfernen"
+                        onClick={() => update(p.id, { splitPvPct: null })}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  )}
                 </TableCell>
                 <TableCell>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={p.menge}
-                    onChange={(e) => update(p.id, { menge: Number(e.target.value) })}
-                    className="h-8 text-right"
-                  />
+                  <div className="flex items-center gap-0.5">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="size-7 shrink-0"
+                      title="Menge −1"
+                      onClick={() =>
+                        update(p.id, {
+                          menge: Math.max((Number(p.menge) || 0) - 1, 0),
+                        })
+                      }
+                    >
+                      <Minus className="size-3" />
+                    </Button>
+                    <Input
+                      type="number"
+                      step="1"
+                      value={p.menge}
+                      onChange={(e) =>
+                        update(p.id, { menge: Number(e.target.value) })
+                      }
+                      className="h-8 w-14 text-right"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="size-7 shrink-0"
+                      title="Menge +1"
+                      onClick={() =>
+                        update(p.id, { menge: (Number(p.menge) || 0) + 1 })
+                      }
+                    >
+                      <Plus className="size-3" />
+                    </Button>
+                  </div>
                 </TableCell>
                 <TableCell>
                   <Input
@@ -377,6 +472,23 @@ export function CalcEditor({
               <Row label={`Skonto ${skonto} %`} value={`- ${formatCurrency(t.skontoBetrag)}`} />
               <Row label="Brutto nach Skonto" value={formatCurrency(t.bruttoNachSkonto)} />
             </>
+          ) : null}
+          {t.spezifischPvProKwp !== null ||
+          t.spezifischSpeicherProKwh !== null ? (
+            <div className="border-t pt-1.5 text-xs">
+              {t.spezifischPvProKwp !== null ? (
+                <Row
+                  label="Spez. Preis PV (netto)"
+                  value={`${formatCurrency(t.spezifischPvProKwp)} / kWp`}
+                />
+              ) : null}
+              {t.spezifischSpeicherProKwh !== null ? (
+                <Row
+                  label="Spez. Preis Speicher (netto)"
+                  value={`${formatCurrency(t.spezifischSpeicherProKwh)} / kWh`}
+                />
+              ) : null}
+            </div>
           ) : null}
           <div className="text-muted-foreground border-t pt-1.5 text-xs">
             <Row

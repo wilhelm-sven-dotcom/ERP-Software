@@ -41,6 +41,14 @@ export interface CalcPosition {
   rabatt?: number | null;
   /** Hauptgruppe (für Gruppenrabatt). Default: Sonstiges. */
   group?: PositionGroup;
+  /**
+   * Hybrid-Aufteilung (z. B. Hybrid-Wechselrichter): Anteil in Prozent, der dem
+   * Topf „PV-Anlage" zugerechnet wird; der Rest geht an „Speicher". Wenn gesetzt
+   * (0–100), wird die Position **anteilig** auf beide Gruppen verteilt statt
+   * einer einzigen `group` zugeordnet. Die Position wird trotzdem nur **einmal**
+   * gezählt (Gesamtsumme bleibt korrekt).
+   */
+  splitPvPct?: number | null;
 }
 
 /** Eingaben für die Summenberechnung (entspricht den calc-Feldern). */
@@ -56,6 +64,10 @@ export interface CalcInput {
   mwstPercent: number;
   /** Skonto in Prozent auf den Bruttobetrag (0–100). */
   skontoPercent?: number;
+  /** Anlagengröße in kWp (für spezifischen PV-Preis €/kWp). */
+  systemSizeKwp?: number | null;
+  /** Speicherkapazität in kWh (für spezifischen Speicherpreis €/kWh). */
+  storageKwh?: number | null;
 }
 
 export interface CalcPositionResult extends CalcPosition {
@@ -89,6 +101,16 @@ export interface CalcTotals {
   margeProzent: number;
   /** Summen je Hauptgruppe (netto vor Pauschalrabatt). */
   gruppenSummen: Record<PositionGroup, number>;
+  /**
+   * Spezifischer PV-Preis netto (€/kWp) = gruppenSummen["PV-Anlage"] / kWp.
+   * null, wenn keine Anlagengröße (kWp) hinterlegt ist.
+   */
+  spezifischPvProKwp: number | null;
+  /**
+   * Spezifischer Speicherpreis netto (€/kWh) = gruppenSummen["Speicher"] / kWh.
+   * null, wenn keine Speicherkapazität (kWh) hinterlegt ist.
+   */
+  spezifischSpeicherProKwh: number | null;
 }
 
 export interface CalcResult {

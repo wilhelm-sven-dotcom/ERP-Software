@@ -61,6 +61,8 @@ export default async function KalkulationEditorPage({
         initialNachlass={meta.nachlass}
         initialMwst={meta.mwstPercent}
         initialSkonto={meta.skontoPercent}
+        systemSizeKwp={project.system_size_kwp}
+        storageKwh={project.storage_kwh}
         products={products}
         templates={templates}
       />
