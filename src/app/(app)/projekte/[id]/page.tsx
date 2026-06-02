@@ -15,7 +15,7 @@ import {
   getProject,
   getProjectActivities,
 } from "@/lib/data/projects";
-import { getCustomers } from "@/lib/data/customers";
+import { getCustomers, getCustomer } from "@/lib/data/customers";
 import { getEmployees } from "@/lib/data/employees";
 import { getCalculationsByProject } from "@/lib/data/calculations";
 import { deleteProject } from "@/app/(app)/projekte/actions";
@@ -42,15 +42,26 @@ export default async function ProjectDetailPage({
   const project = await getProject(id);
   if (!project) notFound();
 
-  const [activities, customers, employees, variants] = await Promise.all([
-    getProjectActivities(id),
-    getCustomers(),
-    getEmployees(),
-    getCalculationsByProject(id),
-  ]);
+  const [activities, customers, employees, variants, fullCustomer] =
+    await Promise.all([
+      getProjectActivities(id),
+      getCustomers(),
+      getEmployees(),
+      getCalculationsByProject(id),
+      project.customer_id ? getCustomer(project.customer_id) : null,
+    ]);
   const selectedVariant =
     variants.find((v) => v.is_selected) ??
     (variants.length === 1 ? variants[0] : null);
+
+  const customerAddress = fullCustomer
+    ? [
+        fullCustomer.street,
+        [fullCustomer.zip, fullCustomer.city].filter(Boolean).join(" "),
+      ]
+        .filter(Boolean)
+        .join(", ")
+    : "";
 
   const address = [
     project.street,
@@ -139,6 +150,89 @@ export default async function ProjectDetailPage({
           </Link>
         )}
       </p>
+
+      {fullCustomer ? (
+        <Card className="mb-4">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">Kunde</CardTitle>
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/kunden/${fullCustomer.id}`}>Kundenakte öffnen</Link>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <Field
+                label="Kundennr."
+                value={
+                  fullCustomer.customer_nr
+                    ? String(fullCustomer.customer_nr)
+                    : "–"
+                }
+              />
+              <Field label="Typ" value={fullCustomer.kind} />
+              <Field
+                label="Name"
+                value={
+                  [
+                    fullCustomer.salutation,
+                    fullCustomer.academic_title,
+                    fullCustomer.first_name,
+                    fullCustomer.last_name,
+                  ]
+                    .filter(Boolean)
+                    .join(" ") || "–"
+                }
+              />
+              <Field label="Firma" value={fullCustomer.company} />
+              <Field label="Wohnort / Adresse" value={customerAddress} />
+              <div>
+                <dt className="text-muted-foreground text-xs">Telefon</dt>
+                <dd className="text-sm">
+                  {fullCustomer.phone ? (
+                    <a className="hover:underline" href={`tel:${fullCustomer.phone}`}>
+                      {fullCustomer.phone}
+                    </a>
+                  ) : (
+                    "–"
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground text-xs">Mobil</dt>
+                <dd className="text-sm">
+                  {fullCustomer.mobile ? (
+                    <a className="hover:underline" href={`tel:${fullCustomer.mobile}`}>
+                      {fullCustomer.mobile}
+                    </a>
+                  ) : (
+                    "–"
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground text-xs">E-Mail</dt>
+                <dd className="text-sm">
+                  {fullCustomer.email ? (
+                    <a
+                      className="hover:underline"
+                      href={`mailto:${fullCustomer.email}`}
+                    >
+                      {fullCustomer.email}
+                    </a>
+                  ) : (
+                    "–"
+                  )}
+                </dd>
+              </div>
+            </dl>
+            {fullCustomer.notes ? (
+              <p className="text-muted-foreground mt-3 text-sm whitespace-pre-wrap">
+                {fullCustomer.notes}
+              </p>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-1">
