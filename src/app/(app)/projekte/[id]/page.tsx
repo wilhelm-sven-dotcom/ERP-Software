@@ -17,6 +17,7 @@ import {
 } from "@/lib/data/projects";
 import { getCustomers } from "@/lib/data/customers";
 import { getEmployees } from "@/lib/data/employees";
+import { getCalculationsByProject } from "@/lib/data/calculations";
 import { deleteProject } from "@/app/(app)/projekte/actions";
 import { customerName, formatNumber } from "@/lib/format";
 import { statusVariant } from "@/lib/constants";
@@ -41,11 +42,15 @@ export default async function ProjectDetailPage({
   const project = await getProject(id);
   if (!project) notFound();
 
-  const [activities, customers, employees] = await Promise.all([
+  const [activities, customers, employees, variants] = await Promise.all([
     getProjectActivities(id),
     getCustomers(),
     getEmployees(),
+    getCalculationsByProject(id),
   ]);
+  const selectedVariant =
+    variants.find((v) => v.is_selected) ??
+    (variants.length === 1 ? variants[0] : null);
 
   const address = [
     project.street,
@@ -112,6 +117,28 @@ export default async function ProjectDetailPage({
           </Card>
         </div>
       ) : null}
+
+      <p className="text-muted-foreground mb-4 text-sm">
+        {selectedVariant ? (
+          <>
+            Gewählte Kalkulation:{" "}
+            <Link
+              href={`/kalkulation/${project.id}?calc=${selectedVariant.id}`}
+              className="text-foreground font-medium hover:underline"
+            >
+              {selectedVariant.name ?? "Standard"}
+            </Link>
+            {variants.length > 1 ? ` (${variants.length} Varianten)` : ""}
+          </>
+        ) : (
+          <Link
+            href={`/kalkulation/${project.id}`}
+            className="hover:underline"
+          >
+            Kalkulation öffnen
+          </Link>
+        )}
+      </p>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-1">
