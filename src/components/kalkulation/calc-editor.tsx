@@ -26,8 +26,9 @@ import {
 import { calculate, round2 } from "@/lib/calc/engine";
 import { POSITION_GROUPS, type CalcPosition, type PositionGroup } from "@/lib/calc/types";
 import { saveCalculation } from "@/app/(app)/kalkulation/actions";
+import { ProductPicker } from "@/components/produkte/product-picker";
 import { formatCurrency, formatNumber } from "@/lib/format";
-import type { CalcTemplate, Product } from "@/lib/types";
+import type { CalcTemplate, Product, ProductGroup } from "@/lib/types";
 
 let rowSeq = 0;
 function newRow(): CalcPosition {
@@ -55,6 +56,7 @@ export function CalcEditor({
   systemSizeKwp,
   storageKwh,
   products,
+  productGroups = [],
   templates = [],
 }: {
   projectId: string;
@@ -67,6 +69,7 @@ export function CalcEditor({
   systemSizeKwp?: number | null;
   storageKwh?: number | null;
   products: Product[];
+  productGroups?: ProductGroup[];
   templates?: CalcTemplate[];
 }) {
   const router = useRouter();
@@ -102,9 +105,7 @@ export function CalcEditor({
   function addRow() {
     setPositions((rows) => [...rows, newRow()]);
   }
-  function applyProduct(id: string, productId: string) {
-    const p = products.find((x) => x.id === productId);
-    if (!p) return;
+  function applyProduct(id: string, p: Product) {
     // Hybrid-Aufteilung aus den Produkt-Specs übernehmen (z. B. Hybrid-WR).
     const rawSplit = (p.specs as Record<string, unknown> | null)?.split_pv_pct;
     const splitPvPct =
@@ -216,18 +217,21 @@ export function CalcEditor({
                   />
                 </TableCell>
                 <TableCell>
-                  <Select onValueChange={(v) => applyProduct(p.id, v)}>
-                    <SelectTrigger size="sm" className="h-8 w-full">
-                      <SelectValue placeholder="übernehmen" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {products.map((prod) => (
-                        <SelectItem key={prod.id} value={prod.id}>
-                          {prod.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <ProductPicker
+                    products={products}
+                    groups={productGroups}
+                    onSelect={(prod) => applyProduct(p.id, prod)}
+                    trigger={
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 w-full justify-start font-normal"
+                      >
+                        {p.product_id ? "ändern" : "wählen …"}
+                      </Button>
+                    }
+                  />
                 </TableCell>
                 <TableCell>
                   {p.splitPvPct === null || p.splitPvPct === undefined ? (

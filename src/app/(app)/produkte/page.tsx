@@ -33,8 +33,26 @@ export default async function ProduktePage() {
     getProductGroups(),
     getAllProductAssets(),
   ]);
-  const groupName = (id: string | null) =>
-    groups.find((g) => g.id === id)?.name ?? "–";
+
+  // Produkte nach Gruppe gliedern; Gruppen-Reihenfolge nach `sort`, dann Name.
+  const sortedGroups = [...groups].sort(
+    (a, b) => a.sort - b.sort || a.name.localeCompare(b.name),
+  );
+  const sections: { name: string; items: typeof products }[] = [];
+  for (const g of sortedGroups) {
+    const items = products
+      .filter((p) => p.group_id === g.id)
+      .sort(
+        (a, b) =>
+          (a.category ?? "").localeCompare(b.category ?? "") ||
+          a.name.localeCompare(b.name),
+      );
+    if (items.length) sections.push({ name: g.name, items });
+  }
+  const ungrouped = products
+    .filter((p) => !groups.some((g) => g.id === p.group_id))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  if (ungrouped.length) sections.push({ name: "Ohne Gruppe", items: ungrouped });
 
   // Öffentliche URL eines Storage-Pfads (für Thumbnails in der Liste).
   const supabase = isSupabaseConfigured() ? await createClient() : null;
@@ -86,68 +104,80 @@ export default async function ProduktePage() {
           {newButton}
         </EmptyState>
       ) : (
-        <div className="bg-card rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-12" />
-                <TableHead>Name</TableHead>
-                <TableHead>Gruppe</TableHead>
-                <TableHead>Hersteller</TableHead>
-                <TableHead className="text-right">EK</TableHead>
-                <TableHead className="text-right">VK</TableHead>
-                <TableHead className="w-24" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {products.map((p) => {
-                const assets = assetsByProduct[p.id] ?? [];
-                const firstImage = assets.find((a) => a.kind === "image");
-                const thumb = urlFor(firstImage?.storage_path);
-                return (
-                  <TableRow key={p.id}>
-                    <TableCell>
-                      {thumb ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={thumb}
-                          alt={p.name}
-                          className="size-9 rounded border object-cover"
-                        />
-                      ) : (
-                        <div className="bg-muted size-9 rounded border" />
-                      )}
-                    </TableCell>
-                    <TableCell className="font-medium">{p.name}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {groupName(p.group_id)}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {p.manufacturer ?? "–"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {formatCurrency(p.price_purchase)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {formatCurrency(p.price_sell)}
-                    </TableCell>
-                    <TableCell>
-                      <ProductFormDialog
-                        product={p}
-                        groups={groups}
-                        assets={assets}
-                        trigger={
-                          <Button variant="ghost" size="sm">
-                            Bearbeiten
-                          </Button>
-                        }
-                      />
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+        <div className="space-y-6">
+          {sections.map((section) => (
+            <div key={section.name}>
+              <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                {section.name}
+                <span className="text-muted-foreground font-normal">
+                  ({section.items.length})
+                </span>
+              </h2>
+              <div className="bg-card rounded-lg border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12" />
+                      <TableHead>Name</TableHead>
+                      <TableHead>Kategorie</TableHead>
+                      <TableHead>Hersteller</TableHead>
+                      <TableHead className="text-right">EK</TableHead>
+                      <TableHead className="text-right">VK</TableHead>
+                      <TableHead className="w-24" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {section.items.map((p) => {
+                      const assets = assetsByProduct[p.id] ?? [];
+                      const firstImage = assets.find((a) => a.kind === "image");
+                      const thumb = urlFor(firstImage?.storage_path);
+                      return (
+                        <TableRow key={p.id}>
+                          <TableCell>
+                            {thumb ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={thumb}
+                                alt={p.name}
+                                className="size-9 rounded border object-cover"
+                              />
+                            ) : (
+                              <div className="bg-muted size-9 rounded border" />
+                            )}
+                          </TableCell>
+                          <TableCell className="font-medium">{p.name}</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {p.category ?? "–"}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {p.manufacturer ?? "–"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {formatCurrency(p.price_purchase)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {formatCurrency(p.price_sell)}
+                          </TableCell>
+                          <TableCell>
+                            <ProductFormDialog
+                              product={p}
+                              groups={groups}
+                              assets={assets}
+                              trigger={
+                                <Button variant="ghost" size="sm">
+                                  Bearbeiten
+                                </Button>
+                              }
+                            />
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>

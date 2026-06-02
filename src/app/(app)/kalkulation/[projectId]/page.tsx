@@ -8,7 +8,7 @@ import { SupabaseNotice } from "@/components/shared/supabase-notice";
 import { Button } from "@/components/ui/button";
 import { CalcEditor } from "@/components/kalkulation/calc-editor";
 import { getProject } from "@/lib/data/projects";
-import { getProducts } from "@/lib/data/products";
+import { getProducts, getProductGroups } from "@/lib/data/products";
 import { getCalcTemplates } from "@/lib/data/templates";
 import {
   getCalculationByProject,
@@ -28,9 +28,10 @@ export default async function KalkulationEditorPage({
   const project = await getProject(projectId);
   if (!project) notFound();
 
-  const [calc, products, templates] = await Promise.all([
+  const [calc, products, productGroups, templates] = await Promise.all([
     getCalculationByProject(projectId),
     getProducts(),
+    getProductGroups(),
     getCalcTemplates(),
   ]);
   const meta = readMeta(calc);
@@ -64,6 +65,7 @@ export default async function KalkulationEditorPage({
         systemSizeKwp={project.system_size_kwp}
         storageKwh={project.storage_kwh}
         products={products}
+        productGroups={productGroups}
         templates={templates}
       />
     </div>
