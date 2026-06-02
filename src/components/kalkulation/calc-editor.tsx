@@ -27,6 +27,7 @@ import { calculate, round2 } from "@/lib/calc/engine";
 import { POSITION_GROUPS, type CalcPosition, type PositionGroup } from "@/lib/calc/types";
 import { saveCalculation } from "@/app/(app)/kalkulation/actions";
 import { ProductPicker } from "@/components/produkte/product-picker";
+import { TemplateLoadDialog } from "@/components/kalkulation/template-load-dialog";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import type { CalcTemplate, Product, ProductGroup } from "@/lib/types";
 
@@ -152,16 +153,14 @@ export function CalcEditor({
   }
 
   /** Eine Kalkulationsvorlage laden: Positionen + Default-Rabatte/MwSt. */
-  function loadTemplate(templateId: string) {
-    const tpl = templates.find((t) => t.id === templateId);
-    if (!tpl) return;
-    const tplPositions = (Array.isArray(tpl.positions) ? tpl.positions : []) as CalcPosition[];
-    if (tplPositions.length === 0) {
-      toast.error("Diese Vorlage enthält keine Positionen.");
-      return;
-    }
-    // Frische IDs vergeben, Menge auf 0 als Vorschlag (Nutzer trägt Mengen ein)
-    const loaded: CalcPosition[] = tplPositions.map((p) => {
+  /** Ausgewählte Vorlagen-Positionen übernehmen (aus dem Auswahl-Dialog). */
+  function applyTemplate(
+    selected: CalcPosition[],
+    d: Record<string, unknown>,
+    templateName: string,
+  ) {
+    // Frische, eindeutige IDs vergeben; Menge als Vorschlag übernehmen.
+    const loaded: CalcPosition[] = selected.map((p) => {
       rowSeq += 1;
       return {
         ...p,
@@ -171,7 +170,6 @@ export function CalcEditor({
     });
     setPositions(loaded);
 
-    const d = (tpl.defaults ?? {}) as Record<string, unknown>;
     if (typeof d.mwstPercent === "number") setMwst(String(d.mwstPercent));
     if (typeof d.skontoPercent === "number") setSkonto(String(d.skontoPercent));
     if (typeof d.pauschalRabattPercent === "number")
@@ -179,7 +177,7 @@ export function CalcEditor({
     if (typeof d.nachlass === "number") setNachlass(String(d.nachlass));
 
     toast.success(
-      `Vorlage „${tpl.name}" geladen (${loaded.length} Positionen). Bitte Mengen eintragen.`,
+      `Vorlage „${templateName}" geladen (${loaded.length} Positionen). Bitte Mengen prüfen.`,
     );
   }
 
@@ -289,8 +287,9 @@ export function CalcEditor({
                         variant="outline"
                         size="sm"
                         className="h-8 w-full justify-start font-normal"
+                        title="Katalog-Produkt zuordnen / tauschen"
                       >
-                        {p.product_id ? "ändern" : "wählen …"}
+                        {p.product_id ? "Produkt ändern" : "Produkt wählen …"}
                       </Button>
                     }
                   />
@@ -457,18 +456,7 @@ export function CalcEditor({
           <Plus className="size-4" /> Position
         </Button>
         {templates.length > 0 ? (
-          <Select onValueChange={loadTemplate}>
-            <SelectTrigger size="sm" className="w-64">
-              <SelectValue placeholder="Vorlage übernehmen …" />
-            </SelectTrigger>
-            <SelectContent>
-              {templates.map((t) => (
-                <SelectItem key={t.id} value={t.id}>
-                  {t.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <TemplateLoadDialog templates={templates} onApply={applyTemplate} />
         ) : null}
         {positions.length > 0 ? (
           <span className="text-muted-foreground text-xs">
