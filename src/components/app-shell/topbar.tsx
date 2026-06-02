@@ -12,7 +12,7 @@ import { GlobalSearch } from "@/components/shared/global-search";
 import { NotificationBell } from "@/components/app-shell/notification-bell";
 
 /** Topbar: mobiles Menü, Zurück, Breadcrumb, Theme-Toggle, „Neues Projekt". */
-export function Topbar() {
+export function Topbar({ logoUrl }: { logoUrl?: string | null }) {
   const router = useRouter();
 
   return (
@@ -20,7 +20,7 @@ export function Topbar() {
       data-app-shell-chrome
       className="bg-background/80 supports-[backdrop-filter]:bg-background/60 sticky top-0 z-30 flex h-16 items-center gap-1 border-b px-4 backdrop-blur-xl"
     >
-      <MobileNav />
+      <MobileNav logoUrl={logoUrl} />
       <Button
         variant="ghost"
         size="icon"

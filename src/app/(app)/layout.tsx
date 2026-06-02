@@ -1,16 +1,19 @@
 import { Sidebar } from "@/components/app-shell/sidebar";
 import { Topbar } from "@/components/app-shell/topbar";
+import { getCompanySettings } from "@/lib/data/settings";
 
-export default function AppLayout({
+export default async function AppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const company = await getCompanySettings();
+  const logoUrl = company.logo_url ?? null;
   return (
     <div className="flex min-h-svh">
-      <Sidebar />
+      <Sidebar logoUrl={logoUrl} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar />
+        <Topbar logoUrl={logoUrl} />
         <main className="mx-auto w-full max-w-[1600px] flex-1 p-5 sm:p-7 lg:p-8">{children}</main>
       </div>
     </div>
