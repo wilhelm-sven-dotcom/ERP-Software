@@ -11,7 +11,7 @@ export default function AppLayout({
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar />
-        <main className="flex-1 p-4 sm:p-6">{children}</main>
+        <main className="mx-auto w-full max-w-[1600px] flex-1 p-5 sm:p-7 lg:p-8">{children}</main>
       </div>
     </div>
   );

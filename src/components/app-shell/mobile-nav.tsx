@@ -31,7 +31,7 @@ export function MobileNav() {
         </Button>
       </SheetTrigger>
       <SheetContent side="left" className="w-72 p-0">
-        <SheetHeader className="border-sidebar-border h-14 justify-center border-b">
+        <SheetHeader className="border-sidebar-border h-16 justify-center border-b px-4">
           <SheetTitle className="text-left">
             <BrandLogo />
           </SheetTitle>
