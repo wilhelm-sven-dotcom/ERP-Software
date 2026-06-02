@@ -67,6 +67,7 @@ export async function saveProject(
     title,
     customer_id: s(fd, "customer_id"),
     status: s(fd, "status") ?? "Anfrage",
+    project_type: s(fd, "project_type"),
     assigned_employee_id: s(fd, "assigned_employee_id"),
     street: s(fd, "street"),
     zip: s(fd, "zip"),

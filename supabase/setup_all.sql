@@ -855,3 +855,8 @@ drop policy if exists "offers_update" on public.offers;
 create policy "offers_update" on public.offers for update using (public.is_staff()) with check (public.is_staff());
 drop policy if exists "offers_delete" on public.offers;
 create policy "offers_delete" on public.offers for delete using (public.is_admin());
+
+-- ============================================================================
+-- Projekttyp (Anlagentyp) — Migration 20260531121300
+-- ============================================================================
+alter table public.projects add column if not exists project_type text;

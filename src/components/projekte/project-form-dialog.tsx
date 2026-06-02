@@ -28,7 +28,7 @@ import {
 import { AddressAutocomplete } from "@/components/shared/address-autocomplete";
 import { saveProject } from "@/app/(app)/projekte/actions";
 import { type ActionResult } from "@/lib/actions";
-import { PROJECT_STATUSES } from "@/lib/constants";
+import { PROJECT_STATUSES, PROJECT_TYPES } from "@/lib/constants";
 import { customerName } from "@/lib/format";
 import type { Customer, Employee, Project } from "@/lib/types";
 
@@ -139,6 +139,25 @@ export function ProjectFormDialog({
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="project_type">Anlagentyp</Label>
+            <Select
+              name="project_type"
+              defaultValue={project?.project_type ?? undefined}
+            >
+              <SelectTrigger id="project_type" className="w-full">
+                <SelectValue placeholder="Anlagentyp wählen" />
+              </SelectTrigger>
+              <SelectContent>
+                {PROJECT_TYPES.map((pt) => (
+                  <SelectItem key={pt} value={pt}>
+                    {pt}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="grid gap-2 sm:grid-cols-2">

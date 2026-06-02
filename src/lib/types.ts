@@ -74,6 +74,8 @@ export interface Project {
   customer_id: string | null;
   title: string | null;
   status: ProjectStatus | string | null;
+  /** Anlagentyp (PROJECT_TYPES) — steuert Angebots-Bausteine & Ablauf-Vorlagen. */
+  project_type: string | null;
   assigned_employee_id: string | null;
   street: string | null;
   zip: string | null;

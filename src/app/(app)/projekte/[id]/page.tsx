@@ -326,6 +326,7 @@ export default async function ProjectDetailPage({
                 value={project.customer ? customerName(project.customer) : "–"}
               />
               <Field label="Status" value={project.status} />
+              <Field label="Anlagentyp" value={project.project_type ?? "–"} />
               <Field
                 label="Anlagengröße"
                 value={
