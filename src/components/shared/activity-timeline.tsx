@@ -12,7 +12,7 @@ export function ActivityTimeline({ activities }: { activities: Activity[] }) {
   }
 
   return (
-    <ol className="relative space-y-4 border-l pl-5">
+    <ol className="relative max-h-[28rem] space-y-4 overflow-y-auto border-l pr-1 pl-5">
       {activities.map((a) => (
         <li key={a.id} className="relative">
           <span className="bg-primary ring-background absolute top-1.5 -left-[1.4rem] size-2.5 rounded-full ring-4" />
