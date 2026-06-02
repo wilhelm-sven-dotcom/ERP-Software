@@ -6,18 +6,9 @@ import { ArrowLeft, FileOutput, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { SupabaseNotice } from "@/components/shared/supabase-notice";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { PrintButton } from "@/components/angebot/print-button";
 import { OfferStatusSelect } from "@/components/angebot/offer-status-select";
 import {
-  DocumentHeader,
   DocumentFooter,
   RecipientBlock,
   salutationLine,
@@ -187,216 +178,245 @@ export default async function AngebotPage({
         />
       </div>
 
-      <article className="bg-card mx-auto max-w-3xl rounded-xl border p-8 print:border-0 print:p-0 print:shadow-none">
-        <DocumentHeader
-          company={company}
-          rightTitle={`Angebot Nr. ${offer.offer_number ?? "–"}`}
-          rightLines={[
-            datum,
-            ...(offer.valid_until
-              ? [
-                  `gültig bis ${new Intl.DateTimeFormat("de-DE").format(
-                    new Date(offer.valid_until),
-                  )}`,
-                ]
-              : []),
-          ]}
-        />
+      <article className="bg-card text-foreground mx-auto max-w-3xl overflow-hidden rounded-2xl border shadow-sm print:max-w-none print:rounded-none print:border-0 print:shadow-none">
+        {/* Briefkopf-Band */}
+        <header className="bg-primary/5 flex items-center justify-between gap-4 px-8 py-6">
+          <div className="flex items-center gap-4">
+            {company.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={company.logo_url}
+                alt={company.name || "Logo"}
+                className="h-14 max-w-52 object-contain"
+              />
+            ) : null}
+            <div>
+              <p className="text-primary text-lg font-bold tracking-tight">
+                {company.name || "ip³ Energietechnik"}
+              </p>
+              <p className="text-muted-foreground text-xs">
+                {[company.street, [company.zip, company.city].filter(Boolean).join(" ")]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-primary text-xs font-semibold tracking-[0.2em] uppercase">
+              Angebot
+            </p>
+            <p className="text-2xl font-bold">Nr. {offer.offer_number ?? "–"}</p>
+            <p className="text-muted-foreground text-xs">{datum}</p>
+            {offer.valid_until ? (
+              <p className="text-muted-foreground text-xs">
+                gültig bis {new Intl.DateTimeFormat("de-DE").format(new Date(offer.valid_until))}
+              </p>
+            ) : null}
+          </div>
+        </header>
 
-        <RecipientBlock customer={customer} />
+        <div className="px-8 py-7">
+          <RecipientBlock customer={customer} />
 
-        <div className="mt-6">
-          <h3 className="text-primary font-semibold">
-            {offer.title || project?.title || "Photovoltaikanlage"}
-          </h3>
-          {project?.system_size_kwp || project?.storage_kwh ? (
-            <p className="text-muted-foreground text-sm">
-              {project?.system_size_kwp
-                ? `PV-Anlage ${formatNumber(project.system_size_kwp)} kWp`
-                : ""}
-              {project?.storage_kwh
-                ? ` · Speicher ${formatNumber(project.storage_kwh)} kWh`
-                : ""}
-              {project?.city ? ` · Montageort: ${project.city}` : ""}
+          {/* Projekt-Titel + Eckdaten als Pills */}
+          <div className="mt-7">
+            <p className="text-muted-foreground text-xs tracking-wide uppercase">
+              Ihr Vorhaben
+            </p>
+            <h3 className="mt-1 text-xl font-semibold tracking-tight">
+              {offer.title || project?.title || "Photovoltaikanlage"}
+            </h3>
+            {project?.system_size_kwp || project?.storage_kwh || project?.city ? (
+              <div className="mt-3 flex flex-wrap gap-2 text-sm">
+                {project?.system_size_kwp ? (
+                  <span className="bg-primary/10 text-primary rounded-full px-3 py-1 font-medium">
+                    PV {formatNumber(project.system_size_kwp)} kWp
+                  </span>
+                ) : null}
+                {project?.storage_kwh ? (
+                  <span className="bg-primary/10 text-primary rounded-full px-3 py-1 font-medium">
+                    Speicher {formatNumber(project.storage_kwh)} kWh
+                  </span>
+                ) : null}
+                {project?.city ? (
+                  <span className="bg-muted text-muted-foreground rounded-full px-3 py-1">
+                    Montageort {project.city}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+
+          {/* Anrede + Einleitung */}
+          <p className="mt-7 text-sm">{salutationLine(customer)}</p>
+          {block("intro") ? (
+            <p className="text-foreground/90 mt-2 text-sm leading-relaxed whitespace-pre-wrap">
+              {block("intro")!.body}
             </p>
           ) : null}
-        </div>
 
-        {/* Anrede + Einleitung */}
-        <p className="mt-6 text-sm">{salutationLine(customer)}</p>
-        {block("intro") ? (
-          <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">
-            {block("intro")!.body}
-          </p>
-        ) : null}
-
-        {/* Lieferungen und Leistungen, nummeriert je Gruppe */}
-        <Section title="Lieferungen und Leistungen">
-          <ol className="space-y-4">
+          {/* Lieferungen und Leistungen — je Gruppe eine Karte */}
+          <h4 className="text-primary mt-8 mb-3 border-b pb-1 text-sm font-semibold tracking-wide uppercase">
+            Lieferungen und Leistungen
+          </h4>
+          <div className="space-y-3">
             {grouped.map((s, i) => {
               const lb = leistungByTitle.get(s.group.toLowerCase());
               const thumbs = s.rows
                 .map((r) => imageFor(r.product_id))
                 .filter((u): u is string => Boolean(u));
               return (
-                <li key={s.group}>
-                  <p className="font-medium">
-                    {i + 1}. {s.group}
-                  </p>
+                <div key={s.group} className="rounded-xl border p-4">
+                  <div className="flex items-center gap-3">
+                    <span className="bg-primary text-primary-foreground grid size-7 shrink-0 place-items-center rounded-full text-sm font-semibold">
+                      {i + 1}
+                    </span>
+                    <p className="font-semibold">{s.group}</p>
+                  </div>
                   {lb ? (
-                    <p className="text-muted-foreground mt-1 whitespace-pre-wrap">
-                      {lb}
-                    </p>
+                    <p className="text-muted-foreground mt-2 text-sm whitespace-pre-wrap">{lb}</p>
                   ) : null}
-                  <ul className="mt-1 list-inside list-disc">
+                  <ul className="mt-2 space-y-1 text-sm">
                     {s.rows.map((r) => (
-                      <li key={r.id}>
-                        {formatNumber(r.menge)} {r.einheit} · {r.bezeichnung || "—"}
+                      <li key={r.id} className="flex gap-2">
+                        <span className="text-primary">•</span>
+                        <span>
+                          <span className="text-muted-foreground tabular-nums">
+                            {formatNumber(r.menge)} {r.einheit}
+                          </span>{" "}
+                          {r.bezeichnung || "—"}
+                        </span>
                       </li>
                     ))}
                   </ul>
                   {thumbs.length > 0 ? (
-                    <div className="mt-2 flex flex-wrap gap-2">
+                    <div className="mt-3 flex flex-wrap gap-2">
                       {thumbs.map((u, k) => (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
                           key={k}
                           src={u}
                           alt=""
-                          className="h-16 w-16 rounded border object-cover"
+                          className="h-24 w-24 rounded-lg border object-cover"
                         />
                       ))}
                     </div>
                   ) : null}
-                </li>
+                </div>
               );
             })}
-          </ol>
-        </Section>
+          </div>
 
-        {/* Preisübersicht */}
-        <div className="mt-8">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Position</TableHead>
-                <TableHead className="text-right">Menge</TableHead>
-                <TableHead>Einheit</TableHead>
-                <TableHead className="text-right">Einzelpreis</TableHead>
-                <TableHead className="text-right">Summe netto</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {result.positions.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell>{p.bezeichnung || "—"}</TableCell>
-                  <TableCell className="text-right">{formatNumber(p.menge)}</TableCell>
-                  <TableCell>{p.einheit ?? ""}</TableCell>
-                  <TableCell className="text-right">
-                    {formatCurrency(p.einzelpreis)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {formatCurrency(p.positionNetto)}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-
-        <div className="mt-6 flex justify-end">
-          <table className="min-w-[320px] text-sm">
-            <tbody>
-              <tr>
-                <td className="py-1">Zwischensumme</td>
-                <td className="py-1 text-right">{formatCurrency(t.nettoVorPauschal)}</td>
-              </tr>
-              {meta.pauschalRabattPercent > 0 ? (
-                <tr>
-                  <td className="py-1">
-                    Pauschalrabatt {formatNumber(meta.pauschalRabattPercent, 1)} %
-                  </td>
-                  <td className="py-1 text-right">
-                    – {formatCurrency(t.nettoVorPauschal * (meta.pauschalRabattPercent / 100))}
-                  </td>
+          {/* Investitionsübersicht */}
+          <h4 className="text-primary mt-8 mb-3 border-b pb-1 text-sm font-semibold tracking-wide uppercase">
+            Investitionsübersicht
+          </h4>
+          <div className="overflow-hidden rounded-xl border">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/60">
+                <tr className="text-muted-foreground text-left text-xs uppercase">
+                  <th className="px-3 py-2 font-medium">Position</th>
+                  <th className="px-3 py-2 text-right font-medium">Menge</th>
+                  <th className="px-3 py-2 text-right font-medium">Einzelpreis</th>
+                  <th className="px-3 py-2 text-right font-medium">Summe netto</th>
                 </tr>
+              </thead>
+              <tbody>
+                {result.positions.map((p) => (
+                  <tr key={p.id} className="border-t">
+                    <td className="px-3 py-2">{p.bezeichnung || "—"}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {formatNumber(p.menge)} {p.einheit ?? ""}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {formatCurrency(p.einzelpreis)}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {formatCurrency(p.positionNetto)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Summen-Karte */}
+          <div className="mt-4 flex justify-end">
+            <div className="border-primary/20 bg-primary/5 w-full max-w-sm rounded-xl border p-4 text-sm">
+              <Row label="Zwischensumme" value={formatCurrency(t.nettoVorPauschal)} />
+              {meta.pauschalRabattPercent > 0 ? (
+                <Row
+                  label={`Pauschalrabatt ${formatNumber(meta.pauschalRabattPercent, 1)} %`}
+                  value={`– ${formatCurrency(t.nettoVorPauschal * (meta.pauschalRabattPercent / 100))}`}
+                />
               ) : null}
               {meta.nachlass > 0 ? (
-                <tr>
-                  <td className="py-1">Nachlass</td>
-                  <td className="py-1 text-right">– {formatCurrency(meta.nachlass)}</td>
-                </tr>
+                <Row label="Nachlass" value={`– ${formatCurrency(meta.nachlass)}`} />
               ) : null}
-              <tr className="border-t font-semibold">
-                <td className="py-1">Summe netto</td>
-                <td className="py-1 text-right">{formatCurrency(t.netto)}</td>
-              </tr>
-              {(
-                t.mwstSaetze ?? [{ rate: t.mwstSatz, betrag: t.mwstBetrag, netto: t.netto }]
-              ).map((mw) => (
-                <tr key={mw.rate}>
-                  <td className="py-1">
-                    MwSt {formatNumber(mw.rate, 0)} % (auf {formatCurrency(mw.netto)})
-                  </td>
-                  <td className="py-1 text-right">{formatCurrency(mw.betrag)}</td>
-                </tr>
-              ))}
-              <tr className="border-t text-base font-bold">
-                <td className="text-primary py-1.5">Endpreis brutto</td>
-                <td className="text-primary py-1.5 text-right">{formatCurrency(t.brutto)}</td>
-              </tr>
+              <div className="my-2 border-t" />
+              <Row label="Summe netto" value={formatCurrency(t.netto)} strong />
+              {(t.mwstSaetze ?? [{ rate: t.mwstSatz, betrag: t.mwstBetrag, netto: t.netto }]).map(
+                (mw) => (
+                  <Row
+                    key={mw.rate}
+                    label={`MwSt ${formatNumber(mw.rate, 0)} %`}
+                    value={formatCurrency(mw.betrag)}
+                  />
+                ),
+              )}
+              <div className="text-primary mt-2 flex items-baseline justify-between border-t pt-2">
+                <span className="font-semibold">Endpreis brutto</span>
+                <span className="text-xl font-bold tabular-nums">{formatCurrency(t.brutto)}</span>
+              </div>
               {t.skontoBetrag > 0 ? (
-                <>
-                  <tr>
-                    <td className="py-1">Skonto {formatNumber(meta.skontoPercent, 1)} %</td>
-                    <td className="py-1 text-right">– {formatCurrency(t.skontoBetrag)}</td>
-                  </tr>
-                  <tr className="font-semibold">
-                    <td className="py-1">Brutto nach Skonto</td>
-                    <td className="py-1 text-right">{formatCurrency(t.bruttoNachSkonto)}</td>
-                  </tr>
-                </>
+                <div className="mt-2 border-t pt-2">
+                  <Row
+                    label={`Skonto ${formatNumber(meta.skontoPercent, 1)} %`}
+                    value={`– ${formatCurrency(t.skontoBetrag)}`}
+                  />
+                  <Row label="Brutto nach Skonto" value={formatCurrency(t.bruttoNachSkonto)} strong />
+                </div>
               ) : null}
-            </tbody>
-          </table>
-        </div>
+              {t.spezifischPvProKwp !== null || t.spezifischSpeicherProKwh !== null ? (
+                <p className="text-muted-foreground mt-2 text-right text-[11px]">
+                  {t.spezifischPvProKwp !== null
+                    ? `${formatCurrency(t.spezifischPvProKwp)} / kWp`
+                    : ""}
+                  {t.spezifischSpeicherProKwh !== null
+                    ? `  ·  ${formatCurrency(t.spezifischSpeicherProKwh)} / kWh`
+                    : ""}
+                </p>
+              ) : null}
+            </div>
+          </div>
 
-        {/* Spezifische Preise */}
-        {t.spezifischPvProKwp !== null || t.spezifischSpeicherProKwh !== null ? (
-          <p className="text-muted-foreground mt-3 text-right text-xs">
-            {t.spezifischPvProKwp !== null
-              ? `Spez. Preis PV: ${formatCurrency(t.spezifischPvProKwp)} / kWp`
-              : ""}
-            {t.spezifischSpeicherProKwh !== null
-              ? `  ·  Speicher: ${formatCurrency(t.spezifischSpeicherProKwh)} / kWh`
-              : ""}
-          </p>
-        ) : null}
+          {/* Textbausteine in gespeicherter (per Drag & Drop änderbarer) Reihenfolge */}
+          {orderedTextBlocks.map((b, i) =>
+            b.kind === "schluss" && !b.title ? (
+              <p key={i} className="mt-7 text-sm leading-relaxed whitespace-pre-wrap">
+                {b.body}
+              </p>
+            ) : (
+              <Section key={i} title={b.title || b.kind}>
+                <p className="whitespace-pre-wrap">{b.body}</p>
+              </Section>
+            ),
+          )}
 
-        {/* Textbausteine in gespeicherter (per Drag & Drop änderbarer) Reihenfolge */}
-        {orderedTextBlocks.map((b, i) =>
-          b.kind === "schluss" && !b.title ? (
-            <p key={i} className="mt-6 whitespace-pre-wrap text-sm leading-relaxed">
-              {b.body}
+          {/* Unterschrift */}
+          <div className="mt-10 text-sm">
+            <p className="text-muted-foreground">
+              {company.city || "Weiden"}, den{" "}
+              {new Intl.DateTimeFormat("de-DE").format(new Date(offer.created_at))}
             </p>
-          ) : (
-            <Section key={i} title={b.title || b.kind}>
-              <p className="whitespace-pre-wrap">{b.body}</p>
-            </Section>
-          ),
-        )}
+            <div className="mt-10 w-56 border-t pt-1 text-xs">
+              <p className="font-medium">{company.name || "ip³ Energietechnik"}</p>
+              {company.ceo ? <p className="text-muted-foreground">{company.ceo}</p> : null}
+            </div>
+          </div>
 
-        {/* Unterschrift */}
-        <div className="mt-10 text-sm">
-          <p>
-            {company.city || "Weiden"}, den{" "}
-            {new Intl.DateTimeFormat("de-DE").format(new Date(offer.created_at))}
-          </p>
-          <p className="mt-8">{company.name || "ip³ Energietechnik"}</p>
-          {company.ceo ? <p className="text-muted-foreground">{company.ceo}</p> : null}
+          <DocumentFooter company={company} />
         </div>
-
-        <DocumentFooter company={company} />
       </article>
     </div>
   );
@@ -410,9 +430,28 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div className="mt-6 text-sm leading-relaxed">
-      <h4 className="text-primary mb-1 font-semibold">{title}</h4>
-      {children}
+    <div className="mt-7 text-sm leading-relaxed">
+      <h4 className="text-primary mb-2 border-b pb-1 text-sm font-semibold tracking-wide uppercase">
+        {title}
+      </h4>
+      <div className="text-foreground/90">{children}</div>
+    </div>
+  );
+}
+
+function Row({
+  label,
+  value,
+  strong = false,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+}) {
+  return (
+    <div className="flex items-baseline justify-between py-0.5">
+      <span className={strong ? "font-semibold" : "text-muted-foreground"}>{label}</span>
+      <span className={strong ? "font-semibold tabular-nums" : "tabular-nums"}>{value}</span>
     </div>
   );
 }
