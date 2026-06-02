@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentEmployee } from "@/lib/supabase/auth";
 import { ensureConfigured, fail, OK, type ActionResult } from "@/lib/actions";
 
 function s(fd: FormData, key: string): string | null {
@@ -152,12 +153,14 @@ export async function addProjectActivity(
   if (!title) return fail("Bitte einen Titel angeben.");
 
   const supabase = await createClient();
+  const me = await getCurrentEmployee();
   const { error } = await supabase.from("activities").insert({
     project_id: projectId,
     customer_id: s(fd, "customer_id"),
     type: s(fd, "type") ?? "notiz",
     title,
     body: s(fd, "body"),
+    employee_id: me?.id || null,
   });
   if (error) return fail(error.message);
 

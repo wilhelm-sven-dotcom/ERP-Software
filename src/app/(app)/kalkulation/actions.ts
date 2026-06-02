@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/supabase/auth";
+import { logActivity } from "@/lib/data/activities";
 import { ensureConfigured, fail, OK, type ActionResult } from "@/lib/actions";
 import { calculate } from "@/lib/calc/engine";
 import type { CalcInput, CalcPosition } from "@/lib/calc/types";
@@ -79,6 +80,7 @@ export async function saveCalculation(
   };
 
   let savedId = existingId;
+  let created = false;
   if (existingId) {
     const { error } = await supabase
       .from("calculations")
@@ -94,7 +96,14 @@ export async function saveCalculation(
       .single();
     if (error || !data) return fail(error?.message ?? "Speichern fehlgeschlagen");
     savedId = data.id;
+    created = true;
   }
+
+  await logActivity({
+    projectId,
+    type: "kalkulation",
+    title: `Kalkulation „${name}" ${created ? "erstellt" : "geändert"}`,
+  });
 
   // Größe ins Projekt übernehmen, wenn diese Variante ausgewählt ist
   // (oder die einzige Variante des Projekts).
