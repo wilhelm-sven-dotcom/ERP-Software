@@ -17,6 +17,10 @@ function n(fd: FormData, key: string): number | null {
   const x = Number(v.replace(",", "."));
   return Number.isFinite(x) ? x : null;
 }
+/** Auf 2 Nachkommastellen runden (null bleibt null). */
+function round2(v: number | null): number | null {
+  return v === null ? null : Math.round((v + Number.EPSILON) * 100) / 100;
+}
 
 export async function saveProduct(
   _prev: ActionResult,
@@ -55,8 +59,8 @@ export async function saveProduct(
     category: s(fd, "category"),
     sku: s(fd, "sku"),
     unit: s(fd, "unit"),
-    price_purchase: n(fd, "price_purchase"),
-    price_sell: n(fd, "price_sell"),
+    price_purchase: round2(n(fd, "price_purchase")),
+    price_sell: round2(n(fd, "price_sell")),
     specs,
   };
 
@@ -268,8 +272,8 @@ export async function importProducts(
       category: r.kategorie?.trim() || null,
       sku: r.artikelnr?.trim() || null,
       unit: r.einheit?.trim() || null,
-      price_purchase: toNum(r.ek),
-      price_sell: toNum(r.vk),
+      price_purchase: round2(toNum(r.ek)),
+      price_sell: round2(toNum(r.vk)),
       group_id,
     });
     if (error) skipped++;

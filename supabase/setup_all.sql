@@ -744,3 +744,15 @@ alter table public.projects add column if not exists lon numeric;
 alter table public.products add column if not exists sort int not null default 0;
 create index if not exists products_group_sort_idx
   on public.products (group_id, sort);
+
+-- ============================================================================
+-- Produktpreise auf 2 Nachkommastellen runden (Migration 20260531120900)
+-- ============================================================================
+update public.products
+set price_purchase = round(price_purchase::numeric, 2)
+where price_purchase is not null
+  and price_purchase <> round(price_purchase::numeric, 2);
+update public.products
+set price_sell = round(price_sell::numeric, 2)
+where price_sell is not null
+  and price_sell <> round(price_sell::numeric, 2);

@@ -176,16 +176,20 @@ function main() {
   const items: PriceItem[] = [];
   for (const r of rows) {
     const name = str(r[COL.name]);
-    const vk = numOrNull(r[COL.vk]);
+    const vkRaw = numOrNull(r[COL.vk]);
     const group = str(r[COL.group]);
     const art = str(r[COL.art]);
     // Echte Position: Name + VK + (Gruppe oder Art)
-    if (!name || vk === null || (!group && !art)) continue;
+    if (!name || vkRaw === null || (!group && !art)) continue;
+    // Preise auf 2 Nachkommastellen runden (geteilte Dienstleistungen ergeben
+    // sonst Werte wie 13,3333…).
+    const vk = round2(vkRaw);
+    const ekRaw = numOrNull(r[COL.ek]);
     // Spec-Zeilen (Phasen/MPP-Tracker…) haben keine Gruppe/Art → oben gefiltert
     items.push({
       name,
       description: str(r[COL.desc]),
-      ek: numOrNull(r[COL.ek]),
+      ek: ekRaw === null ? null : round2(ekRaw),
       vk,
       aufschlag_pct: numOrNull(r[COL.aufschlag]),
       unit: str(r[COL.unit]),
