@@ -82,6 +82,32 @@ export function CalcEditor({
   const [skonto, setSkonto] = React.useState(String(initialSkonto));
   const [saving, setSaving] = React.useState(false);
 
+  // Anlagengröße (kWp) und Speicher (kWh) live aus den Positionen berechnen:
+  // Σ(Menge·Wp)/1000 bzw. Σ(Menge·kWh je Einheit). Übersteuert die Projektfelder.
+  const computedKwp = React.useMemo(
+    () =>
+      Math.round(
+        positions.reduce(
+          (s, p) => s + (Number(p.menge) || 0) * (Number(p.moduleWp) || 0),
+          0,
+        ) / 10,
+      ) / 100,
+    [positions],
+  );
+  const computedKwh = React.useMemo(
+    () =>
+      Math.round(
+        positions.reduce(
+          (s, p) => s + (Number(p.menge) || 0) * (Number(p.kwhPerUnit) || 0),
+          0,
+        ) * 100,
+      ) / 100,
+    [positions],
+  );
+  // Fallback auf die manuellen Projektfelder, solange keine Wp/kWh hinterlegt sind.
+  const effKwp = computedKwp > 0 ? computedKwp : (systemSizeKwp ?? null);
+  const effKwh = computedKwh > 0 ? computedKwh : (storageKwh ?? null);
+
   const result = React.useMemo(
     () =>
       calculate({
@@ -90,10 +116,10 @@ export function CalcEditor({
         nachlass: Number(nachlass) || 0,
         mwstPercent: Number(mwst) || 0,
         skontoPercent: Number(skonto) || 0,
-        systemSizeKwp,
-        storageKwh,
+        systemSizeKwp: effKwp,
+        storageKwh: effKwh,
       }),
-    [positions, pauschal, nachlass, mwst, skonto, systemSizeKwp, storageKwh],
+    [positions, pauschal, nachlass, mwst, skonto, effKwp, effKwh],
   );
 
   function update(id: string, patch: Partial<CalcPosition>) {
@@ -106,17 +132,19 @@ export function CalcEditor({
     setPositions((rows) => [...rows, newRow()]);
   }
   function applyProduct(id: string, p: Product) {
-    // Hybrid-Aufteilung aus den Produkt-Specs übernehmen (z. B. Hybrid-WR).
-    const rawSplit = (p.specs as Record<string, unknown> | null)?.split_pv_pct;
-    const splitPvPct =
-      typeof rawSplit === "number" && Number.isFinite(rawSplit) ? rawSplit : null;
+    // Hybrid-Aufteilung sowie Wp/kWh aus den Produkt-Specs übernehmen.
+    const specs = (p.specs as Record<string, unknown> | null) ?? {};
+    const numOrNull = (v: unknown) =>
+      typeof v === "number" && Number.isFinite(v) ? v : null;
     update(id, {
       product_id: p.id,
       bezeichnung: p.name,
       einheit: p.unit ?? "Stk",
       ek: p.price_purchase ?? 0,
       einzelpreis: p.price_sell ?? 0,
-      splitPvPct,
+      splitPvPct: numOrNull(specs.split_pv_pct),
+      moduleWp: numOrNull(specs.module_wp),
+      kwhPerUnit: numOrNull(specs.storage_kwh),
     });
   }
 
@@ -479,6 +507,32 @@ export function CalcEditor({
           </div>
         </div>
 
+        <div className="space-y-4">
+        <div className="bg-primary/5 border-primary/20 grid grid-cols-2 gap-3 rounded-lg border p-4">
+          <div>
+            <p className="text-muted-foreground text-xs">Anlagengröße</p>
+            <p className="text-lg font-semibold">
+              {formatNumber(effKwp ?? 0)} kWp
+            </p>
+            {t.spezifischPvProKwp !== null ? (
+              <p className="text-muted-foreground text-xs">
+                {formatCurrency(t.spezifischPvProKwp)} / kWp
+              </p>
+            ) : null}
+          </div>
+          <div>
+            <p className="text-muted-foreground text-xs">Speicher</p>
+            <p className="text-lg font-semibold">
+              {formatNumber(effKwh ?? 0)} kWh
+            </p>
+            {t.spezifischSpeicherProKwh !== null ? (
+              <p className="text-muted-foreground text-xs">
+                {formatCurrency(t.spezifischSpeicherProKwh)} / kWh
+              </p>
+            ) : null}
+          </div>
+        </div>
+
         <div className="bg-card space-y-1.5 rounded-lg border p-4 text-sm">
           <Row label="Zwischensumme" value={formatCurrency(t.nettoVorPauschal)} />
           {Number(pauschal) > 0 ? (
@@ -519,6 +573,7 @@ export function CalcEditor({
               value={`${formatCurrency(t.marge)} (${formatNumber(t.margeProzent, 1)} %)`}
             />
           </div>
+        </div>
         </div>
       </div>
 

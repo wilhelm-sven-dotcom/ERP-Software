@@ -49,6 +49,10 @@ export interface CalcPosition {
    * gezählt (Gesamtsumme bleibt korrekt).
    */
   splitPvPct?: number | null;
+  /** Modulleistung je Einheit in Wp (aus Produkt) → Anlagengröße in kWp. */
+  moduleWp?: number | null;
+  /** Speicherkapazität je Einheit in kWh (aus Produkt) → Speichergröße. */
+  kwhPerUnit?: number | null;
 }
 
 /** Eingaben für die Summenberechnung (entspricht den calc-Feldern). */
