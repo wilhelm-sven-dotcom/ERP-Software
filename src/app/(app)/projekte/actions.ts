@@ -130,6 +130,26 @@ export async function setProjectStatus(fd: FormData): Promise<void> {
   revalidatePath(`/projekte/${id}`);
 }
 
+/** Status per Drag & Drop in der Pipeline setzen (typisiert, optimistisch). */
+export async function moveProjectStatus(
+  id: string,
+  status: string,
+): Promise<ActionResult> {
+  const guard = ensureConfigured();
+  if (guard) return guard;
+  if (!id || !status) return fail("Projekt oder Status fehlt.");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("projects")
+    .update({ status })
+    .eq("id", id);
+  if (error) return fail(error.message);
+  revalidatePath("/pipeline");
+  revalidatePath("/projekte");
+  revalidatePath(`/projekte/${id}`);
+  return OK;
+}
+
 export async function deleteProject(fd: FormData): Promise<void> {
   const id = s(fd, "id");
   if (!id || ensureConfigured()) return;
