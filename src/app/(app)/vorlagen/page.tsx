@@ -23,14 +23,20 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getOfferTemplates, getCalcTemplates } from "@/lib/data/templates";
+import { getAllTextBlocks } from "@/lib/data/text-blocks";
+import { getCurrentEmployee } from "@/lib/supabase/auth";
+import { TextBlockManager } from "@/components/vorlagen/text-block-manager";
 
 export const metadata: Metadata = { title: "Vorlagen" };
 
 export default async function VorlagenPage() {
-  const [offerTemplates, calcTemplates] = await Promise.all([
+  const [offerTemplates, calcTemplates, textBlocks, me] = await Promise.all([
     getOfferTemplates(),
     getCalcTemplates(),
+    getAllTextBlocks(),
+    getCurrentEmployee(),
   ]);
+  const isAdmin = me?.role === "admin";
 
   return (
     <div>
@@ -99,7 +105,7 @@ export default async function VorlagenPage() {
               <>
                 <p className="text-muted-foreground mb-3 text-sm">
                   In der <strong>Kalkulation</strong> eines Projekts oben
-                  „Vorlage übernehmen" wählen — die Positionen werden geladen,
+                  „Vorlage übernehmen“ wählen — die Positionen werden geladen,
                   du trägst nur die Mengen ein.
                 </p>
                 <Table>
@@ -142,6 +148,17 @@ export default async function VorlagenPage() {
           </CardContent>
         </Card>
       </div>
+
+      {isAdmin ? (
+        <Card className="mt-4">
+          <CardHeader>
+            <CardTitle className="text-base">Angebots-Textbausteine</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <TextBlockManager blocks={textBlocks} />
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }

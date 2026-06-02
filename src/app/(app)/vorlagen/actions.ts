@@ -7,6 +7,42 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/supabase/auth";
 import { ensureConfigured, fail, OK, type ActionResult } from "@/lib/actions";
 
+/** Angebots-Textbaustein anlegen/aktualisieren (nur Admin via RLS). */
+export async function saveTextBlock(
+  _prev: ActionResult,
+  fd: FormData,
+): Promise<ActionResult> {
+  const guard = ensureConfigured();
+  if (guard) return guard;
+  const supabase = await createClient();
+  const id = String(fd.get("id") ?? "").trim();
+  const kind = String(fd.get("kind") ?? "").trim();
+  if (!kind) return fail("Art des Bausteins fehlt.");
+  const ptRaw = String(fd.get("project_type") ?? "").trim();
+  const projectType = ptRaw && ptRaw !== "__standard__" ? ptRaw : null;
+  const payload = {
+    project_type: projectType,
+    kind,
+    title: String(fd.get("title") ?? "").trim() || null,
+    body: String(fd.get("body") ?? "").trim() || null,
+    sort: Number(fd.get("sort") ?? 0) || 0,
+  };
+  const { error } = id
+    ? await supabase.from("offer_text_blocks").update(payload).eq("id", id)
+    : await supabase.from("offer_text_blocks").insert(payload);
+  if (error) return fail(error.message);
+  revalidatePath("/vorlagen");
+  return OK;
+}
+
+export async function deleteTextBlock(fd: FormData): Promise<void> {
+  const id = String(fd.get("id") ?? "");
+  if (!id || ensureConfigured()) return;
+  const supabase = await createClient();
+  await supabase.from("offer_text_blocks").delete().eq("id", id);
+  revalidatePath("/vorlagen");
+}
+
 /** Leere Kalkulationsvorlage anlegen und in deren Editor springen. */
 export async function createCalcTemplate(): Promise<void> {
   if (ensureConfigured()) return;

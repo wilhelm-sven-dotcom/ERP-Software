@@ -16,12 +16,24 @@ import {
 } from "@/components/ui/table";
 import { PrintButton } from "@/components/angebot/print-button";
 import { OfferStatusSelect } from "@/components/angebot/offer-status-select";
+import {
+  DocumentHeader,
+  DocumentFooter,
+  RecipientBlock,
+  salutationLine,
+} from "@/components/documents/letterhead";
 import { getOffer } from "@/lib/data/offers";
 import { getProject } from "@/lib/data/projects";
+import { getCustomer } from "@/lib/data/customers";
 import { getCompanySettings } from "@/lib/data/settings";
+import { getTextBlocksFor } from "@/lib/data/text-blocks";
+import { getAllProductAssets, PRODUCT_ASSETS_BUCKET } from "@/lib/data/products";
+import { createClient } from "@/lib/supabase/server";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { deleteOffer } from "@/app/(app)/angebot/actions";
 import { calculate } from "@/lib/calc/engine";
-import { customerName, formatCurrency, formatNumber } from "@/lib/format";
+import { POSITION_GROUPS } from "@/lib/calc/types";
+import { formatCurrency, formatNumber } from "@/lib/format";
 import type { CalcPosition } from "@/lib/calc/types";
 
 export const metadata: Metadata = { title: "Angebot" };
@@ -39,6 +51,11 @@ export default async function AngebotPage({
     getProject(offer.project_id),
     getCompanySettings(),
   ]);
+  const [customer, blocks, assetsByProduct] = await Promise.all([
+    project?.customer_id ? getCustomer(project.customer_id) : Promise.resolve(null),
+    getTextBlocksFor(project?.project_type ?? null),
+    getAllProductAssets(),
+  ]);
 
   const m = offer.meta as Record<string, unknown>;
   const num = (v: unknown, d = 0) => (typeof v === "number" ? v : d);
@@ -51,7 +68,6 @@ export default async function AngebotPage({
         ? (m.mwstPerGroup as Record<string, number>)
         : undefined,
   };
-  // Eingefrorene Positionen/Meta neu auswerten (deterministisch, bleibt fix).
   const result = calculate({
     positions: offer.positions as CalcPosition[],
     pauschalRabattPercent: meta.pauschalRabattPercent,
@@ -62,11 +78,33 @@ export default async function AngebotPage({
   });
   const t = result.totals;
 
+  // Bausteine nach Art gruppieren; Leistungsbausteine per Titel (Gruppe/Kategorie).
+  const block = (kind: string) => blocks.find((b) => b.kind === kind) ?? null;
+  const leistungByTitle = new Map(
+    blocks
+      .filter((b) => b.kind === "leistung" && b.title)
+      .map((b) => [b.title!.toLowerCase(), b.body ?? ""]),
+  );
+
+  // Produktbilder je Position (öffentliche URL).
+  const supabase = isSupabaseConfigured() ? await createClient() : null;
+  const imageFor = (productId: string | undefined | null): string | null => {
+    if (!productId || !supabase) return null;
+    const img = (assetsByProduct[productId] ?? []).find((a) => a.kind === "image");
+    if (!img?.storage_path) return null;
+    return supabase.storage.from(PRODUCT_ASSETS_BUCKET).getPublicUrl(img.storage_path)
+      .data.publicUrl;
+  };
+
+  // Positionen je Leistungsgruppe (für „Lieferungen und Leistungen").
+  const grouped = POSITION_GROUPS.map((g) => ({
+    group: g,
+    rows: result.positions.filter((p) => (p.group ?? "Sonstiges") === g),
+  })).filter((s) => s.rows.length > 0);
+
   const datum = new Intl.DateTimeFormat("de-DE", { dateStyle: "long" }).format(
     new Date(offer.created_at),
   );
-  const customer = project?.customer;
-  const customerAddr = customer ? customerName(customer) : "—";
 
   return (
     <div>
@@ -98,39 +136,27 @@ export default async function AngebotPage({
       </div>
 
       <article className="bg-card mx-auto max-w-3xl rounded-lg border p-8 print:border-0 print:p-0 print:shadow-none">
-        <header className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-primary text-xl font-bold">
-              {company.name || "ip³ Energietechnik"}
-            </h2>
-            <p className="text-muted-foreground text-sm">
-              {[company.street, [company.zip, company.city].filter(Boolean).join(" ")]
-                .filter(Boolean)
-                .join(", ")}
-            </p>
-            <p className="text-muted-foreground text-sm">
-              {[company.phone, company.email].filter(Boolean).join(" · ")}
-            </p>
-          </div>
-          <div className="text-right text-sm">
-            <p className="font-semibold">Angebot Nr. {offer.offer_number ?? "–"}</p>
-            <p className="text-muted-foreground">{datum}</p>
-            {offer.valid_until ? (
-              <p className="text-muted-foreground">
-                gültig bis{" "}
-                {new Intl.DateTimeFormat("de-DE").format(new Date(offer.valid_until))}
-              </p>
-            ) : null}
-          </div>
-        </header>
+        <DocumentHeader
+          company={company}
+          rightTitle={`Angebot Nr. ${offer.offer_number ?? "–"}`}
+          rightLines={[
+            datum,
+            ...(offer.valid_until
+              ? [
+                  `gültig bis ${new Intl.DateTimeFormat("de-DE").format(
+                    new Date(offer.valid_until),
+                  )}`,
+                ]
+              : []),
+          ]}
+        />
 
-        <div className="mt-8">
-          <p className="text-muted-foreground text-xs">Angebot für</p>
-          <p className="font-medium">{customerAddr}</p>
-        </div>
+        <RecipientBlock customer={customer} />
 
         <div className="mt-6">
-          <h3 className="text-primary font-semibold">{project?.title}</h3>
+          <h3 className="text-primary font-semibold">
+            {offer.title || project?.title || "Photovoltaikanlage"}
+          </h3>
           {project?.system_size_kwp || project?.storage_kwh ? (
             <p className="text-muted-foreground text-sm">
               {project?.system_size_kwp
@@ -144,7 +170,72 @@ export default async function AngebotPage({
           ) : null}
         </div>
 
-        <div className="mt-6">
+        {/* Anrede + Einleitung */}
+        <p className="mt-6 text-sm">{salutationLine(customer)}</p>
+        {block("intro") ? (
+          <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">
+            {block("intro")!.body}
+          </p>
+        ) : null}
+
+        {block("art_der_anlage") ? (
+          <Section title={block("art_der_anlage")!.title || "Art der Anlage"}>
+            <p className="whitespace-pre-wrap">{block("art_der_anlage")!.body}</p>
+          </Section>
+        ) : null}
+
+        {/* Lieferungen und Leistungen, nummeriert je Gruppe */}
+        <Section title="Lieferungen und Leistungen">
+          <ol className="space-y-4">
+            {grouped.map((s, i) => {
+              const lb = leistungByTitle.get(s.group.toLowerCase());
+              const thumbs = s.rows
+                .map((r) => imageFor(r.product_id))
+                .filter((u): u is string => Boolean(u));
+              return (
+                <li key={s.group}>
+                  <p className="font-medium">
+                    {i + 1}. {s.group}
+                  </p>
+                  {lb ? (
+                    <p className="text-muted-foreground mt-1 whitespace-pre-wrap">
+                      {lb}
+                    </p>
+                  ) : null}
+                  <ul className="mt-1 list-inside list-disc">
+                    {s.rows.map((r) => (
+                      <li key={r.id}>
+                        {formatNumber(r.menge)} {r.einheit} · {r.bezeichnung || "—"}
+                      </li>
+                    ))}
+                  </ul>
+                  {thumbs.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {thumbs.map((u, k) => (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          key={k}
+                          src={u}
+                          alt=""
+                          className="h-16 w-16 rounded border object-cover"
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ol>
+        </Section>
+
+        {block("nicht_enthalten") ? (
+          <Section title={block("nicht_enthalten")!.title || "Explizit nicht enthalten"}>
+            <p className="whitespace-pre-wrap">{block("nicht_enthalten")!.body}</p>
+          </Section>
+        ) : null}
+
+        {/* Preisübersicht */}
+        <div className="mt-8">
           <Table>
             <TableHeader>
               <TableRow>
@@ -159,9 +250,7 @@ export default async function AngebotPage({
               {result.positions.map((p) => (
                 <TableRow key={p.id}>
                   <TableCell>{p.bezeichnung || "—"}</TableCell>
-                  <TableCell className="text-right">
-                    {formatNumber(p.menge)}
-                  </TableCell>
+                  <TableCell className="text-right">{formatNumber(p.menge)}</TableCell>
                   <TableCell>{p.einheit ?? ""}</TableCell>
                   <TableCell className="text-right">
                     {formatCurrency(p.einzelpreis)}
@@ -180,9 +269,7 @@ export default async function AngebotPage({
             <tbody>
               <tr>
                 <td className="py-1">Zwischensumme</td>
-                <td className="py-1 text-right">
-                  {formatCurrency(t.nettoVorPauschal)}
-                </td>
+                <td className="py-1 text-right">{formatCurrency(t.nettoVorPauschal)}</td>
               </tr>
               {meta.pauschalRabattPercent > 0 ? (
                 <tr>
@@ -190,19 +277,14 @@ export default async function AngebotPage({
                     Pauschalrabatt {formatNumber(meta.pauschalRabattPercent, 1)} %
                   </td>
                   <td className="py-1 text-right">
-                    –{" "}
-                    {formatCurrency(
-                      t.nettoVorPauschal * (meta.pauschalRabattPercent / 100),
-                    )}
+                    – {formatCurrency(t.nettoVorPauschal * (meta.pauschalRabattPercent / 100))}
                   </td>
                 </tr>
               ) : null}
               {meta.nachlass > 0 ? (
                 <tr>
                   <td className="py-1">Nachlass</td>
-                  <td className="py-1 text-right">
-                    – {formatCurrency(meta.nachlass)}
-                  </td>
+                  <td className="py-1 text-right">– {formatCurrency(meta.nachlass)}</td>
                 </tr>
               ) : null}
               <tr className="border-t font-semibold">
@@ -210,9 +292,7 @@ export default async function AngebotPage({
                 <td className="py-1 text-right">{formatCurrency(t.netto)}</td>
               </tr>
               {(
-                t.mwstSaetze ?? [
-                  { rate: t.mwstSatz, betrag: t.mwstBetrag, netto: t.netto },
-                ]
+                t.mwstSaetze ?? [{ rate: t.mwstSatz, betrag: t.mwstBetrag, netto: t.netto }]
               ).map((mw) => (
                 <tr key={mw.rate}>
                   <td className="py-1">
@@ -223,25 +303,17 @@ export default async function AngebotPage({
               ))}
               <tr className="border-t text-base font-bold">
                 <td className="text-primary py-1.5">Endpreis brutto</td>
-                <td className="text-primary py-1.5 text-right">
-                  {formatCurrency(t.brutto)}
-                </td>
+                <td className="text-primary py-1.5 text-right">{formatCurrency(t.brutto)}</td>
               </tr>
               {t.skontoBetrag > 0 ? (
                 <>
                   <tr>
-                    <td className="py-1">
-                      Skonto {formatNumber(meta.skontoPercent, 1)} %
-                    </td>
-                    <td className="py-1 text-right">
-                      – {formatCurrency(t.skontoBetrag)}
-                    </td>
+                    <td className="py-1">Skonto {formatNumber(meta.skontoPercent, 1)} %</td>
+                    <td className="py-1 text-right">– {formatCurrency(t.skontoBetrag)}</td>
                   </tr>
                   <tr className="font-semibold">
                     <td className="py-1">Brutto nach Skonto</td>
-                    <td className="py-1 text-right">
-                      {formatCurrency(t.bruttoNachSkonto)}
-                    </td>
+                    <td className="py-1 text-right">{formatCurrency(t.bruttoNachSkonto)}</td>
                   </tr>
                 </>
               ) : null}
@@ -249,11 +321,67 @@ export default async function AngebotPage({
           </table>
         </div>
 
-        <footer className="text-muted-foreground mt-10 border-t pt-4 text-xs">
-          Dieses Angebot ist freibleibend. Es gelten unsere allgemeinen
-          Geschäftsbedingungen.
-        </footer>
+        {/* Spezifische Preise */}
+        {t.spezifischPvProKwp !== null || t.spezifischSpeicherProKwh !== null ? (
+          <p className="text-muted-foreground mt-3 text-right text-xs">
+            {t.spezifischPvProKwp !== null
+              ? `Spez. Preis PV: ${formatCurrency(t.spezifischPvProKwp)} / kWp`
+              : ""}
+            {t.spezifischSpeicherProKwh !== null
+              ? `  ·  Speicher: ${formatCurrency(t.spezifischSpeicherProKwh)} / kWh`
+              : ""}
+          </p>
+        ) : null}
+
+        {block("optionale_leistungen") ? (
+          <Section title={block("optionale_leistungen")!.title || "Optionale Leistungen"}>
+            <p className="whitespace-pre-wrap">{block("optionale_leistungen")!.body}</p>
+          </Section>
+        ) : null}
+
+        {/* Bedingungen */}
+        {(["zahlungsbedingungen", "gewaehrleistung", "gueltigkeit", "liefertermin"] as const).map(
+          (k) =>
+            block(k) ? (
+              <Section key={k} title={block(k)!.title || k}>
+                <p className="whitespace-pre-wrap">{block(k)!.body}</p>
+              </Section>
+            ) : null,
+        )}
+
+        {block("schluss") ? (
+          <p className="mt-6 whitespace-pre-wrap text-sm leading-relaxed">
+            {block("schluss")!.body}
+          </p>
+        ) : null}
+
+        {/* Unterschrift */}
+        <div className="mt-10 text-sm">
+          <p>
+            {company.city || "Weiden"}, den{" "}
+            {new Intl.DateTimeFormat("de-DE").format(new Date(offer.created_at))}
+          </p>
+          <p className="mt-8">{company.name || "ip³ Energietechnik"}</p>
+          {company.ceo ? <p className="text-muted-foreground">{company.ceo}</p> : null}
+        </div>
+
+        <DocumentFooter company={company} />
       </article>
+    </div>
+  );
+}
+
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="mt-6 text-sm leading-relaxed">
+      <h4 className="text-primary mb-1 font-semibold">{title}</h4>
+      {children}
     </div>
   );
 }

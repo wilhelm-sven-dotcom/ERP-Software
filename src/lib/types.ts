@@ -222,6 +222,31 @@ export interface Offer {
   updated_at: string;
 }
 
+export type TextBlockKind =
+  | "intro"
+  | "art_der_anlage"
+  | "leistung"
+  | "nicht_enthalten"
+  | "zahlungsbedingungen"
+  | "gewaehrleistung"
+  | "gueltigkeit"
+  | "liefertermin"
+  | "optionale_leistungen"
+  | "schluss";
+
+export interface OfferTextBlock {
+  id: string;
+  /** NULL = Standard für alle Anlagentypen. */
+  project_type: string | null;
+  kind: TextBlockKind | string;
+  title: string | null;
+  body: string | null;
+  sort: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Setting {
   key: string;
   value: unknown;
