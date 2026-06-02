@@ -52,6 +52,15 @@ export async function saveProduct(
   if (splitPvPct === null) delete specs.split_pv_pct;
   else specs.split_pv_pct = Math.min(Math.max(splitPvPct, 0), 100);
 
+  // Modulleistung (Wp) und Speicherkapazität (kWh je Einheit) für die
+  // automatische kWp/kWh-Berechnung in der Kalkulation.
+  const moduleWp = n(fd, "module_wp");
+  if (moduleWp === null) delete specs.module_wp;
+  else specs.module_wp = Math.max(moduleWp, 0);
+  const storageKwh = n(fd, "storage_kwh");
+  if (storageKwh === null) delete specs.storage_kwh;
+  else specs.storage_kwh = Math.max(storageKwh, 0);
+
   const payload = {
     name,
     group_id: s(fd, "group_id"),

@@ -160,6 +160,47 @@ export function ProductFormDialog({
             </div>
           </div>
 
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <Label htmlFor="module_wp">Modulleistung (Wp)</Label>
+              <Input
+                id="module_wp"
+                name="module_wp"
+                type="number"
+                step="1"
+                min={0}
+                defaultValue={
+                  typeof product?.specs?.module_wp === "number"
+                    ? (product.specs.module_wp as number)
+                    : ""
+                }
+                placeholder="z. B. 445"
+              />
+              <p className="text-muted-foreground text-xs">
+                Nur PV-Module: Leistung je Stück → zählt zur kWp der Kalkulation.
+              </p>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="storage_kwh">Speicher (kWh je Einheit)</Label>
+              <Input
+                id="storage_kwh"
+                name="storage_kwh"
+                type="number"
+                step="0.01"
+                min={0}
+                defaultValue={
+                  typeof product?.specs?.storage_kwh === "number"
+                    ? (product.specs.storage_kwh as number)
+                    : ""
+                }
+                placeholder="z. B. 5.12"
+              />
+              <p className="text-muted-foreground text-xs">
+                Nur Speicher: Kapazität je Stück → zählt zur kWh der Kalkulation.
+              </p>
+            </div>
+          </div>
+
           <div className="grid gap-2">
             <Label htmlFor="split_pv_pct">Hybrid – Anteil PV (%)</Label>
             <Input
