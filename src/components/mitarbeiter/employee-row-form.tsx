@@ -50,7 +50,12 @@ export function EmployeeRowForm({
         <TableCell className="text-muted-foreground">
           {employee.email ?? "–"}
         </TableCell>
-        <TableCell className="capitalize">{employee.role}</TableCell>
+        <TableCell className="capitalize">
+          {employee.role}
+          {employee.is_sales ? (
+            <span className="text-muted-foreground ml-1 text-xs">· Vertrieb</span>
+          ) : null}
+        </TableCell>
         <TableCell>{employee.active ? "aktiv" : "inaktiv"}</TableCell>
         <TableCell />
       </TableRow>
@@ -62,7 +67,7 @@ export function EmployeeRowForm({
       <TableCell colSpan={5} className="p-0">
         <form
           action={action}
-          className="grid grid-cols-[1fr_1fr_140px_96px_100px_auto] items-center gap-2 px-2 py-1.5"
+          className="grid grid-cols-[1fr_1fr_140px_96px_90px_90px_auto] items-center gap-2 px-2 py-1.5"
         >
           <input type="hidden" name="id" value={employee.id} />
           <Input
@@ -92,6 +97,15 @@ export function EmployeeRowForm({
             title="Interner Stundensatz (Nachkalkulation)"
             className="h-8"
           />
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="is_sales"
+              defaultChecked={employee.is_sales ?? false}
+              className="size-4"
+            />
+            Vertrieb
+          </label>
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"

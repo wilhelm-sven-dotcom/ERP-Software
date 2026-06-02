@@ -40,6 +40,7 @@ export async function saveEmployee(
     name: s(fd, "name"),
     role: roleRaw === "admin" ? "admin" : "mitarbeiter",
     active: fd.get("active") === "on" || fd.get("active") === "true",
+    is_sales: fd.get("is_sales") === "on" || fd.get("is_sales") === "true",
     cost_rate: rate !== null && Number.isFinite(rate) ? rate : null,
   };
 

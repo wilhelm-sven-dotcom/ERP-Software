@@ -68,6 +68,17 @@ export const DEFAULT_CATEGORIES = [
 /** Default-Aufschläge für die Preisbildung (Basis-EK → EK → VK). */
 export const PRICE_DEFAULTS = { safety_pct: 0, margin_pct: 20 };
 
+/** Quelle einer Anfrage (Vertriebs-Lead). */
+export const LEAD_SOURCES = [
+  "Telefon",
+  "Web-Formular",
+  "E-Mail",
+  "Empfehlung",
+  "Messe",
+  "Bestandskunde",
+  "Sonstiges",
+] as const;
+
 /** Anlagentypen (für Angebots-Bausteine und Projektablauf-Vorlagen). */
 export const PROJECT_TYPES = [
   "Dachanlage bis 10 kWp",

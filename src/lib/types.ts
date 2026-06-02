@@ -35,6 +35,8 @@ export interface Employee {
   email: string | null;
   role: Role;
   active: boolean;
+  /** Kennzeichen „Vertrieb" — erscheint bei der Anfragen-Zuweisung. */
+  is_sales?: boolean;
   /** Interner Stundensatz (€/Std) für die Nachkalkulation. */
   cost_rate?: number | null;
   created_at: string;
@@ -92,6 +94,8 @@ export interface Project {
   customer_id: string | null;
   title: string | null;
   status: ProjectStatus | string | null;
+  /** Quelle der Anfrage (LEAD_SOURCES: Telefon/Web/Empfehlung …). */
+  source: string | null;
   /** Anlagentyp (PROJECT_TYPES) — steuert Angebots-Bausteine & Ablauf-Vorlagen. */
   project_type: string | null;
   assigned_employee_id: string | null;
@@ -245,6 +249,8 @@ export interface WorkflowTemplate {
   project_type: string | null;
   name: string;
   active: boolean;
+  /** 'projekt' (Standard) | 'vertrieb' (vorgelagerter Vertriebsablauf). */
+  phase: "projekt" | "vertrieb" | string;
   created_at: string;
   updated_at: string;
 }
@@ -257,6 +263,20 @@ export interface WorkflowStep {
   role: string | null;
   offset_days: number;
   sort: number;
+  /** Phase/Bündel für die Aufgaben-Gruppierung (z. B. „Planung"). */
+  group_label: string | null;
+}
+
+/** Vorgänger-Beziehung zwischen Vorlagen-Schritten. */
+export interface WorkflowStepDep {
+  step_id: string;
+  depends_on_step_id: string;
+}
+
+/** Vorgänger-Beziehung zwischen konkreten Aufgaben. */
+export interface ProjectTaskDep {
+  task_id: string;
+  depends_on_task_id: string;
 }
 
 export interface ProjectTask {
@@ -266,7 +286,7 @@ export interface ProjectTask {
   description: string | null;
   assignee_employee_id: string | null;
   due_date: string | null;
-  status: "offen" | "angeboten" | "erledigt" | string;
+  status: "wartet" | "offen" | "angeboten" | "erledigt" | string;
   /** Optionale Bündelung paralleler Aufgaben (z. B. „Vorbereitung"). */
   group_label: string | null;
   sort: number;
