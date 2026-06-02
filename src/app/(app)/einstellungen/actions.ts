@@ -4,7 +4,17 @@ import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/supabase/auth";
+import { disconnect as disconnectGoogleIntegration } from "@/lib/google/calendar";
 import { ensureConfigured, fail, OK, type ActionResult } from "@/lib/actions";
+
+/** Google-Kalender-Verbindung des aktuellen Mitarbeiters trennen. */
+export async function disconnectGoogle(): Promise<void> {
+  if (ensureConfigured()) return;
+  const me = await getCurrentEmployee();
+  if (!me?.id) return;
+  await disconnectGoogleIntegration(me.id);
+  revalidatePath("/einstellungen");
+}
 
 function s(fd: FormData, key: string): string {
   return String(fd.get(key) ?? "").trim();

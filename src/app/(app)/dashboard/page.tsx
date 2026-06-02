@@ -10,6 +10,7 @@ import { getProjects } from "@/lib/data/projects";
 import { getCustomers } from "@/lib/data/customers";
 import { getAdminStats } from "@/lib/data/stats";
 import { getMyOpenTasks } from "@/lib/data/workflow";
+import { listUpcomingEvents } from "@/lib/google/calendar";
 import { getCurrentEmployee } from "@/lib/supabase/auth";
 import { GlobalSearch } from "@/components/shared/global-search";
 import { customerName, formatCurrency, formatDate, formatNumber } from "@/lib/format";
@@ -154,9 +155,10 @@ async function AdminDashboard() {
 }
 
 async function EmployeeDashboard({ employeeId }: { employeeId: string | null }) {
-  const [projects, tasks] = await Promise.all([
+  const [projects, tasks, events] = await Promise.all([
     getProjects(),
     employeeId ? getMyOpenTasks(employeeId) : Promise.resolve([]),
+    employeeId ? listUpcomingEvents(employeeId) : Promise.resolve([]),
   ]);
   const myProjects = projects.filter((p) => p.assigned_employee_id === employeeId);
 
@@ -173,24 +175,51 @@ async function EmployeeDashboard({ employeeId }: { employeeId: string | null }) 
         <Kpi label="Meine Projekte" value={formatNumber(myProjects.length, 0)} icon={FolderKanban} href="/projekte" />
       </div>
 
-      <Card className="mt-4">
-        <CardHeader>
-          <CardTitle className="text-base">Meine Aufgaben</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {tasks.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              Keine offenen Aufgaben. 🎉
-            </p>
-          ) : (
-            <div className="space-y-4">
-              <TaskGroup title="Überfällig" items={overdue} tone="destructive" />
-              <TaskGroup title="Heute" items={dueToday} />
-              <TaskGroup title="Als Nächstes" items={upcoming} />
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Meine Aufgaben</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {tasks.length === 0 ? (
+              <p className="text-muted-foreground text-sm">
+                Keine offenen Aufgaben. 🎉
+              </p>
+            ) : (
+              <div className="space-y-4">
+                <TaskGroup title="Überfällig" items={overdue} tone="destructive" />
+                <TaskGroup title="Heute" items={dueToday} />
+                <TaskGroup title="Als Nächstes" items={upcoming} />
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {events.length > 0 ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Meine Termine</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="divide-y">
+                {events.map((ev) => (
+                  <li key={ev.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                    <span>{ev.summary}</span>
+                    <span className="text-muted-foreground text-xs">
+                      {ev.start
+                        ? new Intl.DateTimeFormat("de-DE", {
+                            dateStyle: "short",
+                            ...(ev.allDay ? {} : { timeStyle: "short" }),
+                          }).format(new Date(ev.start))
+                        : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        ) : null}
+      </div>
     </>
   );
 }

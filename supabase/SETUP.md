@@ -83,3 +83,44 @@ Summenstruktur ab (Positionsrabatt, Gesamtrabatt, Zuschlag, MwSt inkl.
 Kalkulation aus dem alten Tool nachrechnen und die Summen vergleichen; bei
 Abweichungen die Formeln in `engine.ts` anpassen (Tests in `engine.test.ts`
 ergänzen). `npm run test:calc` prüft die Engine isoliert.
+
+---
+
+## Neue Migrationen (UX-Paket 5 & 6)
+
+Im Supabase SQL-Editor **einmal** in dieser Reihenfolge ausführen (oder
+`setup_all.sql` neu einspielen — alle Schritte sind idempotent):
+
+1. `20260531121300_project_type.sql` — Projekttyp/Anlagentyp
+2. `20260531121400_text_blocks.sql` — Angebots-Textbausteine (+ Standard-Seed)
+3. `20260531121500_documents.sql` — Auftragsbestätigung & Lieferschein
+4. `20260531121600_workflow.sql` — Ablauf-Vorlagen, Schritte, Aufgaben (+ Seed)
+5. `20260531121800_time_tracking.sql` — Zeiterfassung + Stundensätze
+6. `20260531121900_user_integrations.sql` — Google-OAuth-Tokens je Mitarbeiter
+
+Danach in den **Einstellungen** das Firmenlogo hochladen und die
+Textbausteine/Ablauf-Schritte je Anlagentyp prüfen. Für die Nachkalkulation
+unter **Mitarbeiter** je Person den internen Stundensatz hinterlegen (oder
+global `settings.labor_rate`).
+
+## Google-Kalender anbinden (read-only, optional)
+
+Jeder Mitarbeiter verbindet seinen eigenen Google-Kalender; gelesen wird nur
+(keine Schreibzugriffe).
+
+1. **Google-Cloud-Projekt** anlegen (console.cloud.google.com).
+2. **Google Calendar API** aktivieren (APIs & Dienste → Bibliothek).
+3. **OAuth-Zustimmungsbildschirm** konfigurieren (intern, falls Workspace;
+   sonst „extern" + Testnutzer eintragen). Scope
+   `.../auth/calendar.readonly` hinzufügen.
+4. **OAuth-Client-ID** (Typ „Webanwendung") erstellen. Autorisierte
+   Redirect-URI: `https://DEINE-DOMAIN/api/google/oauth/callback`
+   (lokal: `http://localhost:3000/api/google/oauth/callback`).
+5. In Vercel/`.env.local` setzen: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+   (und optional `GOOGLE_OAUTH_REDIRECT`). Voraussetzung ist außerdem ein
+   gesetzter `SUPABASE_SERVICE_ROLE_KEY` (Token-Speicherung).
+6. In den **Einstellungen** auf „Mit Google verbinden" klicken. Die Termine
+   erscheinen danach im Dashboard.
+
+Hinweis: Bei vielen externen Nutzern verlangt Google ggf. eine App-Prüfung;
+für den internen Gebrauch genügen Testnutzer bzw. der App-Typ „intern".
