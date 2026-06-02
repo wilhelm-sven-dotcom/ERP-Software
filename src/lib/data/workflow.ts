@@ -2,9 +2,11 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import type {
   ProjectTask,
+  ProjectTaskDep,
   TaskCandidate,
   TaskMessageWithAuthor,
   WorkflowStep,
+  WorkflowStepDep,
   WorkflowTemplate,
 } from "@/lib/types";
 
@@ -37,6 +39,35 @@ export async function getWorkflowSteps(
     return [];
   }
   return (data ?? []) as WorkflowStep[];
+}
+
+/** Alle Vorgänger-Beziehungen der Vorlagen-Schritte (für die Verwaltung). */
+export async function getAllWorkflowStepDeps(): Promise<WorkflowStepDep[]> {
+  if (!isSupabaseConfigured()) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("workflow_step_deps")
+    .select("step_id, depends_on_step_id");
+  if (error) {
+    console.error("getAllWorkflowStepDeps:", error.message);
+    return [];
+  }
+  return (data ?? []) as WorkflowStepDep[];
+}
+
+/** Vorgänger-Beziehungen der Aufgaben eines Projekts (über Task-IDs gefiltert). */
+export async function getTaskDeps(taskIds: string[]): Promise<ProjectTaskDep[]> {
+  if (!isSupabaseConfigured() || taskIds.length === 0) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("project_task_deps")
+    .select("task_id, depends_on_task_id")
+    .in("task_id", taskIds);
+  if (error) {
+    console.error("getTaskDeps:", error.message);
+    return [];
+  }
+  return (data ?? []) as ProjectTaskDep[];
 }
 
 /** Alle Schritte (für die Verwaltung, gruppiert nach Vorlage im UI). */
