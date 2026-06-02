@@ -27,6 +27,8 @@ import { getProjectFiles } from "@/lib/data/project-files";
 import { ProjectFileDrop } from "@/components/projekte/project-file-drop";
 import { getMeasurements } from "@/lib/data/measurements";
 import { AufmassCard } from "@/components/projekte/aufmass-card";
+import { getSiteLog } from "@/lib/data/site-log";
+import { SiteLogCard } from "@/components/projekte/site-log-card";
 import { getLaborRate } from "@/lib/data/settings";
 import { TaskList } from "@/components/projekte/task-list";
 import { InvoiceActions } from "@/components/dokumente/invoice-actions";
@@ -78,7 +80,7 @@ export default async function ProjectDetailPage({
     getDocumentsByProject(id, "lieferschein"),
     getDocumentsByProject(id, "rechnung"),
   ]);
-  const [tasks, taskCandidates, timeEntries, laborRate, me, projectFiles, measurements] =
+  const [tasks, taskCandidates, timeEntries, laborRate, me, projectFiles, measurements, siteLog] =
     await Promise.all([
       getProjectTasks(id),
       getTaskCandidatesByProject(id),
@@ -87,6 +89,7 @@ export default async function ProjectDetailPage({
       getCurrentEmployee(),
       getProjectFiles(id),
       getMeasurements(id),
+      getSiteLog(id),
     ]);
   // Kandidaten je Aufgabe (für „angeboten an …" und „Annehmen").
   const candidatesByTask: Record<string, string[]> = {};
@@ -338,6 +341,16 @@ export default async function ProjectDetailPage({
         </CardHeader>
         <CardContent>
           <AufmassCard projectId={id} measurements={measurements} />
+        </CardContent>
+      </Card>
+
+      {/* Bautagebuch */}
+      <Card className="mb-4">
+        <CardHeader>
+          <CardTitle className="text-base">Bautagebuch</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <SiteLogCard projectId={id} entries={siteLog} />
         </CardContent>
       </Card>
 

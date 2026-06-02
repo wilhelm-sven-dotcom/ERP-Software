@@ -388,6 +388,18 @@ export interface OfferTextBlock {
   updated_at: string;
 }
 
+export interface SiteLogEntry {
+  id: string;
+  project_id: string;
+  log_date: string;
+  weather: string | null;
+  crew: string | null;
+  work_done: string | null;
+  note: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
 export interface Measurement {
   id: string;
   project_id: string;
