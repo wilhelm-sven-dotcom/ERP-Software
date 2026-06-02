@@ -136,6 +136,30 @@ export interface ProductAsset {
   created_at: string;
 }
 
+export interface Wholesaler {
+  id: string;
+  name: string;
+  contact: string | null;
+  email: string | null;
+  phone: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Verknüpfung Produkt ↔ Großhändler mit Bestellnummer und EK je Händler. */
+export interface ProductWholesaler {
+  id: string;
+  product_id: string;
+  wholesaler_id: string;
+  order_number: string | null;
+  price_purchase: number | null;
+  created_at: string;
+  /** Eingebetteter Händler (bei Join). */
+  wholesaler?: { name: string | null } | null;
+}
+
 export interface OfferTemplate {
   id: string;
   name: string;

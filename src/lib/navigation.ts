@@ -9,6 +9,7 @@ import {
   TrendingUp,
   Files,
   Package,
+  Truck,
   UserCog,
   Settings,
   Database,
@@ -57,6 +58,12 @@ export const navItems: NavItem[] = [
   },
   { key: "vorlagen", label: "Vorlagen", href: "/vorlagen", icon: Files },
   { key: "produkte", label: "Produkte", href: "/produkte", icon: Package },
+  {
+    key: "grosshaendler",
+    label: "Großhändler",
+    href: "/grosshaendler",
+    icon: Truck,
+  },
   {
     key: "mitarbeiter",
     label: "Mitarbeiter",

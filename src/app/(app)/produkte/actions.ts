@@ -209,6 +209,44 @@ export async function deleteProductAsset(fd: FormData): Promise<void> {
   revalidatePath("/produkte");
 }
 
+/** Großhändler-Verknüpfung eines Produkts anlegen/aktualisieren. */
+export async function saveProductWholesaler(
+  _prev: ActionResult,
+  fd: FormData,
+): Promise<ActionResult> {
+  const guard = ensureConfigured();
+  if (guard) return guard;
+
+  const productId = s(fd, "product_id");
+  const wholesalerId = s(fd, "wholesaler_id");
+  if (!productId || !wholesalerId) return fail("Produkt und Großhändler wählen.");
+
+  const payload = {
+    product_id: productId,
+    wholesaler_id: wholesalerId,
+    order_number: s(fd, "order_number"),
+    price_purchase: round2(n(fd, "price_purchase")),
+  };
+
+  const supabase = await createClient();
+  const id = s(fd, "id");
+  const { error } = id
+    ? await supabase.from("product_wholesalers").update(payload).eq("id", id)
+    : await supabase.from("product_wholesalers").insert(payload);
+  if (error) return fail(error.message);
+
+  revalidatePath("/produkte");
+  return OK;
+}
+
+export async function deleteProductWholesaler(fd: FormData): Promise<void> {
+  const id = String(fd.get("id") ?? "");
+  if (!id || ensureConfigured()) return;
+  const supabase = await createClient();
+  await supabase.from("product_wholesalers").delete().eq("id", id);
+  revalidatePath("/produkte");
+}
+
 export interface CsvProductRow {
   name?: string;
   hersteller?: string;

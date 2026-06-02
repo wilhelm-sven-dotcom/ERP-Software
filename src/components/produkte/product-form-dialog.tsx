@@ -27,7 +27,14 @@ import {
 import { saveProduct } from "@/app/(app)/produkte/actions";
 import { type ActionResult } from "@/lib/actions";
 import { AssetUpload } from "@/components/produkte/asset-upload";
-import type { Product, ProductAsset, ProductGroup } from "@/lib/types";
+import { ProductWholesalerManager } from "@/components/produkte/product-wholesaler-manager";
+import type {
+  Product,
+  ProductAsset,
+  ProductGroup,
+  ProductWholesaler,
+  Wholesaler,
+} from "@/lib/types";
 
 const initial: ActionResult = { ok: false };
 
@@ -35,11 +42,15 @@ export function ProductFormDialog({
   product,
   groups,
   assets = [],
+  wholesalers = [],
+  productWholesalers = [],
   trigger,
 }: {
   product?: Product;
   groups: ProductGroup[];
   assets?: ProductAsset[];
+  wholesalers?: Wholesaler[];
+  productWholesalers?: ProductWholesaler[];
   trigger: React.ReactNode;
 }) {
   const router = useRouter();
@@ -231,10 +242,22 @@ export function ProductFormDialog({
         </form>
 
         {isEdit && product ? (
-          <div className="border-t pt-4">
-            <p className="mb-2 text-sm font-medium">Bilder &amp; Datenblätter</p>
-            <AssetUpload productId={product.id} assets={assets} />
-          </div>
+          <>
+            <div className="border-t pt-4">
+              <p className="mb-2 text-sm font-medium">
+                Großhändler &amp; Bestellnummern
+              </p>
+              <ProductWholesalerManager
+                productId={product.id}
+                links={productWholesalers}
+                wholesalers={wholesalers}
+              />
+            </div>
+            <div className="border-t pt-4">
+              <p className="mb-2 text-sm font-medium">Bilder &amp; Datenblätter</p>
+              <AssetUpload productId={product.id} assets={assets} />
+            </div>
+          </>
         ) : null}
       </DialogContent>
     </Dialog>

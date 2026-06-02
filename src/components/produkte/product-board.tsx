@@ -37,12 +37,19 @@ import { reorderGroups, reorderProducts } from "@/app/(app)/produkte/actions";
 import { formatCurrency } from "@/lib/format";
 import { productMatches } from "@/lib/search";
 import { cn } from "@/lib/utils";
-import type { Product, ProductAsset, ProductGroup } from "@/lib/types";
+import type {
+  Product,
+  ProductAsset,
+  ProductGroup,
+  ProductWholesaler,
+  Wholesaler,
+} from "@/lib/types";
 
 const NONE = "__none__";
 
 type Thumbs = Record<string, string | null>;
 type AssetsMap = Record<string, ProductAsset[]>;
+type WholesalerLinks = Record<string, ProductWholesaler[]>;
 
 export function ProductBoard({
   groups,
@@ -50,6 +57,8 @@ export function ProductBoard({
   initialItems,
   thumbs,
   assetsByProduct,
+  wholesalers,
+  wholesalersByProduct,
 }: {
   groups: ProductGroup[];
   /** Reihenfolge der echten Gruppen-Container (group_id). */
@@ -58,6 +67,8 @@ export function ProductBoard({
   initialItems: Record<string, Product[]>;
   thumbs: Thumbs;
   assetsByProduct: AssetsMap;
+  wholesalers: Wholesaler[];
+  wholesalersByProduct: WholesalerLinks;
 }) {
   const router = useRouter();
   const [groupOrder, setGroupOrder] =
@@ -264,6 +275,8 @@ export function ProductBoard({
                     product={p}
                     groups={groups}
                     assets={assetsByProduct[p.id] ?? []}
+                    wholesalers={wholesalers}
+                    links={wholesalersByProduct[p.id] ?? []}
                     thumb={thumbs[p.id] ?? null}
                   />
                 ))}
@@ -303,6 +316,8 @@ export function ProductBoard({
                         product={p}
                         groups={groups}
                         assets={assetsByProduct[p.id] ?? []}
+                        wholesalers={wholesalers}
+                        links={wholesalersByProduct[p.id] ?? []}
                         thumb={thumbs[p.id] ?? null}
                       />
                     ))}
@@ -326,6 +341,8 @@ export function ProductBoard({
                       product={p}
                       groups={groups}
                       assets={assetsByProduct[p.id] ?? []}
+                      wholesalers={wholesalers}
+                      links={wholesalersByProduct[p.id] ?? []}
                       thumb={thumbs[p.id] ?? null}
                     />
                   ))}
@@ -505,11 +522,15 @@ function SortableItem({
   product,
   groups,
   assets,
+  wholesalers,
+  links,
   thumb,
 }: {
   product: Product;
   groups: ProductGroup[];
   assets: ProductAsset[];
+  wholesalers: Wholesaler[];
+  links: ProductWholesaler[];
   thumb: string | null;
 }) {
   const { setNodeRef, transform, transition, isDragging, attributes, listeners } =
@@ -540,6 +561,8 @@ function SortableItem({
             product={product}
             groups={groups}
             assets={assets}
+            wholesalers={wholesalers}
+            productWholesalers={links}
             trigger={
               <Button variant="ghost" size="sm">
                 Bearbeiten
@@ -557,11 +580,15 @@ function ProductRow({
   product,
   groups,
   assets,
+  wholesalers,
+  links,
   thumb,
 }: {
   product: Product;
   groups: ProductGroup[];
   assets: ProductAsset[];
+  wholesalers: Wholesaler[];
+  links: ProductWholesaler[];
   thumb: string | null;
 }) {
   return (
@@ -573,6 +600,8 @@ function ProductRow({
           product={product}
           groups={groups}
           assets={assets}
+          wholesalers={wholesalers}
+          productWholesalers={links}
           trigger={
             <Button variant="ghost" size="sm">
               Bearbeiten

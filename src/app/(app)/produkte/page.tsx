@@ -14,6 +14,10 @@ import {
   getProductGroups,
   getAllProductAssets,
 } from "@/lib/data/products";
+import {
+  getWholesalers,
+  getAllProductWholesalers,
+} from "@/lib/data/wholesalers";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import type { Product } from "@/lib/types";
@@ -23,11 +27,14 @@ export const metadata: Metadata = { title: "Produkte" };
 const NONE = "__none__";
 
 export default async function ProduktePage() {
-  const [products, groups, assetsByProduct] = await Promise.all([
-    getProducts(),
-    getProductGroups(),
-    getAllProductAssets(),
-  ]);
+  const [products, groups, assetsByProduct, wholesalers, wholesalersByProduct] =
+    await Promise.all([
+      getProducts(),
+      getProductGroups(),
+      getAllProductAssets(),
+      getWholesalers(),
+      getAllProductWholesalers(),
+    ]);
 
   // Gruppen-Reihenfolge nach `sort`, dann Name (alle Gruppen = Drop-Ziele).
   const sortedGroups = [...groups].sort(
@@ -108,6 +115,8 @@ export default async function ProduktePage() {
           initialItems={items}
           thumbs={thumbs}
           assetsByProduct={assetsByProduct}
+          wholesalers={wholesalers}
+          wholesalersByProduct={wholesalersByProduct}
         />
       )}
     </div>
