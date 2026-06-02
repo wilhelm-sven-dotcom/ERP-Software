@@ -49,6 +49,33 @@ export type DocumentWithProject = DocumentRecord & {
   } | null;
 };
 
+/** Rechnungen im Zeitraum für den Buchhaltungs-/DATEV-Export. */
+export async function getInvoicesForExport(
+  from: string,
+  to: string,
+  status?: "offen" | "bezahlt",
+): Promise<DocumentWithProject[]> {
+  if (!isSupabaseConfigured()) return [];
+  const supabase = await createClient();
+  let q = supabase
+    .from("documents")
+    .select(
+      "*, project:projects(id, title, customer:customers(first_name, last_name, company))",
+    )
+    .eq("kind", "rechnung")
+    .gte("invoice_date", from)
+    .lte("invoice_date", to)
+    .order("doc_number", { ascending: true });
+  if (status === "bezahlt") q = q.eq("payment_status", "bezahlt");
+  if (status === "offen") q = q.neq("payment_status", "bezahlt");
+  const { data, error } = await q;
+  if (error) {
+    console.error("getInvoicesForExport:", error.message);
+    return [];
+  }
+  return (data ?? []) as unknown as DocumentWithProject[];
+}
+
 /** Alle Dokumente einer Art (für Listenseiten), mit Projekt + Kunde. */
 export async function getDocumentsByKind(
   kind: string,

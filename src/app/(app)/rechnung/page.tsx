@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { Download } from "lucide-react";
+
 import { PageHeader } from "@/components/shared/page-header";
 import { SupabaseNotice } from "@/components/shared/supabase-notice";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -35,6 +38,32 @@ export default async function RechnungPage() {
     <div>
       <PageHeader title="Rechnungen" description="Voll-, Abschlags- und Schlussrechnungen." />
       <SupabaseNotice />
+
+      <form
+        method="get"
+        action="/api/datev/export"
+        className="bg-card mb-4 flex flex-wrap items-end gap-2 rounded-xl border p-3 text-sm"
+      >
+        <div className="grid gap-1">
+          <label htmlFor="from" className="text-muted-foreground text-xs">Von</label>
+          <input id="from" name="from" type="date" defaultValue={`${new Date().getFullYear()}-01-01`} className="border-input h-9 rounded-lg border bg-transparent px-3" />
+        </div>
+        <div className="grid gap-1">
+          <label htmlFor="to" className="text-muted-foreground text-xs">Bis</label>
+          <input id="to" name="to" type="date" defaultValue={new Date().toISOString().slice(0, 10)} className="border-input h-9 rounded-lg border bg-transparent px-3" />
+        </div>
+        <div className="grid gap-1">
+          <label htmlFor="status" className="text-muted-foreground text-xs">Status</label>
+          <select id="status" name="status" className="border-input h-9 rounded-lg border bg-transparent px-3">
+            <option value="">alle</option>
+            <option value="offen">nur offen</option>
+            <option value="bezahlt">nur bezahlt</option>
+          </select>
+        </div>
+        <Button type="submit" variant="outline">
+          <Download className="size-4" /> DATEV-/CSV-Export
+        </Button>
+      </form>
 
       {docs.length === 0 ? (
         <EmptyState
