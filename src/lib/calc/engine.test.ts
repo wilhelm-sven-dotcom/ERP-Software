@@ -5,6 +5,24 @@
 import assert from "node:assert/strict";
 
 import { calculate } from "./engine";
+import { computeServicePrice, type ServicePricing } from "./service-pricing";
+
+// 0) Dienstleistung marginal gestaffelt (0–10/10–30/30–135) + Sockel
+{
+  const p: ServicePricing = {
+    mode: "tiered",
+    base: 0,
+    tiers: [
+      { upToKwp: 10, perKwp: 150 },
+      { upToKwp: 30, perKwp: 100 },
+      { upToKwp: 135, perKwp: 60 },
+      { upToKwp: null, perKwp: 0 },
+    ],
+  };
+  assert.equal(computeServicePrice(p, 20), 2500); // 10*150 + 10*100
+  assert.equal(computeServicePrice(p, 40), 4100); // 10*150 + 20*100 + 10*60
+  assert.equal(computeServicePrice({ ...p, base: 500 }, 5), 1250); // 500 + 5*150
+}
 
 // 1) Positions- + Pauschalrabatt, PV-Nullsteuersatz
 {

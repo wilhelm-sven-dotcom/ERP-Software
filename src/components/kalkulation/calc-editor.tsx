@@ -24,6 +24,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { calculate, round2 } from "@/lib/calc/engine";
+import { computeServicePrice } from "@/lib/calc/service-pricing";
 import { POSITION_GROUPS, type CalcPosition, type PositionGroup } from "@/lib/calc/types";
 import { saveCalculation } from "@/app/(app)/kalkulation/actions";
 import { ProductPicker } from "@/components/produkte/product-picker";
@@ -129,10 +130,25 @@ export function CalcEditor({
   const effKwp = computedKwp > 0 ? computedKwp : (systemSizeKwp ?? null);
   const effKwh = computedKwh > 0 ? computedKwh : (storageKwh ?? null);
 
+  // Dienstleistungs-Positionen: Einzelpreis dynamisch aus der Anlagengröße (kWp).
+  const pricedPositions = React.useMemo(
+    () =>
+      positions.map((p) =>
+        p.servicePricing
+          ? {
+              ...p,
+              menge: 1,
+              einzelpreis: computeServicePrice(p.servicePricing, effKwp),
+            }
+          : p,
+      ),
+    [positions, effKwp],
+  );
+
   const result = React.useMemo(
     () =>
       calculate({
-        positions,
+        positions: pricedPositions,
         pauschalRabattPercent: Number(pauschal) || 0,
         nachlass: Number(nachlass) || 0,
         mwstPercent: vat["Sonstiges"] ?? 19,
@@ -141,7 +157,7 @@ export function CalcEditor({
         systemSizeKwp: effKwp,
         storageKwh: effKwh,
       }),
-    [positions, pauschal, nachlass, vat, skonto, effKwp, effKwh],
+    [pricedPositions, pauschal, nachlass, vat, skonto, effKwp, effKwh],
   );
 
   function update(id: string, patch: Partial<CalcPosition>) {
@@ -154,19 +170,27 @@ export function CalcEditor({
     setPositions((rows) => [...rows, newRow()]);
   }
   function applyProduct(id: string, p: Product) {
-    // Hybrid-Aufteilung sowie Wp/kWh aus den Produkt-Specs übernehmen.
+    // Hybrid-Aufteilung, Wp/kWh sowie DL-Preisdynamik aus den Specs übernehmen.
     const specs = (p.specs as Record<string, unknown> | null) ?? {};
     const numOrNull = (v: unknown) =>
       typeof v === "number" && Number.isFinite(v) ? v : null;
+    const servicePricing =
+      specs.is_service && specs.pricing && typeof specs.pricing === "object"
+        ? (specs.pricing as CalcPosition["servicePricing"])
+        : null;
     update(id, {
       product_id: p.id,
       bezeichnung: p.name,
       einheit: p.unit ?? "Stk",
       ek: p.price_purchase ?? 0,
-      einzelpreis: p.price_sell ?? 0,
+      einzelpreis: servicePricing
+        ? computeServicePrice(servicePricing, effKwp)
+        : (p.price_sell ?? 0),
       splitPvPct: numOrNull(specs.split_pv_pct),
       moduleWp: numOrNull(specs.module_wp),
       kwhPerUnit: numOrNull(specs.storage_kwh),
+      servicePricing,
+      ...(servicePricing ? { menge: 1 } : {}),
     });
   }
 
@@ -205,8 +229,9 @@ export function CalcEditor({
   async function onSave() {
     setSaving(true);
     // Vorlagen-Zeilen ohne Menge (0) werden beim Speichern verworfen, damit nur
-    // die tatsächlich gewählten Positionen im Angebot landen.
-    const toSave = positions
+    // die tatsächlich gewählten Positionen im Angebot landen. DL-Preise sind in
+    // pricedPositions bereits aus der kWp-Staffel berechnet.
+    const toSave = pricedPositions
       .filter((p) => (Number(p.menge) || 0) > 0 && p.bezeichnung.trim() !== "")
       // Preise auf 2 Nachkommastellen normalisieren.
       .map((p) => ({
@@ -433,15 +458,25 @@ export function CalcEditor({
                   />
                 </TableCell>
                 <TableCell>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={p.einzelpreis}
-                    onChange={(e) =>
-                      update(p.id, { einzelpreis: Number(e.target.value) })
-                    }
-                    className="h-8 text-right"
-                  />
+                  {p.servicePricing ? (
+                    <div
+                      className="text-muted-foreground flex h-8 items-center justify-end gap-1 text-right text-sm"
+                      title="Preis automatisch nach Anlagengröße (kWp)"
+                    >
+                      {formatCurrency(computeServicePrice(p.servicePricing, effKwp))}
+                      <span className="text-[10px] uppercase">auto</span>
+                    </div>
+                  ) : (
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={p.einzelpreis}
+                      onChange={(e) =>
+                        update(p.id, { einzelpreis: Number(e.target.value) })
+                      }
+                      className="h-8 text-right"
+                    />
+                  )}
                 </TableCell>
                 <TableCell>
                   <Input

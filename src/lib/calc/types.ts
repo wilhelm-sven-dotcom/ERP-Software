@@ -53,6 +53,11 @@ export interface CalcPosition {
   moduleWp?: number | null;
   /** Speicherkapazität je Einheit in kWh (aus Produkt) → Speichergröße. */
   kwhPerUnit?: number | null;
+  /**
+   * Dienstleistung mit kWp-abhängigem Preis (marginal gestaffelt). Wenn gesetzt,
+   * wird `einzelpreis` aus der Anlagengröße berechnet (Menge = 1).
+   */
+  servicePricing?: import("./service-pricing").ServicePricing | null;
 }
 
 /** Eingaben für die Summenberechnung (entspricht den calc-Feldern). */

@@ -8,6 +8,7 @@ import { getCurrentEmployee } from "@/lib/supabase/auth";
 import { logActivity } from "@/lib/data/activities";
 import { ensureConfigured, fail, OK, type ActionResult } from "@/lib/actions";
 import { calculate } from "@/lib/calc/engine";
+import { computeServicePrice } from "@/lib/calc/service-pricing";
 import type { CalcInput, CalcPosition } from "@/lib/calc/types";
 
 /** Anlagen-/Speichergröße aus den Positionen ableiten (Wp bzw. kWh je Einheit). */
@@ -53,9 +54,16 @@ export async function saveCalculation(
   }
 
   const sizes = deriveSizes(input.positions ?? []);
+  const effKwp = sizes.kwp ?? input.systemSizeKwp ?? null;
+  // Dienstleistungs-Positionen serverseitig anhand der Anlagengröße bepreisen.
+  input.positions = (input.positions ?? []).map((p) =>
+    p.servicePricing
+      ? { ...p, menge: 1, einzelpreis: computeServicePrice(p.servicePricing, effKwp) }
+      : p,
+  );
   const result = calculate({
     ...input,
-    systemSizeKwp: sizes.kwp ?? input.systemSizeKwp ?? null,
+    systemSizeKwp: effKwp,
     storageKwh: sizes.kwh ?? input.storageKwh ?? null,
   });
   const totals = {

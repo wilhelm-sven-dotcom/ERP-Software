@@ -64,6 +64,16 @@ export function ProductFormDialog({
   const [state, action, pending] = useActionState(saveProduct, initial);
   const isEdit = Boolean(product);
 
+  const pricing = (product?.specs?.pricing ?? null) as {
+    base?: number;
+    tiers?: { upToKwp: number | null; perKwp: number }[];
+  } | null;
+  const tierAt = (bound: number | null) =>
+    pricing?.tiers?.find((t) => t.upToKwp === bound)?.perKwp ?? "";
+  const [isService, setIsService] = React.useState(
+    Boolean(product?.specs?.is_service),
+  );
+
   React.useEffect(() => {
     if (state.ok && open) {
       toast.success(isEdit ? "Produkt aktualisiert" : "Produkt angelegt");
@@ -241,6 +251,66 @@ export function ProductFormDialog({
               Nur für Hybrid-Wechselrichter: Anteil des Preises, der der PV-Anlage
               zugerechnet wird (Rest = Speicher). Z. B. 50 für 50 % / 50 %.
             </p>
+          </div>
+
+          <div className="grid gap-2 rounded-md border p-3">
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <input
+                type="checkbox"
+                name="is_service"
+                checked={isService}
+                onChange={(e) => setIsService(e.target.checked)}
+                className="size-4"
+              />
+              Dienstleistung – Preis nach Anlagengröße (€/kWp, gestaffelt)
+            </label>
+            {isService ? (
+              <>
+                <p className="text-muted-foreground text-xs">
+                  Marginal gestaffelt: jeder kWp wird mit dem Satz seines Brackets
+                  bewertet und aufsummiert. Satz 0 = konstant. Optionaler
+                  Sockelbetrag.
+                </p>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                  <div className="grid gap-1">
+                    <Label htmlFor="svc_base" className="text-xs">
+                      Sockel €
+                    </Label>
+                    <Input
+                      id="svc_base"
+                      name="svc_base"
+                      type="number"
+                      step="0.01"
+                      defaultValue={pricing?.base ?? ""}
+                    />
+                  </div>
+                  <div className="grid gap-1">
+                    <Label htmlFor="svc_t10" className="text-xs">
+                      ≤10 €/kWp
+                    </Label>
+                    <Input id="svc_t10" name="svc_t10" type="number" step="0.01" defaultValue={tierAt(10)} />
+                  </div>
+                  <div className="grid gap-1">
+                    <Label htmlFor="svc_t30" className="text-xs">
+                      ≤30 €/kWp
+                    </Label>
+                    <Input id="svc_t30" name="svc_t30" type="number" step="0.01" defaultValue={tierAt(30)} />
+                  </div>
+                  <div className="grid gap-1">
+                    <Label htmlFor="svc_t135" className="text-xs">
+                      ≤135 €/kWp
+                    </Label>
+                    <Input id="svc_t135" name="svc_t135" type="number" step="0.01" defaultValue={tierAt(135)} />
+                  </div>
+                  <div className="grid gap-1">
+                    <Label htmlFor="svc_tmax" className="text-xs">
+                      &gt;135 €/kWp
+                    </Label>
+                    <Input id="svc_tmax" name="svc_tmax" type="number" step="0.01" defaultValue={tierAt(null)} />
+                  </div>
+                </div>
+              </>
+            ) : null}
           </div>
 
           <DialogFooter>

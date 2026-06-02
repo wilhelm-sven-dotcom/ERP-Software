@@ -87,6 +87,25 @@ export async function saveProduct(
   if (storageKwh === null) delete specs.storage_kwh;
   else specs.storage_kwh = Math.max(storageKwh, 0);
 
+  // Dienstleistung mit kWp-abhängigem Preis (marginal gestaffelt + Fixbetrag).
+  const isService = fd.get("is_service") === "on" || fd.get("is_service") === "true";
+  if (isService) {
+    specs.is_service = true;
+    specs.pricing = {
+      mode: "tiered",
+      base: n(fd, "svc_base") ?? 0,
+      tiers: [
+        { upToKwp: 10, perKwp: n(fd, "svc_t10") ?? 0 },
+        { upToKwp: 30, perKwp: n(fd, "svc_t30") ?? 0 },
+        { upToKwp: 135, perKwp: n(fd, "svc_t135") ?? 0 },
+        { upToKwp: null, perKwp: n(fd, "svc_tmax") ?? 0 },
+      ],
+    };
+  } else {
+    delete specs.is_service;
+    delete specs.pricing;
+  }
+
   const payload = {
     name,
     group_id: s(fd, "group_id"),
