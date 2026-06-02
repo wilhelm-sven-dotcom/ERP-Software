@@ -85,6 +85,12 @@ export async function getPriceDefaults(): Promise<{
   return getSetting("price_defaults", { safety_pct: 0, margin_pct: 20 });
 }
 
+/** Globaler Stundensatz (€/Std) als Fallback für die Nachkalkulation. */
+export async function getLaborRate(): Promise<number> {
+  const v = await getSetting<number>("labor_rate", 65);
+  return typeof v === "number" && Number.isFinite(v) ? v : 65;
+}
+
 /** MwSt-Vorbelegung je Produktgruppe (§ 12 Abs. 3 UStG: PV+Speicher 0 %). */
 export async function getVatPerGroup(): Promise<Record<string, number>> {
   return getSetting<Record<string, number>>("vat_per_group", {

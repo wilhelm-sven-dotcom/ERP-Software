@@ -62,7 +62,7 @@ export function EmployeeRowForm({
       <TableCell colSpan={5} className="p-0">
         <form
           action={action}
-          className="grid grid-cols-[1fr_1fr_140px_120px_auto] items-center gap-2 px-2 py-1.5"
+          className="grid grid-cols-[1fr_1fr_140px_96px_100px_auto] items-center gap-2 px-2 py-1.5"
         >
           <input type="hidden" name="id" value={employee.id} />
           <Input
@@ -83,6 +83,15 @@ export function EmployeeRowForm({
               <SelectItem value="admin">Admin</SelectItem>
             </SelectContent>
           </Select>
+          <Input
+            name="cost_rate"
+            type="number"
+            step="0.01"
+            defaultValue={employee.cost_rate ?? ""}
+            placeholder="€/Std"
+            title="Interner Stundensatz (Nachkalkulation)"
+            className="h-8"
+          />
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"

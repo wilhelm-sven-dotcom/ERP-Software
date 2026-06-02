@@ -34,10 +34,13 @@ export async function saveEmployee(
   if (!id) return fail("Mitarbeiter fehlt.");
 
   const roleRaw = s(fd, "role");
+  const rateRaw = s(fd, "cost_rate");
+  const rate = rateRaw === null ? null : Number(rateRaw.replace(",", "."));
   const payload = {
     name: s(fd, "name"),
     role: roleRaw === "admin" ? "admin" : "mitarbeiter",
     active: fd.get("active") === "on" || fd.get("active") === "true",
+    cost_rate: rate !== null && Number.isFinite(rate) ? rate : null,
   };
 
   const supabase = await createClient();

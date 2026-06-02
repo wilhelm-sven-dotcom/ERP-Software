@@ -35,6 +35,24 @@ export interface Employee {
   email: string | null;
   role: Role;
   active: boolean;
+  /** Interner Stundensatz (€/Std) für die Nachkalkulation. */
+  cost_rate?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TimeEntry {
+  id: string;
+  project_id: string;
+  employee_id: string | null;
+  work_date: string;
+  hours: number;
+  activity: string | null;
+  description: string | null;
+  hourly_rate: number | null;
+  source: "manual" | "import" | string;
+  external_id: string | null;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
 }

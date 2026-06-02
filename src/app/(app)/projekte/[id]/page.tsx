@@ -21,6 +21,8 @@ import { getCalculationsByProject } from "@/lib/data/calculations";
 import { getOffersByProject } from "@/lib/data/offers";
 import { getDocumentsByProject } from "@/lib/data/documents";
 import { getProjectTasks } from "@/lib/data/workflow";
+import { getTimeEntriesByProject } from "@/lib/data/time";
+import { getLaborRate } from "@/lib/data/settings";
 import { TaskList } from "@/components/projekte/task-list";
 import { deleteProject } from "@/app/(app)/projekte/actions";
 import { createOfferFromCalculation } from "@/app/(app)/angebot/actions";
@@ -67,7 +69,39 @@ export default async function ProjectDetailPage({
     getDocumentsByProject(id, "auftragsbestaetigung"),
     getDocumentsByProject(id, "lieferschein"),
   ]);
-  const tasks = await getProjectTasks(id);
+  const [tasks, timeEntries, laborRate] = await Promise.all([
+    getProjectTasks(id),
+    getTimeEntriesByProject(id),
+    getLaborRate(),
+  ]);
+
+  // Nachkalkulation: Ist-Arbeitskosten aus erfassten Stunden × Satz
+  // (Eintrag > Mitarbeiter-Satz > globaler Satz).
+  const costRateByEmployee = new Map(
+    employees.map((e) => [e.id, e.cost_rate ?? null]),
+  );
+  let istHours = 0;
+  let istLaborCost = 0;
+  for (const e of timeEntries) {
+    const h = Number(e.hours) || 0;
+    istHours += h;
+    const rate =
+      e.hourly_rate ??
+      (e.employee_id ? costRateByEmployee.get(e.employee_id) : null) ??
+      laborRate;
+    istLaborCost += h * rate;
+  }
+  // Referenz-Angebot: bevorzugt angenommen, sonst das neueste.
+  const refOffer = offers.find((o) => o.status === "Angenommen") ?? offers[0];
+  const offNetto =
+    typeof refOffer?.totals?.netto === "number" ? (refOffer.totals.netto as number) : 0;
+  const offEk =
+    typeof refOffer?.totals?.ekGesamt === "number"
+      ? (refOffer.totals.ekGesamt as number)
+      : 0;
+  const planDb =
+    typeof refOffer?.totals?.marge === "number" ? (refOffer.totals.marge as number) : 0;
+  const istDb = offNetto - offEk - istLaborCost;
 
   const customerAddress = fullCustomer
     ? [
@@ -253,6 +287,37 @@ export default async function ProjectDetailPage({
         </CardHeader>
         <CardContent>
           <TaskList projectId={id} tasks={tasks} employees={employees} />
+        </CardContent>
+      </Card>
+
+      {/* Stunden & Nachkalkulation */}
+      <Card className="mb-4">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-base">Stunden & Nachkalkulation</CardTitle>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/zeiterfassung">Stunden erfassen</Link>
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {refOffer ? (
+            <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <Field label="Geleistete Stunden" value={`${formatNumber(istHours)} Std`} />
+              <Field label="Ist-Arbeitskosten" value={formatCurrency(istLaborCost)} />
+              <Field label="Plan-DB (Angebot)" value={formatCurrency(planDb)} />
+              <Field
+                label="Ist-DB (nach Lohn)"
+                value={`${formatCurrency(istDb)} (${formatNumber(
+                  offNetto > 0 ? (istDb / offNetto) * 100 : 0,
+                  1,
+                )} %)`}
+              />
+            </dl>
+          ) : (
+            <p className="text-muted-foreground text-sm">
+              {formatNumber(istHours)} Std erfasst. Für die Nachkalkulation ein
+              Angebot anlegen (liefert Erlös & Material-EK).
+            </p>
+          )}
         </CardContent>
       </Card>
 
