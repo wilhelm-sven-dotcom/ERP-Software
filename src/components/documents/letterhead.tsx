@@ -26,18 +26,18 @@ export function DocumentHeader({
   rightLines?: string[];
 }) {
   return (
-    <header className="flex items-start justify-between gap-4">
+    <header className="border-primary/20 flex items-start justify-between gap-4 border-b-2 pb-4">
       <div className="flex items-center gap-3">
         {company.logo_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={company.logo_url}
             alt={company.name || "Logo"}
-            className="h-14 max-w-44 object-contain"
+            className="h-16 max-w-52 object-contain"
           />
         ) : null}
         <div>
-          <h2 className="text-primary text-xl font-bold">
+          <h2 className="text-primary text-xl font-bold tracking-tight">
             {company.name || "ip³ Energietechnik"}
           </h2>
           <p className="text-muted-foreground text-sm">
@@ -51,7 +51,7 @@ export function DocumentHeader({
         </div>
       </div>
       <div className="text-right text-sm">
-        <p className="font-semibold">{rightTitle}</p>
+        <p className="text-primary text-base font-semibold">{rightTitle}</p>
         {rightLines.map((l, i) => (
           <p key={i} className="text-muted-foreground">
             {l}
