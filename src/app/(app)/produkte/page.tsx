@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Plus, FolderTree, Tag, Upload, FileUp } from "lucide-react";
+import { Plus, FolderTree, Tag, Upload, FileUp, FileDown } from "lucide-react";
 
 import { PageHeader } from "@/components/shared/page-header";
 import { SupabaseNotice } from "@/components/shared/supabase-notice";
@@ -11,6 +11,7 @@ import { GroupManager } from "@/components/produkte/group-manager";
 import { CategoryManager } from "@/components/produkte/category-manager";
 import { BulkAssetDialog } from "@/components/produkte/bulk-asset-dialog";
 import { CsvImportDialog } from "@/components/produkte/csv-import-dialog";
+import { DatanormImportDialog } from "@/components/produkte/datanorm-import-dialog";
 import {
   getProducts,
   getProductGroups,
@@ -122,6 +123,13 @@ export default async function ProduktePage() {
           trigger={
             <Button variant="outline">
               <Upload className="size-4" /> CSV-Import
+            </Button>
+          }
+        />
+        <DatanormImportDialog
+          trigger={
+            <Button variant="outline">
+              <FileDown className="size-4" /> DATANORM
             </Button>
           }
         />
