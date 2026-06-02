@@ -197,6 +197,29 @@ export interface Calculation {
   updated_at: string;
 }
 
+export type OfferStatus =
+  | "Entwurf"
+  | "Versendet"
+  | "Angenommen"
+  | "Abgelehnt";
+
+export interface Offer {
+  id: string;
+  project_id: string;
+  calculation_id: string | null;
+  offer_number: number | null;
+  title: string | null;
+  status: OfferStatus | string;
+  positions: unknown[];
+  totals: Record<string, unknown>;
+  meta: Record<string, unknown>;
+  valid_until: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Setting {
   key: string;
   value: unknown;

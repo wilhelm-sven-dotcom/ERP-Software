@@ -18,9 +18,11 @@ import {
 import { getCustomers, getCustomer } from "@/lib/data/customers";
 import { getEmployees } from "@/lib/data/employees";
 import { getCalculationsByProject } from "@/lib/data/calculations";
+import { getOffersByProject } from "@/lib/data/offers";
 import { deleteProject } from "@/app/(app)/projekte/actions";
-import { customerName, formatNumber } from "@/lib/format";
-import { statusVariant } from "@/lib/constants";
+import { createOfferFromCalculation } from "@/app/(app)/angebot/actions";
+import { customerName, formatCurrency, formatNumber } from "@/lib/format";
+import { offerStatusVariant, statusVariant } from "@/lib/constants";
 
 export const metadata: Metadata = { title: "Projekt" };
 
@@ -42,17 +44,15 @@ export default async function ProjectDetailPage({
   const project = await getProject(id);
   if (!project) notFound();
 
-  const [activities, customers, employees, variants, fullCustomer] =
+  const [activities, customers, employees, variants, fullCustomer, offers] =
     await Promise.all([
       getProjectActivities(id),
       getCustomers(),
       getEmployees(),
       getCalculationsByProject(id),
       project.customer_id ? getCustomer(project.customer_id) : null,
+      getOffersByProject(id),
     ]);
-  const selectedVariant =
-    variants.find((v) => v.is_selected) ??
-    (variants.length === 1 ? variants[0] : null);
 
   const customerAddress = fullCustomer
     ? [
@@ -129,27 +129,107 @@ export default async function ProjectDetailPage({
         </div>
       ) : null}
 
-      <p className="text-muted-foreground mb-4 text-sm">
-        {selectedVariant ? (
-          <>
-            Gewählte Kalkulation:{" "}
-            <Link
-              href={`/kalkulation/${project.id}?calc=${selectedVariant.id}`}
-              className="text-foreground font-medium hover:underline"
-            >
-              {selectedVariant.name ?? "Standard"}
-            </Link>
-            {variants.length > 1 ? ` (${variants.length} Varianten)` : ""}
-          </>
-        ) : (
-          <Link
-            href={`/kalkulation/${project.id}`}
-            className="hover:underline"
-          >
-            Kalkulation öffnen
-          </Link>
-        )}
-      </p>
+      <div className="mb-4 grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">
+              Kalkulationen{" "}
+              <span className="text-muted-foreground font-normal">
+                ({variants.length})
+              </span>
+            </CardTitle>
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/kalkulation/${project.id}`}>Öffnen</Link>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {variants.length === 0 ? (
+              <p className="text-muted-foreground text-sm">
+                Noch keine Kalkulation.
+              </p>
+            ) : (
+              <ul className="divide-y">
+                {variants.map((v) => (
+                  <li
+                    key={v.id}
+                    className="flex items-center justify-between gap-2 py-2"
+                  >
+                    <Link
+                      href={`/kalkulation/${project.id}?calc=${v.id}`}
+                      className="text-sm font-medium hover:underline"
+                    >
+                      {v.is_selected ? "★ " : ""}
+                      {v.name ?? "Variante"}
+                      <span className="text-muted-foreground ml-1 font-normal">
+                        {v.system_size_kwp
+                          ? `${formatNumber(v.system_size_kwp)} kWp`
+                          : ""}
+                        {v.storage_kwh
+                          ? ` / ${formatNumber(v.storage_kwh)} kWh`
+                          : ""}
+                      </span>
+                    </Link>
+                    <form action={createOfferFromCalculation}>
+                      <input type="hidden" name="calc_id" value={v.id} />
+                      <input
+                        type="hidden"
+                        name="project_id"
+                        value={project.id}
+                      />
+                      <Button variant="ghost" size="sm" type="submit">
+                        Angebot erstellen
+                      </Button>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Angebote{" "}
+              <span className="text-muted-foreground font-normal">
+                ({offers.length})
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {offers.length === 0 ? (
+              <p className="text-muted-foreground text-sm">
+                Noch keine Angebote. Über die Schaltfläche bei einer Variante
+                anlegen.
+              </p>
+            ) : (
+              <ul className="divide-y">
+                {offers.map((o) => (
+                  <li
+                    key={o.id}
+                    className="flex items-center justify-between gap-2 py-2"
+                  >
+                    <Link
+                      href={`/angebot/${o.id}`}
+                      className="text-sm font-medium hover:underline"
+                    >
+                      Nr. {o.offer_number ?? "–"} · {o.title ?? "Angebot"}
+                      <span className="text-muted-foreground ml-1 font-normal">
+                        {typeof o.totals?.brutto === "number"
+                          ? formatCurrency(o.totals.brutto)
+                          : ""}
+                      </span>
+                    </Link>
+                    <Badge variant={offerStatusVariant(o.status)}>
+                      {o.status}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       {fullCustomer ? (
         <Card className="mb-4">

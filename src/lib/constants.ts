@@ -10,6 +10,29 @@ export const PROJECT_STATUSES: ProjectStatus[] = [
   "verloren",
 ];
 
+/** Angebotsstatus in Reihenfolge. */
+export const OFFER_STATUSES = [
+  "Entwurf",
+  "Versendet",
+  "Angenommen",
+  "Abgelehnt",
+] as const;
+
+export function offerStatusVariant(
+  status: string | null,
+): "default" | "secondary" | "destructive" | "outline" {
+  switch (status) {
+    case "Angenommen":
+      return "default";
+    case "Abgelehnt":
+      return "destructive";
+    case "Versendet":
+      return "secondary";
+    default:
+      return "outline";
+  }
+}
+
 /** Vorgabe-Einheiten und -Kategorien für den Produktkatalog (client-sicher). */
 export const DEFAULT_UNITS = [
   "Stk",
