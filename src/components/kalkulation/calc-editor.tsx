@@ -189,6 +189,13 @@ export function CalcEditor({
 
   const t = result.totals;
 
+  // Positionen nach Gruppe gliedern (Reihenfolge PV→Speicher→Wallbox→Sonstiges);
+  // leere Gruppen werden ausgelassen. Hybride erscheinen unter ihrer Gruppe.
+  const groupedPositions = POSITION_GROUPS.map((g) => ({
+    groupLabel: g,
+    rows: result.positions.filter((p) => (p.group ?? "Sonstiges") === g),
+  })).filter((s) => s.rows.length > 0);
+
   return (
     <div className="space-y-4">
       <div className="bg-card overflow-x-auto rounded-lg border">
@@ -207,7 +214,17 @@ export function CalcEditor({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {result.positions.map((p) => (
+            {groupedPositions.map(({ groupLabel, rows }) => (
+              <React.Fragment key={groupLabel}>
+                <TableRow className="bg-muted/40 hover:bg-muted/40">
+                  <TableCell
+                    colSpan={9}
+                    className="text-muted-foreground py-1.5 text-xs font-semibold"
+                  >
+                    {groupLabel}
+                  </TableCell>
+                </TableRow>
+                {rows.map((p) => (
               <TableRow key={p.id}>
                 <TableCell>
                   <Input
@@ -383,6 +400,8 @@ export function CalcEditor({
                   </Button>
                 </TableCell>
               </TableRow>
+                ))}
+              </React.Fragment>
             ))}
           </TableBody>
         </Table>
