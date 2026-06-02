@@ -60,11 +60,67 @@ export async function saveProduct(
     specs,
   };
 
-  const { error } = id
-    ? await supabase.from("products").update(payload).eq("id", id)
-    : await supabase.from("products").insert(payload);
+  let error;
+  if (id) {
+    ({ error } = await supabase.from("products").update(payload).eq("id", id));
+  } else {
+    // Neues Produkt ans Ende seiner Gruppe sortieren (max(sort)+1).
+    const { data: last } = await supabase
+      .from("products")
+      .select("sort")
+      .eq("group_id", payload.group_id ?? "")
+      .order("sort", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const nextSort = (last?.sort ?? -1) + 1;
+    ({ error } = await supabase
+      .from("products")
+      .insert({ ...payload, sort: nextSort }));
+  }
   if (error) return fail(error.message);
 
+  revalidatePath("/produkte");
+  return OK;
+}
+
+/** Produkt-Reihenfolge/Gruppenzuordnung nach Drag & Drop speichern. */
+export async function reorderProducts(
+  updates: { id: string; group_id: string | null; sort: number }[],
+): Promise<ActionResult> {
+  const guard = ensureConfigured();
+  if (guard) return guard;
+  if (!Array.isArray(updates) || updates.length === 0) return OK;
+
+  const supabase = await createClient();
+  for (const u of updates) {
+    if (!u.id) continue;
+    const { error } = await supabase
+      .from("products")
+      .update({ group_id: u.group_id, sort: u.sort })
+      .eq("id", u.id);
+    if (error) return fail(error.message);
+  }
+  revalidatePath("/produkte");
+  return OK;
+}
+
+/** Gruppen-Reihenfolge nach Drag & Drop speichern. */
+export async function reorderGroups(
+  updates: { id: string; sort: number }[],
+): Promise<ActionResult> {
+  const guard = ensureConfigured();
+  if (guard) return guard;
+  if (!Array.isArray(updates) || updates.length === 0) return OK;
+
+  const supabase = await createClient();
+  for (const u of updates) {
+    if (!u.id) continue;
+    const { error } = await supabase
+      .from("product_groups")
+      .update({ sort: u.sort })
+      .eq("id", u.id);
+    if (error) return fail(error.message);
+  }
   revalidatePath("/produkte");
   return OK;
 }

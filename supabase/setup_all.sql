@@ -737,3 +737,10 @@ create policy "product_assets_delete" on storage.objects
 alter table public.projects add column if not exists storage_kwh numeric;
 alter table public.projects add column if not exists lat numeric;
 alter table public.projects add column if not exists lon numeric;
+
+-- ============================================================================
+-- Produkte: Sortier-Spalte für Drag & Drop (Migration 20260531120800)
+-- ============================================================================
+alter table public.products add column if not exists sort int not null default 0;
+create index if not exists products_group_sort_idx
+  on public.products (group_id, sort);

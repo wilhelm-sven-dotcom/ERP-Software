@@ -114,6 +114,8 @@ export interface Product {
   price_sell: number | null;
   unit: string | null;
   specs: Record<string, unknown>;
+  /** Manuelle Sortierung innerhalb der Gruppe (Drag & Drop). */
+  sort: number;
   created_by: string | null;
   created_at: string;
   updated_at: string;
