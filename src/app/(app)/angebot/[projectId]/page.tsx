@@ -49,6 +49,7 @@ export default async function AngebotDokumentPage({
     pauschalRabattPercent: meta.pauschalRabattPercent,
     nachlass: meta.nachlass,
     mwstPercent: meta.mwstPercent,
+    mwstPerGroup: meta.mwstPerGroup ?? undefined,
     skontoPercent: meta.skontoPercent,
   });
   const t = result.totals;
@@ -197,12 +198,19 @@ export default async function AngebotDokumentPage({
                   <td className="py-1">Summe netto</td>
                   <td className="py-1 text-right">{formatCurrency(t.netto)}</td>
                 </tr>
-                <tr>
-                  <td className="py-1">MwSt {formatNumber(t.mwstSatz, 0)} %</td>
-                  <td className="py-1 text-right">
-                    {formatCurrency(t.mwstBetrag)}
-                  </td>
-                </tr>
+                {(t.mwstSaetze ?? [{ rate: t.mwstSatz, betrag: t.mwstBetrag, netto: t.netto }]).map(
+                  (m) => (
+                    <tr key={m.rate}>
+                      <td className="py-1">
+                        MwSt {formatNumber(m.rate, 0)} % (auf{" "}
+                        {formatCurrency(m.netto)})
+                      </td>
+                      <td className="py-1 text-right">
+                        {formatCurrency(m.betrag)}
+                      </td>
+                    </tr>
+                  ),
+                )}
                 <tr className="border-t text-base font-bold">
                   <td className="text-primary py-1.5">Endpreis brutto</td>
                   <td className="text-primary py-1.5 text-right">

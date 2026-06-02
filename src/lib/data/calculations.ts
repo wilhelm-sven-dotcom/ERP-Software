@@ -8,6 +8,8 @@ export interface StoredCalcMeta {
   pauschalRabattPercent: number;
   nachlass: number;
   mwstPercent: number;
+  /** MwSt-Satz je Gruppe (falls gespeichert). */
+  mwstPerGroup: Record<string, number> | null;
   skontoPercent: number;
 }
 
@@ -19,10 +21,15 @@ export function readPositions(calc: Calculation | null): CalcPosition[] {
 export function readMeta(calc: Calculation | null): StoredCalcMeta {
   const t = (calc?.totals ?? {}) as Record<string, unknown>;
   const n = (v: unknown, d: number) => (typeof v === "number" ? v : d);
+  const mpg =
+    t.mwstPerGroup && typeof t.mwstPerGroup === "object"
+      ? (t.mwstPerGroup as Record<string, number>)
+      : null;
   return {
     pauschalRabattPercent: n(t.pauschalRabattPercent, 0),
     nachlass: n(t.nachlass, 0),
     mwstPercent: n(t.mwstSatz ?? t.mwstPercent, 0),
+    mwstPerGroup: mpg,
     skontoPercent: n(t.skontoPercent, 0),
   };
 }

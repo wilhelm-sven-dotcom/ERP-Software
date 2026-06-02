@@ -92,9 +92,38 @@ export function calculate(input: CalcInput): CalcResult {
   const nachlass = num(input.nachlass);
   const netto = nettoVorPauschal * (1 - pauschal / 100) - nachlass;
 
-  // Schritt 5: MwSt
-  const mwstSatz = num(input.mwstPercent);
-  const mwstBetrag = netto * (mwstSatz / 100);
+  // Schritt 5: MwSt — je Gruppe (Pauschalrabatt & Nachlass anteilig auf die
+  // Gruppen verteilt), damit § 12 Abs. 3 UStG (0 % PV+Speicher) korrekt greift.
+  const rateOf = (g: PositionGroup) =>
+    clampPercent(input.mwstPerGroup?.[g] ?? input.mwstPercent);
+  const perRate = new Map<number, { netto: number; betrag: number }>();
+  let mwstBetrag = 0;
+  for (const g of POSITION_GROUPS) {
+    const share = nettoVorPauschal !== 0 ? gruppenSummen[g] / nettoVorPauschal : 0;
+    const groupNetto = gruppenSummen[g] * (1 - pauschal / 100) - nachlass * share;
+    const rate = rateOf(g);
+    const betrag = groupNetto * (rate / 100);
+    mwstBetrag += betrag;
+    const e = perRate.get(rate) ?? { netto: 0, betrag: 0 };
+    e.netto += groupNetto;
+    e.betrag += betrag;
+    perRate.set(rate, e);
+  }
+  const mwstSaetze = [...perRate.entries()]
+    .map(([rate, v]) => ({
+      rate,
+      netto: round2(v.netto),
+      betrag: round2(v.betrag),
+    }))
+    .filter((r) => r.netto !== 0 || r.betrag !== 0)
+    .sort((a, b) => b.rate - a.rate);
+  // Einheitlicher Satz, wenn nur einer vorkommt; sonst gewichteter Effektivsatz.
+  const mwstSatz =
+    perRate.size === 1
+      ? [...perRate.keys()][0]
+      : netto > 0
+        ? round2((mwstBetrag / netto) * 100)
+        : 0;
   const brutto = netto + mwstBetrag;
 
   // Schritt 6: Skonto (auf brutto)
@@ -119,6 +148,7 @@ export function calculate(input: CalcInput): CalcResult {
     netto: round2(netto),
     mwstSatz,
     mwstBetrag: round2(mwstBetrag),
+    mwstSaetze,
     brutto: round2(brutto),
     skontoBetrag: round2(skontoBetrag),
     bruttoNachSkonto: round2(bruttoNachSkonto),

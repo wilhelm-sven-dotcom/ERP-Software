@@ -16,6 +16,7 @@ import {
   readMeta,
   readPositions,
 } from "@/lib/data/calculations";
+import { getVatPerGroup } from "@/lib/data/settings";
 import { customerName } from "@/lib/format";
 import type { Calculation } from "@/lib/types";
 
@@ -33,12 +34,14 @@ export default async function KalkulationEditorPage({
   const project = await getProject(projectId);
   if (!project) notFound();
 
-  const [variants, products, productGroups, templates] = await Promise.all([
-    getCalculationsByProject(projectId),
-    getProducts(),
-    getProductGroups(),
-    getCalcTemplates(),
-  ]);
+  const [variants, products, productGroups, templates, vatDefault] =
+    await Promise.all([
+      getCalculationsByProject(projectId),
+      getProducts(),
+      getProductGroups(),
+      getCalcTemplates(),
+      getVatPerGroup(),
+    ]);
 
   // Aktive Variante: aus ?calc, sonst die ausgewählte, sonst die neueste.
   const active: Calculation | null =
@@ -49,6 +52,8 @@ export default async function KalkulationEditorPage({
 
   const meta = readMeta(active);
   const positions = readPositions(active);
+  // MwSt je Gruppe: gespeicherte Werte bevorzugen, sonst Default aus settings.
+  const vatPerGroup = meta.mwstPerGroup ?? vatDefault;
 
   return (
     <div>
@@ -85,8 +90,8 @@ export default async function KalkulationEditorPage({
         initialPositions={positions}
         initialPauschalRabatt={meta.pauschalRabattPercent}
         initialNachlass={meta.nachlass}
-        initialMwst={meta.mwstPercent}
         initialSkonto={meta.skontoPercent}
+        vatPerGroup={vatPerGroup}
         systemSizeKwp={project.system_size_kwp}
         storageKwh={project.storage_kwh}
         products={products}

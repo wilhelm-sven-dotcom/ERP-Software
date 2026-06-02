@@ -63,6 +63,8 @@ export async function saveCalculation(
     pauschalRabattPercent: input.pauschalRabattPercent ?? 0,
     nachlass: input.nachlass ?? 0,
     skontoPercent: input.skontoPercent ?? 0,
+    mwstPercent: input.mwstPercent ?? 0,
+    mwstPerGroup: input.mwstPerGroup ?? null,
     gruppenRabatte: input.gruppenRabatte ?? {},
   };
 

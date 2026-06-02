@@ -64,8 +64,13 @@ export interface CalcInput {
   pauschalRabattPercent?: number;
   /** Nachlass absolut in € (netto). */
   nachlass?: number;
-  /** MwSt-Satz in Prozent (z. B. 19 oder 0 für PV-Nullsteuersatz). */
+  /** MwSt-Satz in Prozent (z. B. 19 oder 0 für PV-Nullsteuersatz). Fallback. */
   mwstPercent: number;
+  /**
+   * MwSt-Satz je Gruppe (§ 12 Abs. 3 UStG: PV-Anlage/Speicher 0 %, Wallbox/
+   * Sonstiges 19 %). Wenn gesetzt, übersteuert es `mwstPercent` je Gruppe.
+   */
+  mwstPerGroup?: Partial<Record<PositionGroup, number>>;
   /** Skonto in Prozent auf den Bruttobetrag (0–100). */
   skontoPercent?: number;
   /** Anlagengröße in kWp (für spezifischen PV-Preis €/kWp). */
@@ -87,10 +92,12 @@ export interface CalcTotals {
   nettoVorPauschal: number;
   /** Summe netto (nach Pauschalrabatt & Nachlass). */
   netto: number;
-  /** MwSt-Satz in Prozent. */
+  /** MwSt-Satz in Prozent (einheitlich, sonst gewichteter Effektivsatz). */
   mwstSatz: number;
-  /** MwSt-Betrag. */
+  /** MwSt-Betrag (gesamt). */
   mwstBetrag: number;
+  /** MwSt aufgeschlüsselt je Satz (für getrennten Ausweis 0 % / 19 %). */
+  mwstSaetze: { rate: number; netto: number; betrag: number }[];
   /** Brutto = netto + MwSt. */
   brutto: number;
   /** Skonto-Betrag (auf brutto). */

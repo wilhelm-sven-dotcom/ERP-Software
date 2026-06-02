@@ -53,8 +53,8 @@ export function CalcEditor({
   initialPositions,
   initialPauschalRabatt,
   initialNachlass,
-  initialMwst,
   initialSkonto,
+  vatPerGroup,
   systemSizeKwp,
   storageKwh,
   products,
@@ -67,8 +67,9 @@ export function CalcEditor({
   initialPositions: CalcPosition[];
   initialPauschalRabatt: number;
   initialNachlass: number;
-  initialMwst: number;
   initialSkonto: number;
+  /** MwSt-Satz je Gruppe (Start: gespeicherte Werte bzw. Default aus settings). */
+  vatPerGroup: Record<string, number>;
   systemSizeKwp?: number | null;
   storageKwh?: number | null;
   products: Product[];
@@ -93,7 +94,12 @@ export function CalcEditor({
   });
   const [pauschal, setPauschal] = React.useState(String(initialPauschalRabatt));
   const [nachlass, setNachlass] = React.useState(String(initialNachlass));
-  const [mwst, setMwst] = React.useState(String(initialMwst));
+  const [vat, setVat] = React.useState<Record<string, number>>(() => ({
+    "PV-Anlage": vatPerGroup["PV-Anlage"] ?? 0,
+    Speicher: vatPerGroup["Speicher"] ?? 0,
+    Wallbox: vatPerGroup["Wallbox"] ?? 19,
+    Sonstiges: vatPerGroup["Sonstiges"] ?? 19,
+  }));
   const [skonto, setSkonto] = React.useState(String(initialSkonto));
   const [saving, setSaving] = React.useState(false);
 
@@ -129,12 +135,13 @@ export function CalcEditor({
         positions,
         pauschalRabattPercent: Number(pauschal) || 0,
         nachlass: Number(nachlass) || 0,
-        mwstPercent: Number(mwst) || 0,
+        mwstPercent: vat["Sonstiges"] ?? 19,
+        mwstPerGroup: vat,
         skontoPercent: Number(skonto) || 0,
         systemSizeKwp: effKwp,
         storageKwh: effKwh,
       }),
-    [positions, pauschal, nachlass, mwst, skonto, effKwp, effKwh],
+    [positions, pauschal, nachlass, vat, skonto, effKwp, effKwh],
   );
 
   function update(id: string, patch: Partial<CalcPosition>) {
@@ -181,7 +188,10 @@ export function CalcEditor({
     });
     setPositions(loaded);
 
-    if (typeof d.mwstPercent === "number") setMwst(String(d.mwstPercent));
+    // Vorlagen-Default-MwSt (Einzelsatz) auf Wallbox/Sonstiges anwenden,
+    // PV/Speicher bleiben beim Nullsteuersatz (§ 12 Abs. 3 UStG).
+    if (typeof d.mwstPercent === "number")
+      setVat((v) => ({ ...v, Wallbox: d.mwstPercent as number, Sonstiges: d.mwstPercent as number }));
     if (typeof d.skontoPercent === "number") setSkonto(String(d.skontoPercent));
     if (typeof d.pauschalRabattPercent === "number")
       setPauschal(String(d.pauschalRabattPercent));
@@ -214,7 +224,8 @@ export function CalcEditor({
         positions: toSave,
         pauschalRabattPercent: Number(pauschal) || 0,
         nachlass: Number(nachlass) || 0,
-        mwstPercent: Number(mwst) || 0,
+        mwstPercent: vat["Sonstiges"] ?? 19,
+        mwstPerGroup: vat,
         skontoPercent: Number(skonto) || 0,
       }),
     );
@@ -477,49 +488,63 @@ export function CalcEditor({
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
-        <div className="grid h-fit grid-cols-2 gap-4 sm:grid-cols-4">
-          <div className="grid gap-1.5">
-            <Label htmlFor="pauschal">Pauschalrabatt %</Label>
-            <Input
-              id="pauschal"
-              type="number"
-              step="1"
-              value={pauschal}
-              onChange={(e) => setPauschal(e.target.value)}
-            />
+        <div className="h-fit space-y-4">
+          <div className="grid grid-cols-3 gap-4">
+            <div className="grid gap-1.5">
+              <Label htmlFor="pauschal">Pauschalrabatt %</Label>
+              <Input
+                id="pauschal"
+                type="number"
+                step="1"
+                value={pauschal}
+                onChange={(e) => setPauschal(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="nachlass">Nachlass €</Label>
+              <Input
+                id="nachlass"
+                type="number"
+                step="0.01"
+                value={nachlass}
+                onChange={(e) => setNachlass(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="skonto">Skonto %</Label>
+              <Input
+                id="skonto"
+                type="number"
+                step="0.1"
+                value={skonto}
+                onChange={(e) => setSkonto(e.target.value)}
+              />
+            </div>
           </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="nachlass">Nachlass €</Label>
-            <Input
-              id="nachlass"
-              type="number"
-              step="0.01"
-              value={nachlass}
-              onChange={(e) => setNachlass(e.target.value)}
-            />
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="mwst">MwSt</Label>
-            <Select value={mwst} onValueChange={setMwst}>
-              <SelectTrigger id="mwst" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="0">0 % (PV)</SelectItem>
-                <SelectItem value="19">19 %</SelectItem>
-                <SelectItem value="7">7 %</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="skonto">Skonto %</Label>
-            <Input
-              id="skonto"
-              type="number"
-              step="0.1"
-              value={skonto}
-              onChange={(e) => setSkonto(e.target.value)}
-            />
+          <div>
+            <Label className="text-muted-foreground mb-1.5 block text-xs">
+              MwSt je Gruppe % (§ 12 Abs. 3 UStG: PV + Speicher 0 %)
+            </Label>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {POSITION_GROUPS.map((g) => (
+                <div key={g} className="grid gap-1">
+                  <Label htmlFor={`vat-${g}`} className="text-xs">
+                    {g}
+                  </Label>
+                  <Input
+                    id={`vat-${g}`}
+                    type="number"
+                    step="1"
+                    min={0}
+                    value={vat[g] ?? 0}
+                    onChange={(e) =>
+                      setVat((v) => ({ ...v, [g]: Number(e.target.value) || 0 }))
+                    }
+                    className="h-8"
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -558,7 +583,13 @@ export function CalcEditor({
             <Row label="Nachlass" value={`- ${formatCurrency(Number(nachlass))}`} />
           ) : null}
           <Row label="Summe netto" value={formatCurrency(t.netto)} strong />
-          <Row label={`MwSt (${t.mwstSatz} %)`} value={formatCurrency(t.mwstBetrag)} />
+          {(t.mwstSaetze ?? []).map((m) => (
+            <Row
+              key={m.rate}
+              label={`MwSt ${m.rate} % (auf ${formatCurrency(m.netto)})`}
+              value={formatCurrency(m.betrag)}
+            />
+          ))}
           <Row label="Endpreis brutto" value={formatCurrency(t.brutto)} strong />
           {t.skontoBetrag > 0 ? (
             <>
