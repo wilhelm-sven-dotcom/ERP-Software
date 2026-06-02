@@ -1,17 +1,22 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, Pencil, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CustomerFormDialog } from "@/components/kunden/customer-form-dialog";
+import { ProjectFormDialog } from "@/components/projekte/project-form-dialog";
 import { AddActivityForm } from "@/components/kunden/add-activity-form";
 import { ActivityTimeline } from "@/components/shared/activity-timeline";
 import { getCustomer, getCustomerActivities } from "@/lib/data/customers";
+import { getProjectsByCustomer } from "@/lib/data/projects";
+import { getEmployees } from "@/lib/data/employees";
 import { deleteCustomer } from "@/app/(app)/kunden/actions";
-import { customerName } from "@/lib/format";
+import { customerName, formatNumber } from "@/lib/format";
+import { statusVariant } from "@/lib/constants";
 
 export const metadata: Metadata = { title: "Kunde" };
 
@@ -30,9 +35,11 @@ export default async function CustomerDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [customer, activities] = await Promise.all([
+  const [customer, activities, projects, employees] = await Promise.all([
     getCustomer(id),
     getCustomerActivities(id),
+    getProjectsByCustomer(id),
+    getEmployees(),
   ]);
   if (!customer) notFound();
   const address = [
@@ -78,6 +85,65 @@ export default async function CustomerDetailPage({
           </Button>
         </form>
       </PageHeader>
+
+      <Card className="mb-4">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-base">
+            Projekte{" "}
+            <span className="text-muted-foreground font-normal">
+              ({projects.length})
+            </span>
+          </CardTitle>
+          <ProjectFormDialog
+            customers={[customer]}
+            employees={employees}
+            defaultCustomerId={customer.id}
+            trigger={
+              <Button variant="outline" size="sm">
+                <Plus className="size-4" /> Projekt anlegen
+              </Button>
+            }
+          />
+        </CardHeader>
+        <CardContent>
+          {projects.length === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              Noch keine Projekte für diesen Kunden.
+            </p>
+          ) : (
+            <ul className="divide-y">
+              {projects.map((p) => (
+                <li
+                  key={p.id}
+                  className="flex items-center justify-between gap-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <Link
+                      href={`/projekte/${p.id}`}
+                      className="font-medium hover:underline"
+                    >
+                      {p.title ?? "Ohne Titel"}
+                    </Link>
+                    <p className="text-muted-foreground text-xs">
+                      {[
+                        p.system_size_kwp
+                          ? `${formatNumber(p.system_size_kwp)} kWp`
+                          : null,
+                        p.city,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ") || "—"}
+                    </p>
+                  </div>
+                  <Badge variant={statusVariant(p.status)}>
+                    {p.status ?? "–"}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-1">

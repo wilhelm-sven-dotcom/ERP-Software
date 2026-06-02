@@ -42,6 +42,23 @@ export async function getProject(
   return (data as unknown as ProjectWithCustomer) ?? null;
 }
 
+export async function getProjectsByCustomer(
+  customerId: string,
+): Promise<Project[]> {
+  if (!isSupabaseConfigured()) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("projects")
+    .select("*")
+    .eq("customer_id", customerId)
+    .order("created_at", { ascending: false });
+  if (error) {
+    console.error("getProjectsByCustomer:", error.message);
+    return [];
+  }
+  return (data ?? []) as Project[];
+}
+
 export async function getProjectActivities(
   projectId: string,
 ): Promise<Activity[]> {
