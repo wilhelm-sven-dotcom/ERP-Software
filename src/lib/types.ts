@@ -414,6 +414,24 @@ export type ServiceContractWithCustomer = ServiceContract & {
   } | null;
 };
 
+export interface DispoEntry {
+  id: string;
+  project_id: string | null;
+  employee_id: string | null;
+  date: string;
+  title: string;
+  kind: string;
+  note: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Dispo-Eintrag mit eingebettetem Projekttitel (für die Plantafel). */
+export type DispoEntryWithProject = DispoEntry & {
+  project: { id: string; title: string | null } | null;
+};
+
 export interface Setting {
   key: string;
   value: unknown;
