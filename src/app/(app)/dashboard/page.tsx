@@ -9,13 +9,15 @@ import {
   BatteryCharging,
   UserPlus,
   MessageSquare,
+  Target,
+  FileText,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/shared/page-header";
 import { SupabaseNotice } from "@/components/shared/supabase-notice";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { getProjects } from "@/lib/data/projects";
+import { getProjects, getMyLeads } from "@/lib/data/projects";
 import { getCustomers } from "@/lib/data/customers";
 import { getAdminStats } from "@/lib/data/stats";
 import { getMyOpenTasks } from "@/lib/data/workflow";
@@ -86,8 +88,99 @@ export default async function DashboardPage() {
       <div className="mb-4">
         <GlobalSearch variant="dashboard" />
       </div>
-      {isAdmin ? <AdminDashboard /> : <EmployeeDashboard employeeId={me?.id ?? null} />}
+      {isAdmin ? (
+        <AdminDashboard />
+      ) : me?.is_sales ? (
+        <SalesDashboard employeeId={me.id} />
+      ) : (
+        <EmployeeDashboard employeeId={me?.id ?? null} />
+      )}
     </div>
+  );
+}
+
+async function SalesDashboard({ employeeId }: { employeeId: string }) {
+  const [leads, tasks, inbox] = await Promise.all([
+    getMyLeads(employeeId),
+    getMyOpenTasks(employeeId),
+    getInbox(employeeId),
+  ]);
+  const anfragen = leads.filter((l) => l.status === "Anfrage");
+  const angebote = leads.filter((l) => l.status === "Angebot");
+  const today = new Date().toISOString().slice(0, 10);
+  const overdue = tasks.filter((t) => t.due_date && t.due_date < today);
+  const dueToday = tasks.filter((t) => t.due_date === today);
+  const upcoming = tasks.filter((t) => !t.due_date || t.due_date > today);
+
+  return (
+    <>
+      <div className="grid gap-4 sm:grid-cols-4">
+        <Kpi label="Offene Anfragen" value={formatNumber(anfragen.length, 0)} icon={Target} />
+        <Kpi label="Angebote offen" value={formatNumber(angebote.length, 0)} icon={FileText} />
+        <Kpi label="Nachfassen" value={formatNumber(tasks.length, 0)} icon={TrendingUp} />
+        <Kpi label="Überfällig" value={formatNumber(overdue.length, 0)} icon={MessageSquare} />
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Meine Leads</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {leads.length === 0 ? (
+              <p className="text-muted-foreground text-sm">Aktuell keine offenen Leads.</p>
+            ) : (
+              <ul className="divide-y">
+                {leads.map((l) => (
+                  <li key={l.id} className="flex items-center justify-between gap-3 py-2">
+                    <div className="min-w-0">
+                      <Link href={`/projekte/${l.id}`} className="font-medium hover:underline">
+                        {l.title ?? "Anfrage"}
+                      </Link>
+                      <p className="text-muted-foreground truncate text-xs">
+                        {l.customer ? customerName(l.customer) : "Kein Kunde"}
+                        {l.source ? ` · ${l.source}` : ""}
+                      </p>
+                    </div>
+                    <Badge variant={statusVariant(l.status)}>{l.status ?? "–"}</Badge>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Nachfassen</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {tasks.length === 0 ? (
+              <p className="text-muted-foreground text-sm">Keine offenen Vertriebsaufgaben.</p>
+            ) : (
+              <div className="space-y-4">
+                <TaskGroup title="Überfällig" items={overdue} tone="destructive" />
+                <TaskGroup title="Heute" items={dueToday} />
+                <TaskGroup title="Als Nächstes" items={upcoming} />
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {inbox.total > 0 ? (
+        <Card className="mt-4">
+          <CardHeader>
+            <CardTitle className="text-base">Posteingang</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {inbox.overdue.length > 0 ? <InboxGroup title="Überfällig" items={inbox.overdue} /> : null}
+            {inbox.offered.length > 0 ? <InboxGroup title="Dir angeboten" items={inbox.offered} /> : null}
+            {inbox.unread.length > 0 ? <InboxGroup title="Ungelesene Nachrichten" items={inbox.unread} /> : null}
+          </CardContent>
+        </Card>
+      ) : null}
+    </>
   );
 }
 

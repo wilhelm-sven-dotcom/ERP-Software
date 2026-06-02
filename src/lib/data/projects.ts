@@ -44,6 +44,25 @@ export async function getProject(
   return (data as unknown as ProjectWithCustomer) ?? null;
 }
 
+/** Leads/Anfragen eines Vertrieblers (zugewiesen, Status Anfrage/Angebot). */
+export async function getMyLeads(
+  employeeId: string,
+): Promise<ProjectWithCustomer[]> {
+  if (!isSupabaseConfigured() || !employeeId) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("projects")
+    .select(SELECT)
+    .eq("assigned_employee_id", employeeId)
+    .in("status", ["Anfrage", "Angebot"])
+    .order("created_at", { ascending: false });
+  if (error) {
+    console.error("getMyLeads:", error.message);
+    return [];
+  }
+  return (data ?? []) as unknown as ProjectWithCustomer[];
+}
+
 export async function getProjectsByCustomer(
   customerId: string,
 ): Promise<Project[]> {

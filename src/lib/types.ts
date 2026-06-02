@@ -26,6 +26,7 @@ export interface CurrentUser {
   name: string | null;
   email: string;
   role: Role;
+  is_sales: boolean;
 }
 
 export interface Employee {
