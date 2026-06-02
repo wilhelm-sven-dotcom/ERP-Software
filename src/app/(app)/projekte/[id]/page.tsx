@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProjectFormDialog } from "@/components/projekte/project-form-dialog";
 import { AddProjectActivityForm } from "@/components/projekte/add-project-activity-form";
 import { ActivityTimeline } from "@/components/shared/activity-timeline";
+import { LocationMap } from "@/components/shared/location-map";
 import {
   getProject,
   getProjectActivities,
@@ -152,6 +153,28 @@ export default async function ProjectDetailPage({
             {project.notes ? (
               <p className="text-muted-foreground mt-4 text-sm whitespace-pre-wrap">
                 {project.notes}
+              </p>
+            ) : null}
+            {project.lat != null && project.lon != null ? (
+              <div className="mt-4">
+                <LocationMap
+                  lat={project.lat}
+                  lon={project.lon}
+                  label={address || project.title || "Montageort"}
+                />
+              </div>
+            ) : address ? (
+              <p className="text-muted-foreground mt-4 text-xs">
+                Keine Koordinaten — Projekt mit Adresse speichern, um die Karte zu
+                laden.{" "}
+                <a
+                  className="underline"
+                  href={`https://www.openstreetmap.org/search?query=${encodeURIComponent(address)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Auf OpenStreetMap suchen
+                </a>
               </p>
             ) : null}
           </CardContent>
