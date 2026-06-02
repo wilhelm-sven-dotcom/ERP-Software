@@ -20,6 +20,8 @@ import { getEmployees } from "@/lib/data/employees";
 import { getCalculationsByProject } from "@/lib/data/calculations";
 import { getOffersByProject } from "@/lib/data/offers";
 import { getDocumentsByProject } from "@/lib/data/documents";
+import { getProjectTasks } from "@/lib/data/workflow";
+import { TaskList } from "@/components/projekte/task-list";
 import { deleteProject } from "@/app/(app)/projekte/actions";
 import { createOfferFromCalculation } from "@/app/(app)/angebot/actions";
 import { createDeliveryNote } from "@/app/(app)/dokumente/actions";
@@ -65,6 +67,7 @@ export default async function ProjectDetailPage({
     getDocumentsByProject(id, "auftragsbestaetigung"),
     getDocumentsByProject(id, "lieferschein"),
   ]);
+  const tasks = await getProjectTasks(id);
 
   const customerAddress = fullCustomer
     ? [
@@ -242,6 +245,16 @@ export default async function ProjectDetailPage({
           </CardContent>
         </Card>
       </div>
+
+      {/* Projektablauf / Aufgaben */}
+      <Card className="mb-4">
+        <CardHeader>
+          <CardTitle className="text-base">Projektablauf</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <TaskList projectId={id} tasks={tasks} employees={employees} />
+        </CardContent>
+      </Card>
 
       {/* Folgedokumente: Auftragsbestätigungen & Lieferscheine */}
       {offers.length > 0 || auftraege.length > 0 || lieferscheine.length > 0 ? (

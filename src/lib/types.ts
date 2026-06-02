@@ -222,6 +222,40 @@ export interface Offer {
   updated_at: string;
 }
 
+export interface WorkflowTemplate {
+  id: string;
+  project_type: string | null;
+  name: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkflowStep {
+  id: string;
+  template_id: string;
+  title: string;
+  description: string | null;
+  role: string | null;
+  offset_days: number;
+  sort: number;
+}
+
+export interface ProjectTask {
+  id: string;
+  project_id: string;
+  title: string;
+  description: string | null;
+  assignee_employee_id: string | null;
+  due_date: string | null;
+  status: "offen" | "erledigt" | string;
+  sort: number;
+  done_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export type DocumentKind = "auftragsbestaetigung" | "lieferschein";
 
 export interface DocumentRecord {

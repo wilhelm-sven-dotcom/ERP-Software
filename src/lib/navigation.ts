@@ -8,6 +8,7 @@ import {
   FileText,
   ClipboardCheck,
   PackageCheck,
+  ListChecks,
   TrendingUp,
   Files,
   Package,
@@ -66,6 +67,7 @@ export const navItems: NavItem[] = [
     icon: TrendingUp,
   },
   { key: "vorlagen", label: "Vorlagen", href: "/vorlagen", icon: Files },
+  { key: "workflow", label: "Ablauf-Vorlagen", href: "/workflow", icon: ListChecks },
   { key: "produkte", label: "Produkte", href: "/produkte", icon: Package },
   {
     key: "grosshaendler",
