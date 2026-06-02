@@ -59,6 +59,19 @@ export const INVOICE_SCHEME_PV = [
   { label: "3. Abschlag bei Montagebeginn", percent: 30 },
 ] as const;
 
+/** Mahnstufen (Titel + Mahngebühr in €). */
+export const MAHN_STAGES = [
+  { level: 1, title: "Zahlungserinnerung", fee: 0 },
+  { level: 2, title: "1. Mahnung", fee: 5 },
+  { level: 3, title: "2. Mahnung", fee: 10 },
+] as const;
+
+/** Mahnstufe zu einem (1-basierten) Level, gedeckelt auf die höchste Stufe. */
+export function mahnStage(level: number) {
+  const i = Math.min(Math.max(level, 1), MAHN_STAGES.length) - 1;
+  return MAHN_STAGES[i];
+}
+
 /** Vorgabe-Einheiten und -Kategorien für den Produktkatalog (client-sicher). */
 export const DEFAULT_UNITS = [
   "Stk",

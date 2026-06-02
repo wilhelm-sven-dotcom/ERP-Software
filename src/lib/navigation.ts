@@ -9,6 +9,7 @@ import {
   ClipboardCheck,
   PackageCheck,
   Receipt,
+  Wallet,
   ListChecks,
   Clock,
   TrendingUp,
@@ -63,6 +64,7 @@ export const navItems: NavItem[] = [
     icon: PackageCheck,
   },
   { key: "rechnung", label: "Rechnungen", href: "/rechnung", icon: Receipt },
+  { key: "offene-posten", label: "Offene Posten", href: "/offene-posten", icon: Wallet },
   {
     key: "wirtschaft",
     label: "Wirtschaftlichkeit",

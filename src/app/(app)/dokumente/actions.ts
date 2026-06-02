@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/supabase/auth";
 import { logActivity } from "@/lib/data/activities";
 import { ensureConfigured } from "@/lib/actions";
+import { mahnStage } from "@/lib/constants";
 import type { DocumentKind, InvoiceType, Offer } from "@/lib/types";
 
 type Totals = Record<string, unknown> & {
@@ -261,6 +262,113 @@ export async function setDocumentStatus(fd: FormData): Promise<void> {
   else revalidatePath(`/auftrag/${id}`);
 }
 
+/** Rechnung als bezahlt markieren (Betrag/Datum optional). */
+export async function markInvoicePaid(fd: FormData): Promise<void> {
+  if (ensureConfigured()) return;
+  const id = String(fd.get("id") ?? "");
+  if (!id) return;
+  const supabase = await createClient();
+  const { data: inv } = await supabase
+    .from("documents")
+    .select("project_id, totals, doc_number")
+    .eq("id", id)
+    .maybeSingle();
+  const amountRaw = String(fd.get("amount") ?? "").replace(",", ".");
+  const amount = amountRaw ? Number(amountRaw) : num((inv?.totals as Totals)?.brutto);
+  const dateRaw = String(fd.get("paid_at") ?? "");
+  await supabase
+    .from("documents")
+    .update({
+      payment_status: "bezahlt",
+      paid_amount: Number.isFinite(amount) ? amount : null,
+      paid_at: dateRaw ? new Date(dateRaw).toISOString() : new Date().toISOString(),
+      status: "Bezahlt",
+    })
+    .eq("id", id);
+  if (inv?.project_id) {
+    await logActivity({
+      projectId: inv.project_id,
+      type: "rechnung",
+      title: `Rechnung Nr. ${inv.doc_number ?? "–"} als bezahlt markiert`,
+    });
+    revalidatePath(`/projekte/${inv.project_id}`);
+  }
+  revalidatePath("/rechnung");
+  revalidatePath("/offene-posten");
+}
+
+/** Rechnung wieder auf „offen" setzen. */
+export async function reopenInvoice(fd: FormData): Promise<void> {
+  if (ensureConfigured()) return;
+  const id = String(fd.get("id") ?? "");
+  if (!id) return;
+  const supabase = await createClient();
+  await supabase
+    .from("documents")
+    .update({ payment_status: "offen", paid_at: null, paid_amount: null, status: "Versendet" })
+    .eq("id", id);
+  revalidatePath("/rechnung");
+  revalidatePath("/offene-posten");
+}
+
+/** Mahnung zu einer offenen Rechnung erzeugen (eskaliert die Mahnstufe). */
+export async function createReminder(fd: FormData): Promise<void> {
+  if (ensureConfigured()) return;
+  const invoiceId = String(fd.get("invoice_id") ?? "");
+  if (!invoiceId) return;
+  const supabase = await createClient();
+  const { data: inv } = await supabase
+    .from("documents")
+    .select("*")
+    .eq("id", invoiceId)
+    .maybeSingle();
+  if (!inv) return;
+
+  const me = await getCurrentEmployee();
+  const level = (num(inv.reminder_level) || 0) + 1;
+  const stage = mahnStage(level);
+  const invoiceBrutto = num((inv.totals as Totals)?.brutto);
+  const nr = await nextDocNumber(supabase, "mahnung");
+
+  const { data: inserted } = await supabase
+    .from("documents")
+    .insert({
+      project_id: inv.project_id,
+      kind: "mahnung",
+      doc_number: nr,
+      source_document_id: inv.id,
+      source_offer_id: inv.source_offer_id ?? null,
+      status: "Versendet",
+      title: stage.title,
+      positions: [],
+      totals: { brutto: invoiceBrutto + stage.fee },
+      meta: {
+        level,
+        fee: stage.fee,
+        invoice_number: inv.doc_number,
+        invoice_brutto: invoiceBrutto,
+        invoice_due: inv.due_date,
+      },
+      created_by: me?.id || null,
+    })
+    .select("id")
+    .single();
+
+  await supabase
+    .from("documents")
+    .update({ reminder_level: level, last_reminder_at: new Date().toISOString() })
+    .eq("id", inv.id);
+
+  await logActivity({
+    projectId: inv.project_id,
+    type: "rechnung",
+    title: `${stage.title} zu Rechnung Nr. ${inv.doc_number ?? "–"} erstellt`,
+  });
+  revalidatePath(`/projekte/${inv.project_id}`);
+  revalidatePath("/offene-posten");
+  if (inserted) redirect(`/mahnung/${inserted.id}`);
+}
+
 export async function deleteDocument(fd: FormData): Promise<void> {
   const id = String(fd.get("id") ?? "");
   const kind = String(fd.get("kind") ?? "");
@@ -274,6 +382,8 @@ export async function deleteDocument(fd: FormData): Promise<void> {
       ? "/lieferschein"
       : kind === "rechnung"
         ? "/rechnung"
-        : "/auftrag",
+        : kind === "mahnung"
+          ? "/offene-posten"
+          : "/auftrag",
   );
 }

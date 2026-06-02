@@ -356,6 +356,8 @@ export interface DocumentRecord {
   payment_status: string | null;
   paid_amount: number | null;
   percentage: number | null;
+  reminder_level: number | null;
+  last_reminder_at: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;

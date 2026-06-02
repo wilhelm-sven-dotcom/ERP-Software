@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Trash2 } from "lucide-react";
+import { ArrowLeft, BellRing, Check, Trash2 } from "lucide-react";
 
 import { PageHeader } from "@/components/shared/page-header";
 import { SupabaseNotice } from "@/components/shared/supabase-notice";
@@ -26,7 +26,12 @@ import { getDocument } from "@/lib/data/documents";
 import { getProject } from "@/lib/data/projects";
 import { getCustomer } from "@/lib/data/customers";
 import { getCompanySettings } from "@/lib/data/settings";
-import { deleteDocument } from "@/app/(app)/dokumente/actions";
+import {
+  createReminder,
+  deleteDocument,
+  markInvoicePaid,
+  reopenInvoice,
+} from "@/app/(app)/dokumente/actions";
 import { calculate } from "@/lib/calc/engine";
 import { formatCurrency, formatNumber, formatDate } from "@/lib/format";
 import type { CalcPosition } from "@/lib/calc/types";
@@ -122,6 +127,29 @@ export default async function RechnungDetailPage({
         </Button>
         <div className="flex items-center gap-2">
           <DocumentStatusSelect documentId={doc.id} kind={doc.kind} status={doc.status} />
+          {doc.payment_status === "bezahlt" ? (
+            <form action={reopenInvoice}>
+              <input type="hidden" name="id" value={doc.id} />
+              <Button variant="outline" size="sm" type="submit">
+                Auf offen setzen
+              </Button>
+            </form>
+          ) : (
+            <>
+              <form action={createReminder}>
+                <input type="hidden" name="invoice_id" value={doc.id} />
+                <Button variant="outline" size="sm" type="submit">
+                  <BellRing className="size-4" /> Mahnung
+                </Button>
+              </form>
+              <form action={markInvoicePaid}>
+                <input type="hidden" name="id" value={doc.id} />
+                <Button variant="outline" size="sm" type="submit">
+                  <Check className="size-4" /> Bezahlt
+                </Button>
+              </form>
+            </>
+          )}
           <PrintButton />
           <form action={deleteDocument}>
             <input type="hidden" name="id" value={doc.id} />
