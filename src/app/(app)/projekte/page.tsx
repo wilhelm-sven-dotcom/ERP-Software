@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ProjectFormDialog } from "@/components/projekte/project-form-dialog";
+import { ClickableRow } from "@/components/projekte/clickable-row";
 import { getProjects } from "@/lib/data/projects";
 import { getCustomers } from "@/lib/data/customers";
 import { getEmployees } from "@/lib/data/employees";
@@ -79,7 +80,7 @@ export default async function ProjektePage({
             </TableHeader>
             <TableBody>
               {projects.map((p) => (
-                <TableRow key={p.id}>
+                <ClickableRow key={p.id} href={`/projekte/${p.id}`}>
                   <TableCell>
                     <Link
                       href={`/projekte/${p.id}`}
@@ -102,7 +103,7 @@ export default async function ProjektePage({
                   <TableCell className="text-muted-foreground">
                     {p.city ?? "–"}
                   </TableCell>
-                </TableRow>
+                </ClickableRow>
               ))}
             </TableBody>
           </Table>

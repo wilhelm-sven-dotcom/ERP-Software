@@ -17,13 +17,15 @@ function Kpi({
   label,
   value,
   icon: Icon,
+  href,
 }: {
   label: string;
   value: string;
   icon: React.ComponentType<{ className?: string }>;
+  href?: string;
 }) {
-  return (
-    <Card>
+  const card = (
+    <Card className={href ? "hover:border-primary transition-colors" : ""}>
       <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-muted-foreground text-sm font-medium">
           {label}
@@ -34,6 +36,13 @@ function Kpi({
         <div className="text-2xl font-semibold">{value}</div>
       </CardContent>
     </Card>
+  );
+  return href ? (
+    <Link href={href} className="block">
+      {card}
+    </Link>
+  ) : (
+    card
   );
 }
 
@@ -60,11 +69,17 @@ export default async function DashboardPage() {
       <SupabaseNotice />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Kpi label="Kunden" value={formatNumber(customers.length, 0)} icon={Users} />
+        <Kpi
+          label="Kunden"
+          value={formatNumber(customers.length, 0)}
+          icon={Users}
+          href="/kunden"
+        />
         <Kpi
           label="Projekte"
           value={formatNumber(projects.length, 0)}
           icon={FolderKanban}
+          href="/projekte"
         />
         <Kpi label="Gewonnen" value={formatNumber(won, 0)} icon={TrendingUp} />
         <Kpi
