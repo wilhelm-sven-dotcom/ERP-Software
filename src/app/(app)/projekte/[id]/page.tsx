@@ -85,6 +85,33 @@ export default async function ProjectDetailPage({
         </form>
       </PageHeader>
 
+      {project.system_size_kwp || project.storage_kwh ? (
+        <div className="mb-4 grid grid-cols-2 gap-4 sm:max-w-md">
+          <Card>
+            <CardContent className="py-4">
+              <p className="text-muted-foreground text-xs">Anlagenleistung</p>
+              <p className="text-2xl font-semibold">
+                {formatNumber(project.system_size_kwp)}{" "}
+                <span className="text-muted-foreground text-base font-normal">
+                  kWp
+                </span>
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="py-4">
+              <p className="text-muted-foreground text-xs">Speicher</p>
+              <p className="text-2xl font-semibold">
+                {formatNumber(project.storage_kwh)}{" "}
+                <span className="text-muted-foreground text-base font-normal">
+                  kWh
+                </span>
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-1">
           <CardHeader>
@@ -102,6 +129,14 @@ export default async function ProjectDetailPage({
                 value={
                   project.system_size_kwp
                     ? `${formatNumber(project.system_size_kwp)} kWp`
+                    : "–"
+                }
+              />
+              <Field
+                label="Speicher"
+                value={
+                  project.storage_kwh
+                    ? `${formatNumber(project.storage_kwh)} kWh`
                     : "–"
                 }
               />
