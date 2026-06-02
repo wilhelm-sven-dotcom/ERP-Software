@@ -44,6 +44,7 @@ export function ProjectFormDialog({
   customers,
   employees,
   defaultCustomerId,
+  projectTypes = PROJECT_TYPES,
   openOnMount = false,
   trigger,
 }: {
@@ -51,6 +52,8 @@ export function ProjectFormDialog({
   customers: CustomerOption[];
   employees: Employee[];
   defaultCustomerId?: string;
+  /** Wählbare Anlagentypen (Default-Konstante ∪ selbst angelegte Vorlagen-Typen). */
+  projectTypes?: readonly string[];
   /** Dialog beim ersten Rendern automatisch öffnen (z. B. via ?neu=1). */
   openOnMount?: boolean;
   trigger: React.ReactNode;
@@ -151,7 +154,7 @@ export function ProjectFormDialog({
                 <SelectValue placeholder="Anlagentyp wählen" />
               </SelectTrigger>
               <SelectContent>
-                {PROJECT_TYPES.map((pt) => (
+                {projectTypes.map((pt) => (
                   <SelectItem key={pt} value={pt}>
                     {pt}
                   </SelectItem>

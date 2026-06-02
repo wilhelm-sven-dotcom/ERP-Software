@@ -82,6 +82,43 @@ export async function deleteWorkflowStep(fd: FormData): Promise<void> {
   revalidatePath("/workflow");
 }
 
+/** Neue Ablaufvorlage anlegen (Name, Phase, optional Anlagentyp als Freitext). */
+export async function createWorkflowTemplate(
+  _prev: ActionResult,
+  fd: FormData,
+): Promise<ActionResult> {
+  const guard = ensureConfigured();
+  if (guard) return guard;
+  const name = s(fd, "name");
+  if (!name) return fail("Bitte einen Namen angeben.");
+  const phase = s(fd, "phase") === "vertrieb" ? "vertrieb" : "projekt";
+  const projectType = phase === "vertrieb" ? null : s(fd, "project_type");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("workflow_templates")
+    .insert({ name, phase, project_type: projectType, active: true });
+  if (error) return fail(error.message);
+  revalidatePath("/workflow");
+  return OK;
+}
+
+export async function toggleTemplateActive(fd: FormData): Promise<void> {
+  const id = String(fd.get("id") ?? "");
+  const active = String(fd.get("active") ?? "") === "true";
+  if (!id || ensureConfigured()) return;
+  const supabase = await createClient();
+  await supabase.from("workflow_templates").update({ active }).eq("id", id);
+  revalidatePath("/workflow");
+}
+
+export async function deleteWorkflowTemplate(fd: FormData): Promise<void> {
+  const id = String(fd.get("id") ?? "");
+  if (!id || ensureConfigured()) return;
+  const supabase = await createClient();
+  await supabase.from("workflow_templates").delete().eq("id", id);
+  revalidatePath("/workflow");
+}
+
 /**
  * Aus der passenden Vorlage Aufgaben für ein Projekt erzeugen — abhängigkeits-
  * bewusst: Schritte mit Vorgängern starten als 'wartet', Wurzeln als 'offen'.

@@ -1,5 +1,6 @@
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
+import { PROJECT_TYPES } from "@/lib/constants";
 import type {
   ProjectTask,
   ProjectTaskDep,
@@ -9,6 +10,21 @@ import type {
   WorkflowStepDep,
   WorkflowTemplate,
 } from "@/lib/types";
+
+/** Wählbare Anlagentypen: Konstante ∪ selbst angelegte Projekt-Vorlagentypen. */
+export async function getProjectTypeOptions(): Promise<string[]> {
+  const base = [...PROJECT_TYPES];
+  if (!isSupabaseConfigured()) return base;
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("workflow_templates")
+    .select("project_type")
+    .eq("phase", "projekt");
+  const extra = (data ?? [])
+    .map((r) => r.project_type)
+    .filter((x): x is string => Boolean(x));
+  return Array.from(new Set([...base, ...extra]));
+}
 
 export async function getWorkflowTemplates(): Promise<WorkflowTemplate[]> {
   if (!isSupabaseConfigured()) return [];

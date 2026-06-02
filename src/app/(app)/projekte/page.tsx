@@ -21,7 +21,7 @@ import { ProgressBar } from "@/components/projekte/progress-bar";
 import { getProjects } from "@/lib/data/projects";
 import { getCustomers } from "@/lib/data/customers";
 import { getEmployees } from "@/lib/data/employees";
-import { getProjectsProgress } from "@/lib/data/workflow";
+import { getProjectsProgress, getProjectTypeOptions } from "@/lib/data/workflow";
 import { customerName, formatNumber } from "@/lib/format";
 import { statusVariant } from "@/lib/constants";
 
@@ -38,13 +38,17 @@ export default async function ProjektePage({
     getCustomers(),
     getEmployees(),
   ]);
-  const progress = await getProjectsProgress(projects.map((p) => p.id));
+  const [progress, projectTypes] = await Promise.all([
+    getProjectsProgress(projects.map((p) => p.id)),
+    getProjectTypeOptions(),
+  ]);
   const openOnMount = neu === "1";
 
   const newButton = (
     <ProjectFormDialog
       customers={customers}
       employees={employees}
+      projectTypes={projectTypes}
       openOnMount={openOnMount}
       trigger={
         <Button>

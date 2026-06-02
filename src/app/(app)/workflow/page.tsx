@@ -4,12 +4,20 @@ import { PageHeader } from "@/components/shared/page-header";
 import { SupabaseNotice } from "@/components/shared/supabase-notice";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Trash2 } from "lucide-react";
 import { WorkflowStepManager } from "@/components/workflow/workflow-step-manager";
+import { TemplateCreateDialog } from "@/components/workflow/template-create-dialog";
 import {
   getWorkflowTemplates,
   getAllWorkflowSteps,
   getAllWorkflowStepDeps,
 } from "@/lib/data/workflow";
+import {
+  toggleTemplateActive,
+  deleteWorkflowTemplate,
+} from "@/app/(app)/workflow/actions";
 import { getCurrentEmployee } from "@/lib/supabase/auth";
 import type { WorkflowStep, WorkflowTemplate } from "@/lib/types";
 
@@ -52,13 +60,31 @@ export default async function WorkflowPage() {
     const tSteps = stepsByTemplate.get(tmpl.id) ?? [];
     return (
       <Card key={tmpl.id}>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between gap-2">
           <CardTitle className="text-base">
             {tmpl.phase === "vertrieb" ? tmpl.name : tmpl.project_type ?? "Allgemein"}
             <span className="text-muted-foreground ml-2 text-sm font-normal">
               {tmpl.phase === "vertrieb" ? "Vertriebsablauf" : tmpl.name}
             </span>
+            {!tmpl.active ? (
+              <Badge variant="secondary" className="ml-2">inaktiv</Badge>
+            ) : null}
           </CardTitle>
+          <div className="flex items-center gap-1">
+            <form action={toggleTemplateActive}>
+              <input type="hidden" name="id" value={tmpl.id} />
+              <input type="hidden" name="active" value={String(!tmpl.active)} />
+              <Button variant="ghost" size="sm" type="submit">
+                {tmpl.active ? "Deaktivieren" : "Aktivieren"}
+              </Button>
+            </form>
+            <form action={deleteWorkflowTemplate}>
+              <input type="hidden" name="id" value={tmpl.id} />
+              <Button variant="ghost" size="icon" className="size-8" type="submit" title="Vorlage löschen">
+                <Trash2 className="size-4" />
+              </Button>
+            </form>
+          </div>
         </CardHeader>
         <CardContent>
           <WorkflowStepManager
@@ -76,7 +102,9 @@ export default async function WorkflowPage() {
       <PageHeader
         title="Ablauf-Vorlagen"
         description="Schritte werden beim Start des Ablaufs zu Aufgaben — mit Vorgängern für die richtige Reihenfolge."
-      />
+      >
+        <TemplateCreateDialog />
+      </PageHeader>
       <SupabaseNotice />
 
       {templates.length === 0 ? (

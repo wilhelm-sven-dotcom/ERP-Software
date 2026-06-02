@@ -20,7 +20,12 @@ import { getEmployees } from "@/lib/data/employees";
 import { getCalculationsByProject } from "@/lib/data/calculations";
 import { getOffersByProject } from "@/lib/data/offers";
 import { getDocumentsByProject } from "@/lib/data/documents";
-import { getProjectTasks, getTaskCandidatesByProject, getTaskDeps } from "@/lib/data/workflow";
+import {
+  getProjectTasks,
+  getTaskCandidatesByProject,
+  getTaskDeps,
+  getProjectTypeOptions,
+} from "@/lib/data/workflow";
 import { getCurrentEmployee } from "@/lib/supabase/auth";
 import { getTimeEntriesByProject } from "@/lib/data/time";
 import { getProjectFiles } from "@/lib/data/project-files";
@@ -99,7 +104,10 @@ export default async function ProjectDetailPage({
   }
 
   // Vorgänger je Aufgabe (für „wartet auf …" und die Blockierung).
-  const taskDeps = await getTaskDeps(tasks.map((t) => t.id));
+  const [taskDeps, projectTypes] = await Promise.all([
+    getTaskDeps(tasks.map((t) => t.id)),
+    getProjectTypeOptions(),
+  ]);
   const taskById = new Map(tasks.map((t) => [t.id, t]));
   const predsByTask: Record<string, { id: string; title: string; done: boolean }[]> = {};
   for (const d of taskDeps) {
@@ -174,6 +182,7 @@ export default async function ProjectDetailPage({
           project={project}
           customers={customers}
           employees={employees}
+          projectTypes={projectTypes}
           trigger={
             <Button variant="outline">
               <Pencil className="size-4" /> Bearbeiten
