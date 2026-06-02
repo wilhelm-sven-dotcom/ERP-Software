@@ -19,8 +19,10 @@ import { getCustomers, getCustomer } from "@/lib/data/customers";
 import { getEmployees } from "@/lib/data/employees";
 import { getCalculationsByProject } from "@/lib/data/calculations";
 import { getOffersByProject } from "@/lib/data/offers";
+import { getDocumentsByProject } from "@/lib/data/documents";
 import { deleteProject } from "@/app/(app)/projekte/actions";
 import { createOfferFromCalculation } from "@/app/(app)/angebot/actions";
+import { createDeliveryNote } from "@/app/(app)/dokumente/actions";
 import { customerName, formatCurrency, formatNumber } from "@/lib/format";
 import { offerStatusVariant, statusVariant } from "@/lib/constants";
 
@@ -44,15 +46,25 @@ export default async function ProjectDetailPage({
   const project = await getProject(id);
   if (!project) notFound();
 
-  const [activities, customers, employees, variants, fullCustomer, offers] =
-    await Promise.all([
-      getProjectActivities(id),
-      getCustomers(),
-      getEmployees(),
-      getCalculationsByProject(id),
-      project.customer_id ? getCustomer(project.customer_id) : null,
-      getOffersByProject(id),
-    ]);
+  const [
+    activities,
+    customers,
+    employees,
+    variants,
+    fullCustomer,
+    offers,
+    auftraege,
+    lieferscheine,
+  ] = await Promise.all([
+    getProjectActivities(id),
+    getCustomers(),
+    getEmployees(),
+    getCalculationsByProject(id),
+    project.customer_id ? getCustomer(project.customer_id) : null,
+    getOffersByProject(id),
+    getDocumentsByProject(id, "auftragsbestaetigung"),
+    getDocumentsByProject(id, "lieferschein"),
+  ]);
 
   const customerAddress = fullCustomer
     ? [
@@ -230,6 +242,80 @@ export default async function ProjectDetailPage({
           </CardContent>
         </Card>
       </div>
+
+      {/* Folgedokumente: Auftragsbestätigungen & Lieferscheine */}
+      {offers.length > 0 || auftraege.length > 0 || lieferscheine.length > 0 ? (
+        <div className="mb-4 grid gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Aufträge</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {auftraege.length === 0 ? (
+                <p className="text-muted-foreground text-sm">
+                  Noch keine Auftragsbestätigung. Bei einem angenommenen Angebot
+                  oben „Auftragsbestätigung“ erstellen.
+                </p>
+              ) : (
+                <ul className="divide-y">
+                  {auftraege.map((d) => (
+                    <li
+                      key={d.id}
+                      className="flex items-center justify-between gap-2 py-2"
+                    >
+                      <Link
+                        href={`/auftrag/${d.id}`}
+                        className="text-sm font-medium hover:underline"
+                      >
+                        AB Nr. {d.doc_number ?? "–"}
+                      </Link>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline">{d.status}</Badge>
+                        <form action={createDeliveryNote}>
+                          <input type="hidden" name="document_id" value={d.id} />
+                          <Button variant="ghost" size="sm" type="submit">
+                            Lieferschein
+                          </Button>
+                        </form>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Lieferscheine</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {lieferscheine.length === 0 ? (
+                <p className="text-muted-foreground text-sm">
+                  Noch keine Lieferscheine.
+                </p>
+              ) : (
+                <ul className="divide-y">
+                  {lieferscheine.map((d) => (
+                    <li
+                      key={d.id}
+                      className="flex items-center justify-between gap-2 py-2"
+                    >
+                      <Link
+                        href={`/lieferschein/${d.id}`}
+                        className="text-sm font-medium hover:underline"
+                      >
+                        LS Nr. {d.doc_number ?? "–"}
+                      </Link>
+                      <Badge variant="outline">{d.status}</Badge>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
 
       {fullCustomer ? (
         <Card className="mb-4">

@@ -33,6 +33,14 @@ export function offerStatusVariant(
   }
 }
 
+/** Status für Folgedokumente (AB/Lieferschein). */
+export const DOCUMENT_STATUSES = [
+  "Entwurf",
+  "Versendet",
+  "Bestätigt",
+  "Abgeschlossen",
+] as const;
+
 /** Vorgabe-Einheiten und -Kategorien für den Produktkatalog (client-sicher). */
 export const DEFAULT_UNITS = [
   "Stk",

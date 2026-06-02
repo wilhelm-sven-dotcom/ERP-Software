@@ -6,6 +6,8 @@ import {
   Users,
   Calculator,
   FileText,
+  ClipboardCheck,
+  PackageCheck,
   TrendingUp,
   Files,
   Package,
@@ -50,6 +52,13 @@ export const navItems: NavItem[] = [
     icon: Calculator,
   },
   { key: "angebot", label: "Angebot", href: "/angebot", icon: FileText },
+  { key: "auftrag", label: "Aufträge", href: "/auftrag", icon: ClipboardCheck },
+  {
+    key: "lieferschein",
+    label: "Lieferscheine",
+    href: "/lieferschein",
+    icon: PackageCheck,
+  },
   {
     key: "wirtschaft",
     label: "Wirtschaftlichkeit",

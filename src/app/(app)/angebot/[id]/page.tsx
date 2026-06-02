@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Trash2 } from "lucide-react";
+import { ArrowLeft, FileOutput, Trash2 } from "lucide-react";
 
 import { PageHeader } from "@/components/shared/page-header";
 import { SupabaseNotice } from "@/components/shared/supabase-notice";
@@ -31,6 +31,7 @@ import { getAllProductAssets, PRODUCT_ASSETS_BUCKET } from "@/lib/data/products"
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { deleteOffer } from "@/app/(app)/angebot/actions";
+import { createOrderConfirmation } from "@/app/(app)/dokumente/actions";
 import { calculate } from "@/lib/calc/engine";
 import { POSITION_GROUPS } from "@/lib/calc/types";
 import { formatCurrency, formatNumber } from "@/lib/format";
@@ -116,6 +117,14 @@ export default async function AngebotPage({
         </Button>
         <div className="flex items-center gap-2">
           <OfferStatusSelect offerId={offer.id} status={offer.status} />
+          {offer.status === "Angenommen" ? (
+            <form action={createOrderConfirmation}>
+              <input type="hidden" name="offer_id" value={offer.id} />
+              <Button type="submit" variant="outline">
+                <FileOutput className="size-4" /> Auftragsbestätigung
+              </Button>
+            </form>
+          ) : null}
           <PrintButton />
           <form action={deleteOffer}>
             <input type="hidden" name="id" value={offer.id} />

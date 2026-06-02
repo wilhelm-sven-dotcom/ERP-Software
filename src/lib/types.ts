@@ -222,6 +222,26 @@ export interface Offer {
   updated_at: string;
 }
 
+export type DocumentKind = "auftragsbestaetigung" | "lieferschein";
+
+export interface DocumentRecord {
+  id: string;
+  project_id: string;
+  kind: DocumentKind | string;
+  doc_number: number | null;
+  source_offer_id: string | null;
+  source_document_id: string | null;
+  status: string;
+  title: string | null;
+  positions: unknown[];
+  totals: Record<string, unknown>;
+  meta: Record<string, unknown>;
+  commission: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export type TextBlockKind =
   | "intro"
   | "art_der_anlage"
