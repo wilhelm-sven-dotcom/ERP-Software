@@ -1,9 +1,10 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
+import { PwaRegister } from "@/components/pwa-register";
 import { APP_NAME, APP_DESCRIPTION } from "@/lib/app-meta";
 
 const geistSans = Geist({
@@ -22,6 +23,20 @@ export const metadata: Metadata = {
     template: `%s · ${APP_NAME}`,
   },
   description: APP_DESCRIPTION,
+  manifest: "/manifest.webmanifest",
+  applicationName: APP_NAME,
+  appleWebApp: { capable: true, statusBarStyle: "default", title: APP_NAME },
+  icons: {
+    icon: "/icon.svg",
+    apple: "/icon.svg",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#0071e3" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a84ff" },
+  ],
 };
 
 export default function RootLayout({
@@ -44,6 +59,7 @@ export default function RootLayout({
         >
           {children}
           <Toaster />
+          <PwaRegister />
         </ThemeProvider>
       </body>
     </html>
