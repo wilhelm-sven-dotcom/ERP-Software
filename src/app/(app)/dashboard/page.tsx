@@ -11,6 +11,7 @@ import { getCustomers } from "@/lib/data/customers";
 import { getAdminStats } from "@/lib/data/stats";
 import { getMyOpenTasks } from "@/lib/data/workflow";
 import { getCurrentEmployee } from "@/lib/supabase/auth";
+import { GlobalSearch } from "@/components/shared/global-search";
 import { customerName, formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import { statusVariant } from "@/lib/constants";
 
@@ -64,6 +65,9 @@ export default async function DashboardPage() {
         }
       />
       <SupabaseNotice />
+      <div className="mb-4">
+        <GlobalSearch variant="dashboard" />
+      </div>
       {isAdmin ? <AdminDashboard /> : <EmployeeDashboard employeeId={me?.id ?? null} />}
     </div>
   );
