@@ -388,6 +388,32 @@ export interface OfferTextBlock {
   updated_at: string;
 }
 
+export interface ServiceContract {
+  id: string;
+  customer_id: string | null;
+  project_id: string | null;
+  title: string;
+  start_date: string | null;
+  interval_months: number;
+  next_due: string | null;
+  price: number | null;
+  status: "aktiv" | "pausiert" | "beendet" | string;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Wartungsvertrag mit eingebettetem Kundennamen (für Listen). */
+export type ServiceContractWithCustomer = ServiceContract & {
+  customer: {
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+    company: string | null;
+  } | null;
+};
+
 export interface Setting {
   key: string;
   value: unknown;
