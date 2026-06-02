@@ -20,10 +20,12 @@ import { getEmployees } from "@/lib/data/employees";
 import { getCalculationsByProject } from "@/lib/data/calculations";
 import { getOffersByProject } from "@/lib/data/offers";
 import { getDocumentsByProject } from "@/lib/data/documents";
-import { getProjectTasks } from "@/lib/data/workflow";
+import { getProjectTasks, getTaskCandidatesByProject } from "@/lib/data/workflow";
+import { getCurrentEmployee } from "@/lib/supabase/auth";
 import { getTimeEntriesByProject } from "@/lib/data/time";
 import { getLaborRate } from "@/lib/data/settings";
 import { TaskList } from "@/components/projekte/task-list";
+import { RueckfrageDialog } from "@/components/projekte/rueckfrage-dialog";
 import { deleteProject } from "@/app/(app)/projekte/actions";
 import { createOfferFromCalculation } from "@/app/(app)/angebot/actions";
 import { createDeliveryNote } from "@/app/(app)/dokumente/actions";
@@ -69,11 +71,18 @@ export default async function ProjectDetailPage({
     getDocumentsByProject(id, "auftragsbestaetigung"),
     getDocumentsByProject(id, "lieferschein"),
   ]);
-  const [tasks, timeEntries, laborRate] = await Promise.all([
+  const [tasks, taskCandidates, timeEntries, laborRate, me] = await Promise.all([
     getProjectTasks(id),
+    getTaskCandidatesByProject(id),
     getTimeEntriesByProject(id),
     getLaborRate(),
+    getCurrentEmployee(),
   ]);
+  // Kandidaten je Aufgabe (für „angeboten an …" und „Annehmen").
+  const candidatesByTask: Record<string, string[]> = {};
+  for (const c of taskCandidates) {
+    (candidatesByTask[c.task_id] ??= []).push(c.employee_id);
+  }
 
   // Nachkalkulation: Ist-Arbeitskosten aus erfassten Stunden × Satz
   // (Eintrag > Mitarbeiter-Satz > globaler Satz).
@@ -282,11 +291,18 @@ export default async function ProjectDetailPage({
 
       {/* Projektablauf / Aufgaben */}
       <Card className="mb-4">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Projektablauf</CardTitle>
+          <RueckfrageDialog projectId={id} employees={employees} />
         </CardHeader>
         <CardContent>
-          <TaskList projectId={id} tasks={tasks} employees={employees} />
+          <TaskList
+            projectId={id}
+            tasks={tasks}
+            employees={employees}
+            candidatesByTask={candidatesByTask}
+            currentEmployeeId={me?.id ?? null}
+          />
         </CardContent>
       </Card>
 
