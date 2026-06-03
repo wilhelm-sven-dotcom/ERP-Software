@@ -30,6 +30,10 @@ export interface ClassifyResult {
   } | null;
   /** Bei Datenblättern: ausgelesene technische Kenndaten (key→Wert). */
   specs?: Record<string, string | number> | null;
+  /** Mehrere Produkte je Datenblatt: technische Kenndaten je Produkt-ID. */
+  productSpecs?: Record<string, Record<string, string | number>> | null;
+  /** Falls kein passendes Produkt existiert: Vorschlag für ein neues Produkt. */
+  product_suggestion?: { name?: string; manufacturer?: string; category?: string } | null;
 }
 
 /**
@@ -79,17 +83,23 @@ export async function POST(req: Request) {
           "interpretierst Dokumente. Lies das Dokument PRIMÄR aus dem BILD (auch gescannte PDFs/ " +
           "Tabellen); der mitgelieferte Text ist nur Hilfe. Entscheide, ob die Datei zu einem " +
           "PRODUKT (z. B. Datenblatt, Produktbild) oder einem PROJEKT (z. B. Rechnung, Plan, Foto, " +
-          "Dokument) gehört. Wähle bei Produkten passende productIds aus der Liste (nur wirklich " +
-          "passende, sonst leer); bei Projekten die beste projectId (oder null). Setze 'kind': für " +
-          "Produkte 'datasheet' oder 'image'; für Projekte eines von " +
-          "dokument|datenblatt|plan|foto|rechnung|sonstiges. Ist die Datei ein Beleg/eine Rechnung, " +
-          "fülle 'document' mit docType ('eingangsrechnung'|'ausgangsrechnung'|'lieferschein'|" +
-          "'angebot'), supplier, invoice_number, invoice_date (YYYY-MM-DD), due_date (YYYY-MM-DD), " +
-          "amount (Bruttobetrag als Zahl), currency. Ist die Datei ein DATENBLATT, fülle 'specs' mit " +
-          "den zentralen technischen Kenndaten als key→Wert (z. B. leistung_wp, wirkungsgrad_prozent, " +
-          "kapazitaet_kwh, masse, gewicht_kg, garantie_jahre, hersteller, modell). Nur was wirklich " +
-          "sichtbar/belegbar ist, nichts erfinden. confidence 0..1. Antworte ausschließlich als JSON " +
-          "mit den Feldern target, productIds, projectId, kind, confidence, reason, document, specs.",
+          "Dokument) gehört. WICHTIG: Ein DATENBLATT gehört IMMER zu Produkten (target='produkt'), " +
+          "auch wenn kein passendes Produkt in der Liste steht. Ein Datenblatt kann MEHRERE Produkte " +
+          "abdecken — wähle ALLE productIds aus der Liste, die im Dokument vorkommen (Modellnamen/ " +
+          "Artikelnummern vergleichen). Steht ein Produkt im Datenblatt, das NICHT in der Liste ist, " +
+          "fülle 'product_suggestion' { name, manufacturer, category } für ein neu anzulegendes Produkt. " +
+          "Bei Projekten die beste projectId (oder null). Setze 'kind': für Produkte 'datasheet' oder " +
+          "'image'; für Projekte eines von dokument|datenblatt|plan|foto|rechnung|sonstiges. Ist die " +
+          "Datei ein Beleg/eine Rechnung, fülle 'document' mit docType ('eingangsrechnung'|" +
+          "'ausgangsrechnung'|'lieferschein'|'angebot'), supplier, invoice_number, invoice_date " +
+          "(YYYY-MM-DD), due_date (YYYY-MM-DD), amount (Bruttobetrag als Zahl), currency. Ist die Datei " +
+          "ein DATENBLATT, fülle 'specs' mit den zentralen technischen Kenndaten (z. B. leistung_wp, " +
+          "wirkungsgrad_prozent, kapazitaet_kwh, strom_a, spannung_v, masse, gewicht_kg, garantie_jahre, " +
+          "hersteller, modell). Wenn das Datenblatt MEHRERE Produkte mit UNTERSCHIEDLICHEN Werten zeigt, " +
+          "fülle zusätzlich 'productSpecs' als Objekt { <productId aus der Liste>: { kenndaten… } } je " +
+          "Produkt. Nur was wirklich sichtbar/belegbar ist, nichts erfinden. confidence 0..1. Antworte " +
+          "ausschließlich als JSON mit target, productIds, projectId, kind, confidence, reason, document, " +
+          "specs, productSpecs, product_suggestion.",
       },
       { role: "user", content: userContent },
     ],
@@ -110,6 +120,14 @@ export async function POST(req: Request) {
     specs:
       result.specs && typeof result.specs === "object" && !Array.isArray(result.specs)
         ? result.specs
+        : null,
+    productSpecs:
+      result.productSpecs && typeof result.productSpecs === "object" && !Array.isArray(result.productSpecs)
+        ? result.productSpecs
+        : null,
+    product_suggestion:
+      result.product_suggestion && typeof result.product_suggestion === "object"
+        ? result.product_suggestion
         : null,
   };
   return NextResponse.json({ enabled: true, result: normalized });

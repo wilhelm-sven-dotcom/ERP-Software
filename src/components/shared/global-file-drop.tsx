@@ -16,7 +16,11 @@ import {
 } from "@/components/ui/select";
 import { createClient } from "@/lib/supabase/client";
 import { registerProjectFile } from "@/app/(app)/projekte/actions";
-import { registerProductAsset, updateProductSpecs } from "@/app/(app)/produkte/actions";
+import {
+  registerProductAsset,
+  updateProductSpecs,
+  createProductFromDatasheet,
+} from "@/app/(app)/produkte/actions";
 import { rankProductsForFilename, matchProductsInText } from "@/lib/asset-match";
 import {
   extractImagesFromPdf,
@@ -66,6 +70,12 @@ type Row = {
   docMeta: DocMeta | null;
   /** KI-ausgelesene technische Kenndaten aus einem Datenblatt. */
   specs: Record<string, string | number> | null;
+  /** Technische Kenndaten je Produkt-ID (Datenblatt mit mehreren Produkten). */
+  productSpecs: Record<string, Record<string, string | number>> | null;
+  /** Vorschlag für ein neu anzulegendes Produkt (wenn keins passt). */
+  productSuggestion: { name?: string; manufacturer?: string; category?: string } | null;
+  /** Editierbarer Name fürs Anlegen eines neuen Produkts. */
+  newProductName: string;
   /** Specs beim Ablegen ins Produkt übernehmen? */
   applySpecs: boolean;
   done: boolean;
@@ -130,12 +140,26 @@ export function GlobalFileDrop({
         aiReason: "",
         docMeta: null,
         specs: null,
+        productSpecs: null,
+        productSuggestion: null,
+        newProductName: "",
         applySpecs: true,
         done: false,
         busy: false,
       };
     });
-    setRows((r) => [...r, ...next]);
+    // Dubletten (gleicher Name + Größe) vermeiden — sowohl im Batch als auch
+    // gegenüber bereits vorhandenen Zeilen.
+    setRows((r) => {
+      const seen = new Set(r.map((x) => `${x.file.name}:${x.file.size}`));
+      const filtered = next.filter((x) => {
+        const key = `${x.file.name}:${x.file.size}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      return [...r, ...filtered];
+    });
     // PDFs: Text auslesen (für Suche), Produkte erkennen, dann KI-Vorschlag.
     for (const row of next) {
       if (row.isPdf) void detectProductsFromText(row.uid, row.file);
@@ -215,6 +239,8 @@ export function GlobalFileDrop({
           reason: string;
           document?: DocMeta | null;
           specs?: Record<string, string | number> | null;
+          productSpecs?: Record<string, Record<string, string | number>> | null;
+          product_suggestion?: { name?: string; manufacturer?: string; category?: string } | null;
         } | null;
       };
       const r = data.result;
@@ -224,6 +250,13 @@ export function GlobalFileDrop({
       }
       const validProductIds = r.productIds.filter((id) => productById.has(id));
       const validProjectId = projects.some((p) => p.id === r.projectId) ? r.projectId! : "";
+      // Per-Produkt-Specs nur für gültige IDs übernehmen.
+      const productSpecs: Record<string, Record<string, string | number>> = {};
+      if (r.productSpecs) {
+        for (const [pid, sp] of Object.entries(r.productSpecs)) {
+          if (productById.has(pid) && sp && typeof sp === "object") productSpecs[pid] = sp;
+        }
+      }
       setRows((rows) =>
         rows.map((x) => {
           if (x.uid !== uid) return x;
@@ -233,12 +266,15 @@ export function GlobalFileDrop({
               target: "produkt",
               aiBusy: false,
               aiReason: r.reason,
+              // ALLE erkannten Produkte vormarkieren (Datenblatt kann mehrere abdecken).
               productIds:
                 validProductIds.length > 0 ? validProductIds : x.productIds,
               suggestedIds: Array.from(new Set([...x.suggestedIds, ...validProductIds])),
               kind: r.kind === "image" ? "image" : "datasheet",
               docMeta: r.document ?? null,
               specs: r.specs ?? null,
+              productSpecs: Object.keys(productSpecs).length > 0 ? productSpecs : null,
+              productSuggestion: r.product_suggestion ?? null,
             };
           }
           return {
@@ -259,6 +295,36 @@ export function GlobalFileDrop({
 
   function patch(uid: string, p: Partial<Row>) {
     setRows((r) => r.map((x) => (x.uid === uid ? { ...x, ...p } : x)));
+  }
+
+  /** Neues Produkt aus dem Datenblatt anlegen und der Datei zuordnen. */
+  async function createNewProduct(row: Row) {
+    const name = (row.newProductName || row.productSuggestion?.name || row.file.name.replace(/\.[^.]+$/, "")).trim();
+    if (!name) {
+      toast.error("Bitte einen Produktnamen angeben.");
+      return;
+    }
+    patch(row.uid, { busy: true });
+    const res = await createProductFromDatasheet({
+      name,
+      manufacturer: row.productSuggestion?.manufacturer ?? null,
+      category: row.productSuggestion?.category ?? null,
+      specs: row.specs ?? null,
+    });
+    patch(row.uid, { busy: false });
+    if (res.ok && res.id) {
+      const newId = res.id;
+      setRows((rows) =>
+        rows.map((x) =>
+          x.uid === row.uid
+            ? { ...x, productIds: Array.from(new Set([...x.productIds, newId])), productSuggestion: null }
+            : x,
+        ),
+      );
+      toast.success(`Produkt „${name}" angelegt und zugeordnet`);
+    } else {
+      toast.error(res.error ?? "Konnte Produkt nicht anlegen.");
+    }
   }
   function removeRow(uid: string) {
     setRows((r) => r.filter((x) => x.uid !== uid));
@@ -353,12 +419,16 @@ export function GlobalFileDrop({
         return;
       }
 
-      // Technische Kenndaten aus dem Datenblatt in die Produkt-Specs übernehmen.
+      // Technische Kenndaten ins Produkt übernehmen — je Produkt die spezifischen
+      // (productSpecs), sonst die allgemeinen Specs.
       let specsApplied = 0;
-      if (row.applySpecs && row.specs && Object.keys(row.specs).length > 0) {
+      if (row.applySpecs) {
         for (const productId of row.productIds) {
-          const r = await updateProductSpecs(productId, row.specs);
-          if (r.ok) specsApplied += 1;
+          const sp = row.productSpecs?.[productId] ?? row.specs;
+          if (sp && Object.keys(sp).length > 0) {
+            const r = await updateProductSpecs(productId, sp);
+            if (r.ok) specsApplied += 1;
+          }
         }
       }
 
@@ -559,11 +629,37 @@ export function GlobalFileDrop({
                 <p className="text-muted-foreground mt-2 text-xs">
                   Produkte im Datenblatt werden erkannt …
                 </p>
-              ) : row.textMatchCount > 0 ? (
+              ) : row.productIds.length > 0 ? (
                 <p className="text-primary mt-2 text-xs font-medium">
-                  {row.textMatchCount} Produkt(e) im Datenblatt erkannt und vormarkiert.
+                  {row.productIds.length} Produkt(e) erkannt und vormarkiert.
                 </p>
               ) : null}
+
+              {/* Kein passendes Produkt gefunden → neu anlegen (Name vorbefüllt). */}
+              {!row.aiBusy && row.productIds.length === 0 && (row.productSuggestion || row.specs) ? (
+                <div className="border-primary/40 bg-primary/5 mt-2 rounded-md border p-2">
+                  <p className="text-xs font-medium">
+                    Kein passendes Produkt im Katalog — neu anlegen?
+                  </p>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                    <Input
+                      value={row.newProductName || row.productSuggestion?.name || ""}
+                      onChange={(e) => patch(row.uid, { newProductName: e.target.value })}
+                      placeholder="Produktname"
+                      className="h-8 flex-1 min-w-48"
+                    />
+                    <Button size="sm" disabled={row.busy} onClick={() => createNewProduct(row)}>
+                      Anlegen &amp; zuordnen
+                    </Button>
+                  </div>
+                  {row.productSuggestion?.manufacturer ? (
+                    <p className="text-muted-foreground mt-1 text-xs">
+                      Hersteller: {row.productSuggestion.manufacturer}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+
               <ProductChooser
                 products={products}
                 suggestedIds={row.suggestedIds}

@@ -341,6 +341,36 @@ export async function registerProductAsset(input: {
 }
 
 /**
+ * Schnell ein neues Produkt aus einem Datenblatt anlegen (Name/Hersteller/
+ * Kategorie + KI-Specs) und die neue ID zurückgeben — für die Datei-Drop-Zone,
+ * wenn das Datenblatt ein noch nicht angelegtes Produkt enthält.
+ */
+export async function createProductFromDatasheet(input: {
+  name: string;
+  manufacturer?: string | null;
+  category?: string | null;
+  specs?: Record<string, string | number> | null;
+}): Promise<ActionResult & { id?: string }> {
+  const guard = ensureConfigured();
+  if (guard) return guard;
+  if (!input.name?.trim()) return fail("Produktname fehlt.");
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("products")
+    .insert({
+      name: input.name.trim(),
+      manufacturer: input.manufacturer ?? null,
+      category: input.category ?? null,
+      specs: input.specs ?? {},
+    })
+    .select("id")
+    .single();
+  if (error || !data) return fail(error?.message ?? "Anlegen fehlgeschlagen.");
+  revalidatePath("/produkte");
+  return { ok: true, id: data.id };
+}
+
+/**
  * Von der KI aus einem Datenblatt ausgelesene technische Kenndaten in das
  * Produkt übernehmen (in `specs` jsonb mergen — bestehende Werte bleiben,
  * neue/aktualisierte kommen hinzu).
