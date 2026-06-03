@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/supabase/auth";
 import { logActivity } from "@/lib/data/activities";
+import { fetchSpecificYield, aspectFromOrientation } from "@/lib/pvgis";
 import { embedFileRow } from "@/lib/ai/embed-file";
 import { ensureConfigured, fail, OK, type ActionResult } from "@/lib/actions";
 
@@ -140,6 +141,35 @@ export async function saveProject(
 }
 
 /** Nur den Status setzen (Pipeline-Schnellwechsel). */
+/**
+ * Standort-Ertrag (kWh/kWp) von PVGIS abrufen und am Projekt speichern
+ * (details.pvgis_yield). Nutzt lat/lon + Dachneigung/-ausrichtung.
+ */
+export async function refreshPvgisYield(fd: FormData): Promise<void> {
+  if (ensureConfigured()) return;
+  const id = s(fd, "id");
+  if (!id) return;
+  const supabase = await createClient();
+  const { data: p } = await supabase
+    .from("projects")
+    .select("lat, lon, details")
+    .eq("id", id)
+    .maybeSingle();
+  if (!p?.lat || !p?.lon) return;
+  const details = (p.details as Record<string, unknown>) ?? {};
+  const tilt = typeof details.dach_neigung === "number" ? (details.dach_neigung as number) : null;
+  const aspect = aspectFromOrientation(details.dach_ausrichtung as string | undefined);
+  const result = await fetchSpecificYield({ lat: p.lat as number, lon: p.lon as number, tilt, aspect });
+  if (!result) return;
+  await supabase
+    .from("projects")
+    .update({
+      details: { ...details, pvgis_yield: result.specificYield, pvgis_at: new Date().toISOString() },
+    })
+    .eq("id", id);
+  revalidatePath(`/projekte/${id}`);
+}
+
 export async function setProjectStatus(fd: FormData): Promise<void> {
   const id = s(fd, "id");
   const status = s(fd, "status");

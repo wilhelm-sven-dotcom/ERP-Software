@@ -43,7 +43,7 @@ import { ProjectTabs } from "@/components/projekte/project-tabs";
 import { ProjectPipeline } from "@/components/projekte/project-pipeline";
 import { WirtschaftRechner } from "@/components/wirtschaft/wirtschaft-rechner";
 import { getWirtschaftDefaults } from "@/lib/data/settings";
-import { deleteProject } from "@/app/(app)/projekte/actions";
+import { deleteProject, refreshPvgisYield } from "@/app/(app)/projekte/actions";
 import { createOfferFromCalculation } from "@/app/(app)/angebot/actions";
 import { createDeliveryNote } from "@/app/(app)/dokumente/actions";
 import { customerName, formatCurrency, formatNumber } from "@/lib/format";
@@ -182,7 +182,12 @@ export default async function ProjectDetailPage({
     typeof (selectedCalc?.totals as Record<string, unknown>)?.brutto === "number"
       ? (selectedCalc!.totals as Record<string, number>).brutto
       : 0;
-  const wParams = wirtschaftDefaults;
+  // Standort-Ertrag (PVGIS), falls am Projekt hinterlegt → überschreibt den Default.
+  const pvgisYield =
+    typeof (project.details as Record<string, unknown>)?.pvgis_yield === "number"
+      ? (project.details as Record<string, number>).pvgis_yield
+      : null;
+  const wParams = pvgisYield ? { ...wirtschaftDefaults, ertragKwhProKwp: pvgisYield } : wirtschaftDefaults;
 
   return (
     <div>
@@ -416,7 +421,22 @@ export default async function ProjectDetailPage({
             </Card>
 
             <div>
-              <h2 className="mb-3 text-lg font-semibold tracking-tight">Wirtschaftlichkeit</h2>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-lg font-semibold tracking-tight">Wirtschaftlichkeit</h2>
+                {project.lat != null && project.lon != null ? (
+                  <form action={refreshPvgisYield}>
+                    <input type="hidden" name="id" value={project.id} />
+                    <Button variant="outline" size="sm" type="submit">
+                      Ertrag vom Standort holen (PVGIS)
+                    </Button>
+                  </form>
+                ) : null}
+              </div>
+              <p className="text-muted-foreground mb-3 text-xs">
+                Spez. Ertrag:{" "}
+                <span className="text-foreground font-medium">{formatNumber(wParams.ertragKwhProKwp)} kWh/kWp</span>{" "}
+                {pvgisYield ? "(Standort/PVGIS)" : "(Firmen-Default — über „Ertrag vom Standort holen“ verfeinern)"}
+              </p>
               {wKwp <= 0 ? (
                 <p className="text-muted-foreground text-sm">
                   Trage im Projekt die Anlagengröße (kWp) ein, um die Wirtschaftlichkeit zu berechnen.
