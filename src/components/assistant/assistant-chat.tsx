@@ -43,6 +43,13 @@ const SUGGESTIONS = [
   "Erstell eine Auswertung der offenen Rechnungen als CSV",
 ];
 
+const GENERAL_SUGGESTIONS = [
+  "Erkläre, was ein MPP-Tracker ist",
+  "Formuliere eine freundliche Nachfass-E-Mail an einen Kunden",
+  "Wie funktioniert ein Hybrid-Wechselrichter?",
+  "Schreibe einen kurzen Text für ein PV-Angebot",
+];
+
 /**
  * KI-Assistent im Gemini-Stil: zentrierte Begrüßung + großes Eingabefeld im
  * leeren Zustand, Gesprächsverlauf links (gespeichert je Mitarbeiter),
@@ -72,7 +79,36 @@ export function AssistantChat({
   const [conversationId, setConversationId] = React.useState<string | null>(null);
   const [conversations, setConversations] = React.useState<ConversationRow[]>(initialConversations);
   const [indexing, setIndexing] = React.useState(false);
+  const [mode, setMode] = React.useState<"crm" | "general">("crm");
   const endRef = React.useRef<HTMLDivElement>(null);
+
+  const suggestions = mode === "general" ? GENERAL_SUGGESTIONS : SUGGESTIONS;
+  const modeToggle = (
+    <div className="bg-muted inline-flex rounded-full p-0.5 text-xs">
+      <button
+        type="button"
+        onClick={() => setMode("crm")}
+        className={
+          mode === "crm"
+            ? "bg-background rounded-full px-3 py-1 font-medium shadow-sm"
+            : "text-muted-foreground rounded-full px-3 py-1"
+        }
+      >
+        CRM
+      </button>
+      <button
+        type="button"
+        onClick={() => setMode("general")}
+        className={
+          mode === "general"
+            ? "bg-background rounded-full px-3 py-1 font-medium shadow-sm"
+            : "text-muted-foreground rounded-full px-3 py-1"
+        }
+      >
+        Allgemein
+      </button>
+    </div>
+  );
 
   async function indexDocuments() {
     setIndexing(true);
@@ -159,7 +195,7 @@ export function AssistantChat({
       const res = await fetch("/api/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: next }),
+        body: JSON.stringify({ messages: next, mode }),
       });
       const data = (await res.json()) as {
         enabled?: boolean;
@@ -295,23 +331,28 @@ export function AssistantChat({
       <div className="flex min-w-0 flex-1 flex-col">
         {empty ? (
           <div className="flex flex-1 flex-col items-center justify-center px-2">
-            <h1 className="mb-8 text-center text-3xl font-semibold tracking-tight sm:text-4xl">
-              Was steht als Nächstes an{firstName ? `, ${firstName}` : ""}?
+            <h1 className="mb-6 text-center text-3xl font-semibold tracking-tight sm:text-4xl">
+              {mode === "general"
+                ? "Frag mich alles"
+                : `Was steht als Nächstes an${firstName ? `, ${firstName}` : ""}?`}
             </h1>
+            <div className="mb-4">{modeToggle}</div>
             <div className="w-full max-w-2xl">{inputBar}</div>
-            <button
-              type="button"
-              onClick={() =>
-                void ask(
-                  "Fasse zusammen, was heute für mich ansteht: überfällige Aufgaben, mir angebotene Aufgaben, offene Leads, überfällige Rechnungen und fällige Wartungen. Gib mir eine kurze, priorisierte To-do-Liste.",
-                )
-              }
-              className="text-primary hover:bg-primary/10 mt-3 inline-flex items-center gap-1.5 rounded-full border border-primary/40 px-3.5 py-1.5 text-sm font-medium"
-            >
-              <Sparkles className="size-4" /> Mein Tag — was steht an?
-            </button>
+            {mode === "crm" ? (
+              <button
+                type="button"
+                onClick={() =>
+                  void ask(
+                    "Fasse zusammen, was heute für mich ansteht: überfällige Aufgaben, mir angebotene Aufgaben, offene Leads, überfällige Rechnungen und fällige Wartungen. Gib mir eine kurze, priorisierte To-do-Liste.",
+                  )
+                }
+                className="text-primary hover:bg-primary/10 mt-3 inline-flex items-center gap-1.5 rounded-full border border-primary/40 px-3.5 py-1.5 text-sm font-medium"
+              >
+                <Sparkles className="size-4" /> Mein Tag — was steht an?
+              </button>
+            ) : null}
             <div className="mt-4 flex max-w-2xl flex-wrap justify-center gap-1.5">
-              {SUGGESTIONS.map((s) => (
+              {suggestions.map((s) => (
                 <button
                   key={s}
                   type="button"
@@ -379,7 +420,10 @@ export function AssistantChat({
               ) : null}
               <div ref={endRef} />
             </div>
-            <div className="mt-3">{inputBar}</div>
+            <div className="mt-3 flex items-center gap-2">
+              <div className="flex-1">{inputBar}</div>
+              {modeToggle}
+            </div>
           </>
         )}
       </div>

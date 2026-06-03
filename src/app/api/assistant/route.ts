@@ -16,6 +16,15 @@ interface IncomingMessage {
 
 const MAX_STEPS = 6;
 
+function generalPrompt(me: { name: string | null }): string {
+  return `Du bist ein hilfreicher, vielseitiger KI-Assistent (wie ChatGPT/Claude) und hilfst
+${me.name ?? "dem Nutzer"}. Beantworte beliebige Fragen klar, fundiert und auf Deutsch — aus deinem
+Allgemein-/Fachwissen (z. B. PV-Technik, Recht-Grundlagen, Texte/E-Mails formulieren, Erklärungen,
+Rechnen). Dies ist der ALLGEMEINE Chat, NICHT die Firmendatenbank: greife nicht auf CRM-Daten zu.
+Wenn der Nutzer konkrete Firmendaten braucht (Projekte, Rechnungen, Kunden …), weise kurz darauf
+hin, dass er dafür in den „CRM"-Modus wechseln kann.`;
+}
+
 function systemPrompt(me: { name: string | null; role: string; is_sales: boolean }): string {
   const today = new Date().toISOString().slice(0, 10);
   return `Du bist der KI-Assistent eines PV-/Speicher-CRM (ip³ PV-Tool) für ein Handwerks-/
@@ -47,8 +56,10 @@ export async function POST(req: Request) {
   if (!isAiConfigured()) return NextResponse.json({ enabled: false });
 
   let incoming: IncomingMessage[] = [];
+  let mode: "crm" | "general" = "crm";
   try {
-    const body = (await req.json()) as { messages?: IncomingMessage[] };
+    const body = (await req.json()) as { messages?: IncomingMessage[]; mode?: string };
+    if (body.mode === "general") mode = "general";
     incoming = (body.messages ?? [])
       .filter((m) => m && (m.role === "user" || m.role === "assistant") && m.content)
       .slice(-12);
@@ -56,6 +67,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ enabled: true, answer: null });
   }
   if (incoming.length === 0) return NextResponse.json({ enabled: true, answer: null });
+
+  // ALLGEMEINER Chat: ohne CRM-Werkzeuge, antwortet aus dem Wissen.
+  if (mode === "general") {
+    const msg = await chatRaw(
+      [{ role: "system", content: generalPrompt(me) }, ...incoming],
+      { maxTokens: 1200 },
+    );
+    return NextResponse.json({ enabled: true, answer: msg?.content ?? "" });
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const messages: any[] = [{ role: "system", content: systemPrompt(me) }, ...incoming];
