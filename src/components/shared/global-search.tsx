@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Search, Sparkles } from "lucide-react";
+import { Search, Sparkles, Send, Check, X, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 import {
   Dialog,
@@ -10,7 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { searchAll, type SearchHit, type SearchResults } from "@/app/(app)/search/actions";
 
 const EMPTY: SearchResults = {
@@ -22,19 +23,30 @@ const EMPTY: SearchResults = {
   files: [],
 };
 
-interface AiState {
-  loading: boolean;
-  answer: string | null;
-  relevantIds: Set<string>;
+interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
 }
 
-const AI_EMPTY: AiState = { loading: false, answer: null, relevantIds: new Set() };
+interface TaskAction {
+  title: string;
+  body: string;
+  employeeIds: string[];
+  employeeNames: string[];
+  projectId: string | null;
+  projectTitle: string | null;
+  unmatched: string[];
+}
+interface ProposedAction {
+  type: "create_task";
+  task: TaskAction;
+}
 
 /**
- * Globale Sofortsuche über alle Module. Öffnet per Klick oder ⌘/Strg+K,
- * sucht mit kurzer Verzögerung serverseitig und zeigt gruppierte Treffer.
- * Mit aktivierter KI (`aiEnabled`) liefert Enter zusätzlich eine
- * interpretierte Antwort + hebt die relevanten Treffer hervor.
+ * Globale Suche + KI-Assistent. Öffnet per Klick oder ⌘/Strg+K.
+ * - Tippen zeigt sofortige Stichworttreffer (wie bisher).
+ * - Mit aktivierter KI (`aiEnabled`) beantwortet Enter Fragen, erstellt
+ *   Auswertungen und kann Aufgaben vorschlagen, die der Nutzer bestätigt.
  */
 export function GlobalSearch({
   variant = "topbar",
@@ -48,7 +60,13 @@ export function GlobalSearch({
   const [query, setQuery] = React.useState("");
   const [results, setResults] = React.useState<SearchResults>(EMPTY);
   const [loading, setLoading] = React.useState(false);
-  const [ai, setAi] = React.useState<AiState>(AI_EMPTY);
+
+  // Assistent
+  const [chat, setChat] = React.useState<ChatMessage[]>([]);
+  const [thinking, setThinking] = React.useState(false);
+  const [proposed, setProposed] = React.useState<ProposedAction | null>(null);
+  const [executing, setExecuting] = React.useState(false);
+  const threadEndRef = React.useRef<HTMLDivElement>(null);
 
   // ⌘/Strg+K öffnet die Suche.
   React.useEffect(() => {
@@ -62,7 +80,7 @@ export function GlobalSearch({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Debounced Serversuche.
+  // Debounced Serversuche (Sofort-Treffer beim Tippen).
   React.useEffect(() => {
     const q = query.trim();
     if (q.length < 2) {
@@ -81,30 +99,84 @@ export function GlobalSearch({
     return () => clearTimeout(handle);
   }, [query]);
 
-  // KI-Antwort nur auf Enter (kostenkontrolliert, nicht je Tastendruck).
-  async function askAi() {
+  React.useEffect(() => {
+    threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chat, thinking, proposed]);
+
+  // KI-Assistent fragen (Enter).
+  async function ask() {
     const q = query.trim();
-    if (!aiEnabled || q.length < 2) return;
-    setAi({ loading: true, answer: null, relevantIds: new Set() });
+    if (!aiEnabled || q.length < 2 || thinking) return;
+    const next: ChatMessage[] = [...chat, { role: "user", content: q }];
+    setChat(next);
+    setQuery("");
+    setResults(EMPTY);
+    setProposed(null);
+    setThinking(true);
     try {
-      const res = await fetch("/api/search/ai", {
+      const res = await fetch("/api/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: q }),
+        body: JSON.stringify({ messages: next }),
       });
       const data = (await res.json()) as {
         enabled?: boolean;
         answer?: string | null;
-        relevantIds?: string[];
+        proposedAction?: ProposedAction | null;
       };
-      setAi({
-        loading: false,
-        answer: data.answer ?? null,
-        relevantIds: new Set(data.relevantIds ?? []),
-      });
+      setChat((c) => [
+        ...c,
+        { role: "assistant", content: data.answer ?? "Dazu habe ich gerade keine Antwort." },
+      ]);
+      if (data.proposedAction) setProposed(data.proposedAction);
     } catch {
-      setAi(AI_EMPTY);
+      setChat((c) => [
+        ...c,
+        { role: "assistant", content: "Es gab ein Problem bei der Anfrage." },
+      ]);
+    } finally {
+      setThinking(false);
     }
+  }
+
+  async function runProposed() {
+    if (!proposed) return;
+    setExecuting(true);
+    try {
+      const res = await fetch("/api/assistant/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: proposed.type,
+          task: {
+            title: proposed.task.title,
+            body: proposed.task.body,
+            employeeIds: proposed.task.employeeIds,
+            projectId: proposed.task.projectId,
+          },
+        }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string | null };
+      if (data.ok) {
+        toast.success("Aufgabe angelegt");
+        setChat((c) => [...c, { role: "assistant", content: "✅ Erledigt — die Aufgabe wurde angelegt." }]);
+        setProposed(null);
+        router.refresh();
+      } else {
+        toast.error(data.error ?? "Konnte die Aktion nicht ausführen.");
+      }
+    } catch {
+      toast.error("Konnte die Aktion nicht ausführen.");
+    } finally {
+      setExecuting(false);
+    }
+  }
+
+  function resetAll() {
+    setChat([]);
+    setProposed(null);
+    setQuery("");
+    setResults(EMPTY);
   }
 
   const groups: { label: string; hits: SearchHit[] }[] = [
@@ -117,12 +189,11 @@ export function GlobalSearch({
   ].filter((g) => g.hits.length > 0);
 
   const total = groups.reduce((s, g) => s + g.hits.length, 0);
-  const hasRelevant = ai.relevantIds.size > 0;
+  const hasChat = chat.length > 0 || thinking;
 
   function go(href: string) {
     setOpen(false);
-    setQuery("");
-    setAi(AI_EMPTY);
+    resetAll();
     router.push(href);
   }
 
@@ -133,9 +204,9 @@ export function GlobalSearch({
         onClick={() => setOpen(true)}
         className="bg-card text-muted-foreground hover:border-primary flex w-full items-center gap-2 rounded-lg border px-4 py-3 text-left text-sm transition-colors"
       >
-        <Search className="size-4" />
+        {aiEnabled ? <Sparkles className="size-4" /> : <Search className="size-4" />}
         {aiEnabled
-          ? "Fragen stellen oder suchen … (⌘K)"
+          ? "Fragen, Auswertungen, Aufgaben oder suchen … (⌘K)"
           : "Kunden, Projekte, Angebote, Produkte suchen … (⌘K)"}
       </button>
     ) : (
@@ -143,110 +214,162 @@ export function GlobalSearch({
         type="button"
         onClick={() => setOpen(true)}
         className="text-muted-foreground hover:bg-muted flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm"
-        title="Suchen (⌘K)"
+        title="Suchen / KI-Assistent (⌘K)"
       >
-        <Search className="size-4" />
-        <span className="hidden md:inline">Suchen …</span>
+        {aiEnabled ? <Sparkles className="size-4" /> : <Search className="size-4" />}
+        <span className="hidden md:inline">{aiEnabled ? "Assistent …" : "Suchen …"}</span>
       </button>
     );
 
   return (
     <>
       {trigger}
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="top-24 max-h-[70vh] translate-y-0 overflow-hidden p-0 sm:max-w-xl">
-          <DialogTitle className="sr-only">Globale Suche</DialogTitle>
-          <div className="border-b p-2">
+      <Dialog
+        open={open}
+        onOpenChange={(o) => {
+          setOpen(o);
+          if (!o) resetAll();
+        }}
+      >
+        <DialogContent className="top-24 max-h-[75vh] translate-y-0 overflow-hidden p-0 sm:max-w-xl">
+          <DialogTitle className="sr-only">Suche und KI-Assistent</DialogTitle>
+          <div className="flex items-center gap-1 border-b p-2">
             <Input
               autoFocus
               value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setAi(AI_EMPTY); // alte KI-Antwort bei neuer Eingabe verwerfen
-              }}
+              onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") {
+                if (e.key === "Enter" && aiEnabled) {
                   e.preventDefault();
-                  void askAi();
+                  void ask();
                 }
               }}
               placeholder={
                 aiEnabled
-                  ? "Fragen oder suchen … (Enter für KI-Antwort)"
+                  ? hasChat
+                    ? "Nachfragen … (Enter)"
+                    : "Frage stellen, Auswertung oder Aufgabe … (Enter)"
                   : "Suchen … (Name, Nummer, Ort, Artikel)"
               }
               className="h-10 border-0 shadow-none focus-visible:ring-0"
             />
-            {aiEnabled && query.trim().length >= 2 && !ai.answer && !ai.loading ? (
-              <p className="text-muted-foreground flex items-center gap-1 px-1 pt-1 text-xs">
-                <Sparkles className="size-3" /> Enter für die intelligente Antwort
-              </p>
+            {aiEnabled ? (
+              <Button
+                size="icon"
+                variant="ghost"
+                className="size-9 shrink-0"
+                title="An den Assistenten senden"
+                disabled={thinking || query.trim().length < 2}
+                onClick={() => void ask()}
+              >
+                <Send className="size-4" />
+              </Button>
             ) : null}
           </div>
-          <div className="max-h-[55vh] overflow-y-auto p-2">
-            {(ai.loading || ai.answer) && (
-              <div className="border-primary/30 bg-primary/5 mb-3 rounded-lg border p-3">
-                <p className="text-primary mb-1 flex items-center gap-1 text-xs font-semibold">
-                  <Sparkles className="size-3" /> KI-Antwort
-                </p>
-                {ai.loading ? (
-                  <p className="text-muted-foreground text-sm">Denkt nach …</p>
-                ) : (
-                  <p className="text-sm whitespace-pre-wrap">{ai.answer}</p>
-                )}
-              </div>
-            )}
-            {query.trim().length < 2 ? (
-              <p className="text-muted-foreground p-3 text-sm">
-                Mindestens 2 Zeichen eingeben.
-              </p>
-            ) : loading && total === 0 ? (
-              <p className="text-muted-foreground p-3 text-sm">Suche …</p>
-            ) : total === 0 ? (
-              <p className="text-muted-foreground p-3 text-sm">Keine Treffer.</p>
-            ) : (
-              groups.map((g) => {
-                // Relevante Treffer (per KI markiert) innerhalb der Gruppe zuerst.
-                const hits = hasRelevant
-                  ? [...g.hits].sort(
-                      (a, b) =>
-                        (ai.relevantIds.has(b.id) ? 1 : 0) -
-                        (ai.relevantIds.has(a.id) ? 1 : 0),
-                    )
-                  : g.hits;
-                return (
-                  <div key={g.label} className="mb-2">
-                    <p className="text-muted-foreground px-2 py-1 text-xs font-semibold">
-                      {g.label}
+
+          <div className="max-h-[60vh] overflow-y-auto p-2">
+            {/* Assistenten-Verlauf */}
+            {hasChat ? (
+              <div className="mb-3 space-y-2">
+                {chat.map((m, i) => (
+                  <div
+                    key={i}
+                    className={
+                      m.role === "user"
+                        ? "bg-primary text-primary-foreground ml-auto max-w-[85%] rounded-lg px-3 py-2 text-sm"
+                        : "bg-muted mr-auto max-w-[90%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap"
+                    }
+                  >
+                    {m.content}
+                  </div>
+                ))}
+                {thinking ? (
+                  <div className="text-muted-foreground flex items-center gap-2 px-1 text-sm">
+                    <Loader2 className="size-4 animate-spin" /> Denkt nach …
+                  </div>
+                ) : null}
+
+                {/* Bestätigungspflichtige Aktion */}
+                {proposed?.type === "create_task" ? (
+                  <div className="border-primary/40 bg-primary/5 rounded-lg border p-3 text-sm">
+                    <p className="flex items-center gap-1 font-medium">
+                      <Sparkles className="text-primary size-3.5" /> Aufgabe anlegen
                     </p>
-                    {hits.map((h) => {
-                      const relevant = ai.relevantIds.has(h.id);
-                      return (
+                    <p className="mt-1">{proposed.task.title}</p>
+                    <p className="text-muted-foreground text-xs">
+                      An: {proposed.task.employeeNames.join(", ") || "—"}
+                      {proposed.task.projectTitle ? ` · Projekt: ${proposed.task.projectTitle}` : ""}
+                    </p>
+                    {proposed.task.unmatched.length > 0 ? (
+                      <p className="text-destructive mt-1 text-xs">
+                        Nicht zugeordnet: {proposed.task.unmatched.join(", ")}
+                      </p>
+                    ) : null}
+                    <div className="mt-2 flex gap-2">
+                      <Button
+                        size="sm"
+                        disabled={executing || proposed.task.employeeIds.length === 0}
+                        onClick={() => void runProposed()}
+                      >
+                        <Check className="size-4" /> {executing ? "…" : "Ausführen"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={executing}
+                        onClick={() => setProposed(null)}
+                      >
+                        <X className="size-4" /> Verwerfen
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+                <div ref={threadEndRef} />
+              </div>
+            ) : null}
+
+            {/* Sofort-Stichworttreffer (beim Tippen) */}
+            {query.trim().length >= 2 ? (
+              loading && total === 0 ? (
+                <p className="text-muted-foreground p-3 text-sm">Suche …</p>
+              ) : total > 0 ? (
+                <>
+                  {aiEnabled ? (
+                    <p className="text-muted-foreground px-2 pb-1 text-xs">
+                      Direkte Treffer (Enter fragt den Assistenten):
+                    </p>
+                  ) : null}
+                  {groups.map((g) => (
+                    <div key={g.label} className="mb-2">
+                      <p className="text-muted-foreground px-2 py-1 text-xs font-semibold">
+                        {g.label}
+                      </p>
+                      {g.hits.map((h) => (
                         <button
                           key={`${h.type}-${h.id}`}
                           type="button"
                           onClick={() => go(h.href)}
-                          className={cn(
-                            "hover:bg-muted flex w-full flex-col rounded-md px-2 py-1.5 text-left",
-                            relevant && "bg-primary/10 ring-primary/30 ring-1",
-                          )}
+                          className="hover:bg-muted flex w-full flex-col rounded-md px-2 py-1.5 text-left"
                         >
-                          <span className="flex items-center gap-1 text-sm font-medium">
-                            {relevant ? (
-                              <Sparkles className="text-primary size-3 shrink-0" />
-                            ) : null}
-                            {h.label}
-                          </span>
+                          <span className="text-sm font-medium">{h.label}</span>
                           {h.sub ? (
                             <span className="text-muted-foreground text-xs">{h.sub}</span>
                           ) : null}
                         </button>
-                      );
-                    })}
-                  </div>
-                );
-              })
-            )}
+                      ))}
+                    </div>
+                  ))}
+                </>
+              ) : !aiEnabled ? (
+                <p className="text-muted-foreground p-3 text-sm">Keine Treffer.</p>
+              ) : null
+            ) : !hasChat ? (
+              <p className="text-muted-foreground p-3 text-sm">
+                {aiEnabled
+                  ? "Stell eine Frage, bitte um eine Auswertung oder gib eine Aufgabe auf — oder tippe, um direkt zu suchen."
+                  : "Mindestens 2 Zeichen eingeben."}
+              </p>
+            ) : null}
           </div>
         </DialogContent>
       </Dialog>

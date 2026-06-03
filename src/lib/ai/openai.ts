@@ -24,6 +24,28 @@ export interface ChatMessage {
   content: string;
 }
 
+/** Werkzeug-Definition für Function-Calling. */
+export interface ChatTool {
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
+}
+
+export interface ToolCall {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+}
+
+export interface AssistantMessage {
+  role: "assistant";
+  content: string | null;
+  tool_calls?: ToolCall[];
+}
+
 /**
  * Ein einzelner Chat-Aufruf, der ein JSON-Objekt zurückgibt
  * (`response_format: json_object`). Fehlertolerant: bei Problemen `null`,
@@ -63,6 +85,52 @@ export async function chatJSON<T = Record<string, unknown>>(
     const content = data.choices?.[0]?.message?.content;
     if (!content) return null;
     return JSON.parse(content) as T;
+  } catch (e) {
+    if ((e as Error).name !== "AbortError") console.error("OpenAI-Aufruf fehlgeschlagen:", e);
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * Ein Chat-Aufruf mit optionalem Function-Calling. Gibt die rohe
+ * Assistant-Nachricht zurück (inkl. tool_calls), damit der Aufrufer eine
+ * Werkzeug-Schleife (Agent) fahren kann. `messages` darf auch Tool-Ergebnisse
+ * enthalten (role: "tool", tool_call_id, content). Fehlertolerant → null.
+ */
+export async function chatRaw(
+  messages: unknown[],
+  opts: { tools?: ChatTool[]; maxTokens?: number; timeoutMs?: number } = {},
+): Promise<AssistantMessage | null> {
+  if (!isAiConfigured()) return null;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), opts.timeoutMs ?? 30000);
+  try {
+    const res = await fetch(CHAT_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: aiModel(),
+        temperature: 0,
+        max_tokens: opts.maxTokens ?? 1200,
+        messages,
+        ...(opts.tools && opts.tools.length > 0 ? { tools: opts.tools } : {}),
+      }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      console.error("OpenAI-Fehler:", res.status, await res.text().catch(() => ""));
+      return null;
+    }
+    const data = (await res.json()) as {
+      choices?: { message?: AssistantMessage }[];
+    };
+    return data.choices?.[0]?.message ?? null;
   } catch (e) {
     if ((e as Error).name !== "AbortError") console.error("OpenAI-Aufruf fehlgeschlagen:", e);
     return null;
