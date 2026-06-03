@@ -102,17 +102,71 @@ export async function extractTextFromPdf(
     for (let i = 1; i <= pages; i++) {
       const page = await doc.getPage(i);
       const content = await page.getTextContent();
-      const text = content.items
-        .map((it) => ("str" in it ? it.str : ""))
-        .join(" ");
+      // Struktur bewahren: hasEOL der pdf.js-Items → Zeilenumbrüche statt nur
+      // Leerzeichen (sonst werden Tabellen/Specs zu unleserlichem Fließtext).
+      let text = "";
+      for (const it of content.items) {
+        if (!("str" in it)) continue;
+        text += it.str;
+        text += (it as { hasEOL?: boolean }).hasEOL ? "\n" : " ";
+      }
       parts.push(text);
       page.cleanup();
     }
-    return parts.join("\n").toLowerCase();
+    return parts.join("\n\n").toLowerCase();
   } catch (e) {
     console.error("extractTextFromPdf:", e);
     return "";
   }
+}
+
+/**
+ * Rendert die ersten Seiten eines PDFs als PNG-DataURLs — für die
+ * Bild-/Vision-Auslese (gpt-4o-mini „sieht" das Dokument, auch bei Scans).
+ * Auf sinnvolle Breite skaliert (Lesbarkeit vs. Tokenkosten).
+ */
+export async function renderPagesToDataUrls(
+  file: File,
+  opts: { maxPages?: number; maxWidth?: number } = {},
+): Promise<string[]> {
+  const maxPages = opts.maxPages ?? 2;
+  const maxWidth = opts.maxWidth ?? 1400;
+  const pdfjs = await import("pdfjs-dist");
+  if (!workerConfigured) {
+    pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+      "pdfjs-dist/build/pdf.worker.min.mjs",
+      import.meta.url,
+    ).toString();
+    workerConfigured = true;
+  }
+  const urls: string[] = [];
+  try {
+    const buf = await file.arrayBuffer();
+    const doc = await pdfjs.getDocument({ data: buf }).promise;
+    const pages = Math.min(doc.numPages, maxPages);
+    for (let i = 1; i <= pages; i++) {
+      const page = await doc.getPage(i);
+      const base = page.getViewport({ scale: 1 });
+      const scale = Math.min(2, maxWidth / base.width);
+      const vp = page.getViewport({ scale });
+      const c = document.createElement("canvas");
+      c.width = Math.max(1, Math.ceil(vp.width));
+      c.height = Math.max(1, Math.ceil(vp.height));
+      const ctx = c.getContext("2d");
+      if (!ctx) continue;
+      try {
+        await page.render({ canvas: c, canvasContext: ctx, viewport: vp }).promise;
+        // JPEG spart Tokens/Größe gegenüber PNG bei Foto-/Scan-Inhalten.
+        urls.push(c.toDataURL("image/jpeg", 0.82));
+      } catch {
+        /* Seite überspringen */
+      }
+      page.cleanup();
+    }
+  } catch (e) {
+    console.error("renderPagesToDataUrls:", e);
+  }
+  return urls;
 }
 
 export async function extractImagesFromPdf(

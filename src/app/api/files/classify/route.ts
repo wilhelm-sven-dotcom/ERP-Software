@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 
 import { getCurrentEmployee } from "@/lib/supabase/auth";
-import { chatJSON, isAiConfigured } from "@/lib/ai/openai";
+import { chatJSON, isAiConfigured, type ContentPart } from "@/lib/ai/openai";
 
 interface ClassifyBody {
   fileName?: string;
   text?: string;
+  /** Gerenderte Seiten/Bild als DataURL — für die Vision-Auslese. */
+  images?: string[];
   projects?: { id: string; title: string }[];
   products?: { id: string; name: string; sku?: string | null; manufacturer?: string | null }[];
 }
@@ -50,35 +52,49 @@ export async function POST(req: Request) {
 
   const fileName = (body.fileName ?? "").slice(0, 300);
   const text = (body.text ?? "").slice(0, 6000);
+  const images = (body.images ?? []).filter((u) => typeof u === "string" && u.startsWith("data:")).slice(0, 2);
   // Kandidatenlisten klein halten (Token-/Kostenkontrolle).
   const projects = (body.projects ?? []).slice(0, 80);
   const products = (body.products ?? []).slice(0, 60);
 
-  const result = await chatJSON<ClassifyResult>([
+  // Nutzer-Nachricht: zuerst Daten/Text, dann das/die Seitenbild(er) für die
+  // Vision-Auslese (funktioniert auch bei gescannten PDFs).
+  const userContent: ContentPart[] = [
     {
-      role: "system",
-      content:
-        "Du ordnest eine hochgeladene Datei in einem PV-/Speicher-CRM korrekt zu und " +
-        "interpretierst Dokumente. Entscheide anhand von Dateiname und Textinhalt, ob die Datei " +
-        "zu einem PRODUKT (z. B. Datenblatt, Produktbild) oder einem PROJEKT (z. B. Rechnung, " +
-        "Plan, Foto, Dokument) gehört. Wähle bei Produkten passende productIds aus der Liste " +
-        "(nur wirklich passende, sonst leer); bei Projekten die beste projectId (oder null). " +
-        "Setze 'kind': für Produkte 'datasheet' oder 'image'; für Projekte eines von " +
-        "dokument|datenblatt|plan|foto|rechnung|sonstiges. Ist die Datei ein Beleg/eine Rechnung, " +
-        "fülle 'document' mit docType (z. B. 'eingangsrechnung','ausgangsrechnung','lieferschein'," +
-        "'angebot'), supplier, invoice_number, invoice_date (YYYY-MM-DD), due_date (YYYY-MM-DD), " +
-        "amount (Bruttobetrag als Zahl), currency. Ist die Datei ein DATENBLATT, fülle zusätzlich " +
-        "'specs' mit den zentralen technischen Kenndaten als key→Wert (z. B. leistung_wp, " +
-        "wirkungsgrad_prozent, kapazitaet_kwh, masse, gewicht_kg, garantie_jahre, hersteller, modell). " +
-        "Nur belegbare Werte aus dem Text, nichts erfinden. " +
-        "confidence 0..1. Antworte ausschließlich als JSON mit den Feldern target, productIds, " +
-        "projectId, kind, confidence, reason, document, specs.",
+      type: "text",
+      text:
+        "Klassifiziere und interpretiere dieses Dokument. Daten:\n" +
+        JSON.stringify({ fileName, projects, products }) +
+        (text ? `\n\nExtrahierter Text (Hilfe, evtl. unvollständig):\n${text}` : ""),
     },
-    {
-      role: "user",
-      content: JSON.stringify({ fileName, text, projects, products }),
-    },
-  ]);
+    ...images.map((url): ContentPart => ({ type: "image_url", image_url: { url } })),
+  ];
+
+  const result = await chatJSON<ClassifyResult>(
+    [
+      {
+        role: "system",
+        content:
+          "Du ordnest eine hochgeladene Datei in einem PV-/Speicher-CRM korrekt zu und " +
+          "interpretierst Dokumente. Lies das Dokument PRIMÄR aus dem BILD (auch gescannte PDFs/ " +
+          "Tabellen); der mitgelieferte Text ist nur Hilfe. Entscheide, ob die Datei zu einem " +
+          "PRODUKT (z. B. Datenblatt, Produktbild) oder einem PROJEKT (z. B. Rechnung, Plan, Foto, " +
+          "Dokument) gehört. Wähle bei Produkten passende productIds aus der Liste (nur wirklich " +
+          "passende, sonst leer); bei Projekten die beste projectId (oder null). Setze 'kind': für " +
+          "Produkte 'datasheet' oder 'image'; für Projekte eines von " +
+          "dokument|datenblatt|plan|foto|rechnung|sonstiges. Ist die Datei ein Beleg/eine Rechnung, " +
+          "fülle 'document' mit docType ('eingangsrechnung'|'ausgangsrechnung'|'lieferschein'|" +
+          "'angebot'), supplier, invoice_number, invoice_date (YYYY-MM-DD), due_date (YYYY-MM-DD), " +
+          "amount (Bruttobetrag als Zahl), currency. Ist die Datei ein DATENBLATT, fülle 'specs' mit " +
+          "den zentralen technischen Kenndaten als key→Wert (z. B. leistung_wp, wirkungsgrad_prozent, " +
+          "kapazitaet_kwh, masse, gewicht_kg, garantie_jahre, hersteller, modell). Nur was wirklich " +
+          "sichtbar/belegbar ist, nichts erfinden. confidence 0..1. Antworte ausschließlich als JSON " +
+          "mit den Feldern target, productIds, projectId, kind, confidence, reason, document, specs.",
+      },
+      { role: "user", content: userContent },
+    ],
+    { maxTokens: 1200 },
+  );
 
   if (!result) return NextResponse.json({ enabled: true, result: null });
 

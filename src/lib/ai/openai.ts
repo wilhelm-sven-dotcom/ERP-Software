@@ -21,9 +21,14 @@ export function aiModel(): string {
   return process.env.OPENAI_MODEL || DEFAULT_MODEL;
 }
 
+/** Inhalts-Teil einer Nachricht: Text oder Bild (für Vision-fähige Modelle). */
+export type ContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
+
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
-  content: string;
+  content: string | ContentPart[];
 }
 
 /** Werkzeug-Definition für Function-Calling. */

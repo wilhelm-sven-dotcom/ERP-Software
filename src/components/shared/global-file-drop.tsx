@@ -21,6 +21,7 @@ import { rankProductsForFilename, matchProductsInText } from "@/lib/asset-match"
 import {
   extractImagesFromPdf,
   extractTextFromPdf,
+  renderPagesToDataUrls,
   type ExtractedImage,
 } from "@/lib/pdf/extract-images";
 import { cn } from "@/lib/utils";
@@ -72,6 +73,16 @@ type Row = {
 };
 
 let seq = 0;
+
+/** Bilddatei als DataURL lesen (für die Vision-Auslese). */
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
 
 export function GlobalFileDrop({
   projects,
@@ -165,12 +176,25 @@ export function GlobalFileDrop({
   async function runAiSuggest(uid: string, file: File, text: string) {
     patch(uid, { aiBusy: true });
     try {
+      // Bild der Datei für die Vision-Auslese: PDF → erste Seite(n) rendern,
+      // Bilddatei → direkt als DataURL (funktioniert auch bei Scans).
+      let images: string[] = [];
+      try {
+        if (/pdf$/i.test(file.type) || /\.pdf$/i.test(file.name)) {
+          images = await renderPagesToDataUrls(file, { maxPages: 2 });
+        } else if (/^image\//.test(file.type)) {
+          images = [await fileToDataUrl(file)];
+        }
+      } catch {
+        images = [];
+      }
       const res = await fetch("/api/files/classify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fileName: file.name,
           text,
+          images,
           projects,
           products: products.map((p) => ({
             id: p.id,
