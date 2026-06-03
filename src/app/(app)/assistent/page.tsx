@@ -14,8 +14,9 @@ import { getDueServiceContracts } from "@/lib/data/service-contracts";
 
 export const metadata: Metadata = { title: "KI-Assistent" };
 
-/** Vorname aus „Max Mustermann" → „Max". */
-function firstNameOf(name: string | null, email: string): string {
+/** Vorname zuverlässig: separates first_name → erstes Wort von name → E-Mail. */
+function firstNameOf(firstName: string | null, name: string | null, email: string): string {
+  if (firstName?.trim()) return firstName.trim();
   const base = (name ?? "").trim();
   if (base) return base.split(/\s+/)[0];
   return email.split("@")[0] ?? "";
@@ -29,7 +30,7 @@ export default async function AssistentPage() {
     getProducts(),
     getConversations(),
   ]);
-  const firstName = me ? firstNameOf(me.name, me.email) : "";
+  const firstName = me ? firstNameOf(me.first_name, me.name, me.email) : "";
   const projectOptions = projects.map((p) => ({ id: p.id, title: p.title ?? "Ohne Titel" }));
   const initialConversations = conversations.map((c) => ({
     id: c.id,

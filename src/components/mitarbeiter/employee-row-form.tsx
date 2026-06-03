@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useActionState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -57,7 +58,11 @@ export function EmployeeRowForm({
           ) : null}
         </TableCell>
         <TableCell>{employee.active ? "aktiv" : "inaktiv"}</TableCell>
-        <TableCell />
+        <TableCell>
+          <Link href={`/mitarbeiter/${employee.id}`} className="text-primary text-sm hover:underline">
+            Akte öffnen
+          </Link>
+        </TableCell>
       </TableRow>
     );
   }
@@ -115,9 +120,14 @@ export function EmployeeRowForm({
             />
             aktiv
           </label>
-          <Button type="submit" size="sm" variant="outline" disabled={pending}>
-            {pending ? "…" : "Speichern"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button type="submit" size="sm" variant="outline" disabled={pending}>
+              {pending ? "…" : "Speichern"}
+            </Button>
+            <Button type="button" size="sm" variant="ghost" asChild>
+              <Link href={`/mitarbeiter/${employee.id}`}>Akte</Link>
+            </Button>
+          </div>
         </form>
       </TableCell>
     </TableRow>

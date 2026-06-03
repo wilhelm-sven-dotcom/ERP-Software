@@ -24,6 +24,7 @@ export type AuditAction = "create" | "update" | "delete";
 export interface CurrentUser {
   id: string;
   name: string | null;
+  first_name: string | null;
   email: string;
   role: Role;
   is_sales: boolean;
@@ -33,6 +34,8 @@ export interface Employee {
   id: string;
   auth_user_id: string | null;
   name: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
   email: string | null;
   role: Role;
   active: boolean;
@@ -40,8 +43,49 @@ export interface Employee {
   is_sales?: boolean;
   /** Interner Stundensatz (€/Std) für die Nachkalkulation. */
   cost_rate?: number | null;
+  // HR-Stammdaten
+  birth_date?: string | null;
+  start_date?: string | null;
+  street?: string | null;
+  zip?: string | null;
+  city?: string | null;
+  phone?: string | null;
+  mobile?: string | null;
+  position?: string | null;
+  emergency_contact?: string | null;
+  vacation_days_per_year?: number | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface EmployeeContract {
+  id: string;
+  employee_id: string;
+  contract_type: string;
+  start_date: string | null;
+  end_date: string | null;
+  weekly_hours: number | null;
+  salary_monthly: number | null;
+  hourly_rate: number | null;
+  vacation_days: number | null;
+  notes: string | null;
+  file_path: string | null;
+  status: string;
+  created_at: string;
+}
+
+export interface EmployeeAbsence {
+  id: string;
+  employee_id: string;
+  absence_type: string;
+  start_date: string;
+  end_date: string;
+  days: number;
+  status: "pending" | "approved" | "rejected" | "cancelled" | string;
+  notes: string | null;
+  requested_by: string | null;
+  approved_by: string | null;
+  created_at: string;
 }
 
 export interface TimeEntry {
