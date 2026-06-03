@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
 import { WorkflowStepManager } from "@/components/workflow/workflow-step-manager";
 import { TemplateCreateDialog } from "@/components/workflow/template-create-dialog";
+import { VorlagenSectionTabs } from "@/components/vorlagen/section-tabs";
 import {
   getWorkflowTemplates,
   getAllWorkflowSteps,
@@ -35,6 +36,7 @@ export default async function WorkflowPage() {
     return (
       <div>
         <PageHeader title="Ablauf-Vorlagen" description="Projektablauf je Anlagentyp." />
+        <VorlagenSectionTabs />
         <EmptyState
           title="Nur für Administratoren"
           description="Die Ablauf-Vorlagen können nur von Administratoren bearbeitet werden."
@@ -105,6 +107,7 @@ export default async function WorkflowPage() {
       >
         <TemplateCreateDialog />
       </PageHeader>
+      <VorlagenSectionTabs />
       <SupabaseNotice />
 
       {templates.length === 0 ? (

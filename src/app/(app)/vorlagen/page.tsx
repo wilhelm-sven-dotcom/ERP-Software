@@ -26,6 +26,7 @@ import { getOfferTemplates, getCalcTemplates } from "@/lib/data/templates";
 import { getAllTextBlocks } from "@/lib/data/text-blocks";
 import { getCurrentEmployee } from "@/lib/supabase/auth";
 import { TextBlockManager } from "@/components/vorlagen/text-block-manager";
+import { VorlagenSectionTabs } from "@/components/vorlagen/section-tabs";
 
 export const metadata: Metadata = { title: "Vorlagen" };
 
@@ -50,6 +51,7 @@ export default async function VorlagenPage() {
           </Button>
         </form>
       </PageHeader>
+      <VorlagenSectionTabs />
 
       <SupabaseNotice />
 
