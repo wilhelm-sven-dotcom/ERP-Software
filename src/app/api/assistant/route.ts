@@ -4,9 +4,9 @@ import { getCurrentEmployee } from "@/lib/supabase/auth";
 import { chatRaw, isAiConfigured, type ToolCall } from "@/lib/ai/openai";
 import {
   ASSISTANT_TOOLS,
+  isActionTool,
   runReadTool,
-  resolveProposedTask,
-  type ResolvedTask,
+  buildProposal,
 } from "@/lib/ai/assistant-tools";
 
 interface IncomingMessage {
@@ -14,28 +14,29 @@ interface IncomingMessage {
   content: string;
 }
 
-export interface ProposedAction {
-  type: "create_task";
-  task: ResolvedTask;
-}
-
 const MAX_STEPS = 6;
 
-const SYSTEM = `Du bist der KI-Assistent eines PV-/Speicher-CRM (ip³ PV-Tool) für ein Handwerks-/
-Vertriebsteam. Du hilfst bei drei Dingen:
-1. Fragen beantworten — nutze die Werkzeuge, um echte Daten zu holen, statt zu raten.
-2. Auswertungen/Übersichten erstellen (z. B. Umsatz, Pipeline, überfällige Aufgaben).
-3. Aufgaben vergeben — wenn der Nutzer jemandem etwas auftragen will, rufe propose_task auf.
-   Aktionen werden NICHT von dir ausgeführt, sondern dem Nutzer zur Bestätigung vorgeschlagen.
+function systemPrompt(me: { name: string | null; role: string; is_sales: boolean }): string {
+  const today = new Date().toISOString().slice(0, 10);
+  return `Du bist der KI-Assistent eines PV-/Speicher-CRM (ip³ PV-Tool) für ein Handwerks-/
+Vertriebsteam. Du hilfst ${me.name ?? "dem Nutzer"} (Rolle: ${me.role}${me.is_sales ? ", Vertrieb" : ""}).
+Heute ist ${today}. Du siehst nur Daten, die dieser Nutzer sehen darf (Datenbank-Rechte/RLS).
 
-Antworte knapp, klar und auf Deutsch. Erfinde keine Zahlen, Namen oder Datensätze — wenn du etwas
-nicht über die Werkzeuge belegen kannst, sage das. Formuliere Auswertungen übersichtlich
-(kurze Aufzählungen, konkrete Zahlen).`;
+Aufgaben:
+1. Fragen beantworten — nutze die Lese-Werkzeuge, um echte Daten zu holen, statt zu raten.
+2. Auswertungen/Übersichten erstellen. Für exportierbare Auswertungen nutze propose_report.
+3. Aufgaben/Vorgänge ausführen — nutze die passenden propose_*-Werkzeuge. Diese werden NICHT
+   von dir ausgeführt, sondern dem Nutzer zur Bestätigung vorgeschlagen.
+
+Antworte knapp, klar und auf Deutsch. Erfinde keine Zahlen, Namen oder Datensätze; wenn ein
+Werkzeug nichts liefert, sage das. Zeige je Antwort höchstens die ~10–20 relevantesten Einträge.
+Wenn der Nutzer etwas ändern/anlegen will, rufe genau EIN passendes propose_*-Werkzeug auf.`;
+}
 
 /**
- * KI-Assistent mit Werkzeug-Schleife (Agent). Lese-Werkzeuge werden serverseitig
- * (RLS-sicher) ausgeführt; eine vorgeschlagene Aktion (propose_*) wird nicht
- * ausgeführt, sondern als bestätigungspflichtiger Vorschlag zurückgegeben.
+ * KI-Assistent mit Werkzeug-Schleife (Agent). Lese-Werkzeuge laufen serverseitig
+ * (RLS-sicher); ein propose_*-Aufruf wird nicht ausgeführt, sondern als
+ * bestätigungspflichtiger Vorschlag zurückgegeben.
  */
 export async function POST(req: Request) {
   const me = await getCurrentEmployee();
@@ -47,14 +48,14 @@ export async function POST(req: Request) {
     const body = (await req.json()) as { messages?: IncomingMessage[] };
     incoming = (body.messages ?? [])
       .filter((m) => m && (m.role === "user" || m.role === "assistant") && m.content)
-      .slice(-12); // Verlauf begrenzen (Kosten/Tokens)
+      .slice(-12);
   } catch {
     return NextResponse.json({ enabled: true, answer: null });
   }
   if (incoming.length === 0) return NextResponse.json({ enabled: true, answer: null });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const messages: any[] = [{ role: "system", content: SYSTEM }, ...incoming];
+  const messages: any[] = [{ role: "system", content: systemPrompt(me) }, ...incoming];
 
   for (let step = 0; step < MAX_STEPS; step++) {
     const msg = await chatRaw(messages, { tools: ASSISTANT_TOOLS });
@@ -66,33 +67,26 @@ export async function POST(req: Request) {
     }
 
     // Aktionsvorschlag? → nicht ausführen, sondern zur Bestätigung zurückgeben.
-    const propose = toolCalls.find((t) => t.function.name.startsWith("propose_"));
-    if (propose) {
-      const args = parseArgs(propose);
-      if (propose.function.name === "propose_task") {
-        const task = await resolveProposedTask(args);
-        const answer = buildTaskAnswer(task);
-        return NextResponse.json({
-          enabled: true,
-          answer,
-          proposedAction: { type: "create_task", task } satisfies ProposedAction,
-        });
-      }
+    const action = toolCalls.find((t) => isActionTool(t.function.name));
+    if (action) {
+      const proposal = await buildProposal(action.function.name, parseArgs(action));
+      const answer = proposal
+        ? `${proposal.summary}${proposal.ready ? " — bitte unten bestätigen." : " — bitte unten ergänzen/auswählen."}`
+        : "Ich konnte keinen passenden Vorschlag bilden.";
+      return NextResponse.json({ enabled: true, answer, proposedAction: proposal });
     }
 
     // Lese-Werkzeuge ausführen und Ergebnisse zurückspeisen.
     messages.push(msg);
     for (const call of toolCalls) {
-      const args = parseArgs(call);
-      const result = await runReadTool(call.function.name, args);
+      const result = await runReadTool(call.function.name, parseArgs(call), me);
       messages.push({ role: "tool", tool_call_id: call.id, content: result });
     }
   }
 
   return NextResponse.json({
     enabled: true,
-    answer:
-      "Ich konnte die Anfrage nicht vollständig auflösen. Bitte formuliere sie etwas konkreter.",
+    answer: "Ich konnte die Anfrage nicht vollständig auflösen. Bitte formuliere sie etwas konkreter.",
   });
 }
 
@@ -102,14 +96,4 @@ function parseArgs(call: ToolCall): Record<string, unknown> {
   } catch {
     return {};
   }
-}
-
-function buildTaskAnswer(task: ResolvedTask): string {
-  const who = task.employeeNames.length > 0 ? task.employeeNames.join(", ") : "(noch niemand erkannt)";
-  const parts = [`Vorschlag: Aufgabe „${task.title}" an ${who}.`];
-  if (task.projectTitle) parts.push(`Projekt: ${task.projectTitle}.`);
-  if (task.unmatched.length > 0)
-    parts.push(`Nicht zugeordnet: ${task.unmatched.join(", ")}.`);
-  parts.push("Bitte unten bestätigen.");
-  return parts.join(" ");
 }

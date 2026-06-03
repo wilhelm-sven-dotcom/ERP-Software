@@ -2,8 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Search, Sparkles, Send, Check, X, Loader2 } from "lucide-react";
-import { toast } from "sonner";
+import { Search, Sparkles, Send, Loader2 } from "lucide-react";
 
 import {
   Dialog,
@@ -12,6 +11,10 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  ProposedActionCard,
+  type ProposedAction,
+} from "@/components/assistant/proposed-action-card";
 import { searchAll, type SearchHit, type SearchResults } from "@/app/(app)/search/actions";
 
 const EMPTY: SearchResults = {
@@ -28,25 +31,11 @@ interface ChatMessage {
   content: string;
 }
 
-interface TaskAction {
-  title: string;
-  body: string;
-  employeeIds: string[];
-  employeeNames: string[];
-  projectId: string | null;
-  projectTitle: string | null;
-  unmatched: string[];
-}
-interface ProposedAction {
-  type: "create_task";
-  task: TaskAction;
-}
-
 /**
- * Globale Suche + KI-Assistent. Öffnet per Klick oder ⌘/Strg+K.
- * - Tippen zeigt sofortige Stichworttreffer (wie bisher).
+ * Globale Suche + KI-Assistent im ⌘K-Fenster.
+ * - Tippen zeigt sofortige Stichworttreffer.
  * - Mit aktivierter KI (`aiEnabled`) beantwortet Enter Fragen, erstellt
- *   Auswertungen und kann Aufgaben vorschlagen, die der Nutzer bestätigt.
+ *   Auswertungen und schlägt Aktionen vor (Bestätigung über ProposedActionCard).
  */
 export function GlobalSearch({
   variant = "topbar",
@@ -61,14 +50,11 @@ export function GlobalSearch({
   const [results, setResults] = React.useState<SearchResults>(EMPTY);
   const [loading, setLoading] = React.useState(false);
 
-  // Assistent
   const [chat, setChat] = React.useState<ChatMessage[]>([]);
   const [thinking, setThinking] = React.useState(false);
   const [proposed, setProposed] = React.useState<ProposedAction | null>(null);
-  const [executing, setExecuting] = React.useState(false);
   const threadEndRef = React.useRef<HTMLDivElement>(null);
 
-  // ⌘/Strg+K öffnet die Suche.
   React.useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -80,7 +66,7 @@ export function GlobalSearch({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Debounced Serversuche (Sofort-Treffer beim Tippen).
+  // Debounced Sofort-Treffer beim Tippen.
   React.useEffect(() => {
     const q = query.trim();
     if (q.length < 2) {
@@ -103,7 +89,6 @@ export function GlobalSearch({
     threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chat, thinking, proposed]);
 
-  // KI-Assistent fragen (Enter).
   async function ask() {
     const q = query.trim();
     if (!aiEnabled || q.length < 2 || thinking) return;
@@ -130,45 +115,9 @@ export function GlobalSearch({
       ]);
       if (data.proposedAction) setProposed(data.proposedAction);
     } catch {
-      setChat((c) => [
-        ...c,
-        { role: "assistant", content: "Es gab ein Problem bei der Anfrage." },
-      ]);
+      setChat((c) => [...c, { role: "assistant", content: "Es gab ein Problem bei der Anfrage." }]);
     } finally {
       setThinking(false);
-    }
-  }
-
-  async function runProposed() {
-    if (!proposed) return;
-    setExecuting(true);
-    try {
-      const res = await fetch("/api/assistant/execute", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: proposed.type,
-          task: {
-            title: proposed.task.title,
-            body: proposed.task.body,
-            employeeIds: proposed.task.employeeIds,
-            projectId: proposed.task.projectId,
-          },
-        }),
-      });
-      const data = (await res.json()) as { ok?: boolean; error?: string | null };
-      if (data.ok) {
-        toast.success("Aufgabe angelegt");
-        setChat((c) => [...c, { role: "assistant", content: "✅ Erledigt — die Aufgabe wurde angelegt." }]);
-        setProposed(null);
-        router.refresh();
-      } else {
-        toast.error(data.error ?? "Konnte die Aktion nicht ausführen.");
-      }
-    } catch {
-      toast.error("Konnte die Aktion nicht ausführen.");
-    } finally {
-      setExecuting(false);
     }
   }
 
@@ -262,13 +211,12 @@ export function GlobalSearch({
                 disabled={thinking || query.trim().length < 2}
                 onClick={() => void ask()}
               >
-                <Send className="size-4" />
+                {thinking ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
               </Button>
             ) : null}
           </div>
 
           <div className="max-h-[60vh] overflow-y-auto p-2">
-            {/* Assistenten-Verlauf */}
             {hasChat ? (
               <div className="mb-3 space-y-2">
                 {chat.map((m, i) => (
@@ -288,47 +236,19 @@ export function GlobalSearch({
                     <Loader2 className="size-4 animate-spin" /> Denkt nach …
                   </div>
                 ) : null}
-
-                {/* Bestätigungspflichtige Aktion */}
-                {proposed?.type === "create_task" ? (
-                  <div className="border-primary/40 bg-primary/5 rounded-lg border p-3 text-sm">
-                    <p className="flex items-center gap-1 font-medium">
-                      <Sparkles className="text-primary size-3.5" /> Aufgabe anlegen
-                    </p>
-                    <p className="mt-1">{proposed.task.title}</p>
-                    <p className="text-muted-foreground text-xs">
-                      An: {proposed.task.employeeNames.join(", ") || "—"}
-                      {proposed.task.projectTitle ? ` · Projekt: ${proposed.task.projectTitle}` : ""}
-                    </p>
-                    {proposed.task.unmatched.length > 0 ? (
-                      <p className="text-destructive mt-1 text-xs">
-                        Nicht zugeordnet: {proposed.task.unmatched.join(", ")}
-                      </p>
-                    ) : null}
-                    <div className="mt-2 flex gap-2">
-                      <Button
-                        size="sm"
-                        disabled={executing || proposed.task.employeeIds.length === 0}
-                        onClick={() => void runProposed()}
-                      >
-                        <Check className="size-4" /> {executing ? "…" : "Ausführen"}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={executing}
-                        onClick={() => setProposed(null)}
-                      >
-                        <X className="size-4" /> Verwerfen
-                      </Button>
-                    </div>
-                  </div>
+                {proposed ? (
+                  <ProposedActionCard
+                    proposal={proposed}
+                    onDone={(note) => {
+                      setProposed(null);
+                      if (note) setChat((c) => [...c, { role: "assistant", content: note }]);
+                    }}
+                  />
                 ) : null}
                 <div ref={threadEndRef} />
               </div>
             ) : null}
 
-            {/* Sofort-Stichworttreffer (beim Tippen) */}
             {query.trim().length >= 2 ? (
               loading && total === 0 ? (
                 <p className="text-muted-foreground p-3 text-sm">Suche …</p>

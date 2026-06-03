@@ -1,5 +1,6 @@
 import {
   LayoutGrid,
+  Sparkles,
   FolderKanban,
   Target,
   GitBranch,
@@ -43,6 +44,7 @@ export interface NavItem {
  */
 export const navItems: NavItem[] = [
   { key: "dashboard", label: "Dashboard", href: "/dashboard", icon: LayoutGrid },
+  { key: "assistent", label: "KI-Assistent", href: "/assistent", icon: Sparkles },
   { key: "projekte", label: "Projekte", href: "/projekte", icon: FolderKanban },
   {
     key: "projekt-detail",
