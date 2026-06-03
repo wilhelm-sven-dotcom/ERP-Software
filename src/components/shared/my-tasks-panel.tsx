@@ -21,9 +21,11 @@ type Task = {
 export function MyTasksPanel({
   tasks,
   currentEmployeeId,
+  readOnly = false,
 }: {
   tasks: Task[];
   currentEmployeeId: string | null;
+  readOnly?: boolean;
 }) {
   const router = useRouter();
   const today = new Date().toISOString().slice(0, 10);
@@ -72,25 +74,29 @@ export function MyTasksPanel({
                   <span className="text-muted-foreground shrink-0 text-xs">
                     {t.due_date ? formatDate(t.due_date) : ""}
                   </span>
-                  <TaskThread
-                    taskId={t.id}
-                    taskTitle={t.title}
-                    currentEmployeeId={currentEmployeeId}
-                    trigger={
-                      <Button variant="ghost" size="icon" className="size-8" title="Chat / Verlauf">
-                        <MessageSquare className="size-4" />
+                  {readOnly ? null : (
+                    <>
+                      <TaskThread
+                        taskId={t.id}
+                        taskTitle={t.title}
+                        currentEmployeeId={currentEmployeeId}
+                        trigger={
+                          <Button variant="ghost" size="icon" className="size-8" title="Chat / Verlauf">
+                            <MessageSquare className="size-4" />
+                          </Button>
+                        }
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8"
+                        title="Erledigt"
+                        onClick={() => done(t)}
+                      >
+                        <Check className="size-4" />
                       </Button>
-                    }
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-8"
-                    title="Erledigt"
-                    onClick={() => done(t)}
-                  >
-                    <Check className="size-4" />
-                  </Button>
+                    </>
+                  )}
                 </li>
               ))}
             </ul>

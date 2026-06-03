@@ -35,9 +35,11 @@ function initials(name: string): string {
 export function QuickTask({
   employees,
   projects,
+  onDone,
 }: {
   employees: { id: string; name: string }[];
   projects: { id: string; title: string }[];
+  onDone?: () => void;
 }) {
   const router = useRouter();
   const [state, action, pending] = useActionState(createRueckfrage, initial);
@@ -53,10 +55,11 @@ export function QuickTask({
       setProjectId("");
       router.refresh();
       state.ok = false;
+      onDone?.();
     } else if (state.error) {
       toast.error(state.error);
     }
-  }, [state, router]);
+  }, [state, router, onDone]);
 
   function toggle(id: string) {
     setSel((prev) => {

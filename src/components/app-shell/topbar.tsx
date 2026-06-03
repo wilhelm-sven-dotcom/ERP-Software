@@ -9,6 +9,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { MobileNav } from "@/components/app-shell/mobile-nav";
 import { Breadcrumb } from "@/components/app-shell/breadcrumb";
 import { GlobalSearch } from "@/components/shared/global-search";
+import { QuickTaskButton } from "@/components/shared/quick-task-button";
 import { NotificationBell } from "@/components/app-shell/notification-bell";
 
 /** Topbar: mobiles Menü, Zurück, Breadcrumb, Theme-Toggle, „Neues Projekt". */
@@ -33,6 +34,7 @@ export function Topbar({ logoUrl }: { logoUrl?: string | null }) {
       <Breadcrumb />
       <div className="flex-1" />
       <GlobalSearch />
+      <QuickTaskButton />
       <NotificationBell />
       <ThemeToggle />
       <Button size="sm" className="gap-1.5" title="Neues Projekt anlegen" asChild>

@@ -22,8 +22,8 @@ import { getProducts } from "@/lib/data/products";
 import { getCustomers } from "@/lib/data/customers";
 import { getEmployees } from "@/lib/data/employees";
 import { GlobalFileDrop } from "@/components/shared/global-file-drop";
-import { QuickTask } from "@/components/shared/quick-task";
 import { MyTasksPanel } from "@/components/shared/my-tasks-panel";
+import { TeamViewSelect } from "@/components/dashboard/team-view-select";
 import { getAdminStats } from "@/lib/data/stats";
 import { getMyOpenTasks } from "@/lib/data/workflow";
 import { getSalesEmployees } from "@/lib/data/employees";
@@ -70,7 +70,12 @@ function Kpi({
   );
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ as?: string }>;
+}) {
+  const { as } = await searchParams;
   const [me, salesEmployees, dropProjects, dropProducts, allEmployees] = await Promise.all([
     getCurrentEmployee(),
     getSalesEmployees(),
@@ -83,10 +88,12 @@ export default async function DashboardPage() {
     id: p.id,
     title: p.title ?? "Ohne Titel",
   }));
-  // Kollegen für die Schnellaufgabe (ohne mich selbst).
-  const colleagues = allEmployees
-    .filter((e) => e.active && e.id !== me?.id)
-    .map((e) => ({ id: e.id, name: e.name ?? e.email ?? "Mitarbeiter" }));
+
+  // Mitarbeiter-Sicht (nur Admin): die Aufgaben/Leads eines Kollegen read-only ansehen.
+  const viewTarget =
+    isAdmin && as && as !== me?.id
+      ? allEmployees.find((e) => e.id === as) ?? null
+      : null;
 
   return (
     <div>
@@ -98,42 +105,68 @@ export default async function DashboardPage() {
             : "Deine Aufgaben und Projekte."
         }
       >
+        {isAdmin ? (
+          <TeamViewSelect
+            employees={allEmployees
+              .filter((e) => e.active && e.id !== me?.id)
+              .map((e) => ({ id: e.id, name: e.name ?? e.email ?? "Mitarbeiter" }))}
+            current={viewTarget?.id ?? null}
+          />
+        ) : null}
         <LeadIntakeDialog salesEmployees={salesEmployees} />
       </PageHeader>
       <SupabaseNotice />
-      <div className="mb-4">
-        <GlobalSearch variant="dashboard" />
-      </div>
-      <div className="mb-4 grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Schnellaufgabe / Rückfrage</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <QuickTask employees={colleagues} projects={projectOptions} />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Dateien ablegen</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <GlobalFileDrop projects={projectOptions} products={dropProducts} />
-          </CardContent>
-        </Card>
-      </div>
-      {isAdmin ? (
-        <AdminDashboard />
-      ) : me?.is_sales ? (
-        <SalesDashboard employeeId={me.id} />
+
+      {viewTarget ? (
+        <>
+          <div className="border-primary/30 bg-primary/5 mb-4 flex items-center justify-between gap-2 rounded-lg border px-4 py-2 text-sm">
+            <span>
+              Sicht von <span className="font-semibold">{viewTarget.name ?? viewTarget.email}</span>{" "}
+              (read-only)
+            </span>
+            <Link href="/dashboard" className="text-primary hover:underline">
+              ← zurück zu meiner Sicht
+            </Link>
+          </div>
+          {viewTarget.is_sales ? (
+            <SalesDashboard employeeId={viewTarget.id} readOnly />
+          ) : (
+            <EmployeeDashboard employeeId={viewTarget.id} readOnly />
+          )}
+        </>
       ) : (
-        <EmployeeDashboard employeeId={me?.id ?? null} />
+        <>
+          <div className="mb-4">
+            <GlobalSearch variant="dashboard" />
+          </div>
+          <Card className="mb-4">
+            <CardHeader>
+              <CardTitle className="text-base">Dateien ablegen</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <GlobalFileDrop projects={projectOptions} products={dropProducts} />
+            </CardContent>
+          </Card>
+          {isAdmin ? (
+            <AdminDashboard />
+          ) : me?.is_sales ? (
+            <SalesDashboard employeeId={me.id} />
+          ) : (
+            <EmployeeDashboard employeeId={me?.id ?? null} />
+          )}
+        </>
       )}
     </div>
   );
 }
 
-async function SalesDashboard({ employeeId }: { employeeId: string }) {
+async function SalesDashboard({
+  employeeId,
+  readOnly = false,
+}: {
+  employeeId: string;
+  readOnly?: boolean;
+}) {
   const [leads, tasks, inbox] = await Promise.all([
     getMyLeads(employeeId),
     getMyOpenTasks(employeeId),
@@ -190,7 +223,7 @@ async function SalesDashboard({ employeeId }: { employeeId: string }) {
             {tasks.length === 0 ? (
               <p className="text-muted-foreground text-sm">Keine offenen Vertriebsaufgaben.</p>
             ) : (
-              <MyTasksPanel tasks={tasks} currentEmployeeId={employeeId} />
+              <MyTasksPanel tasks={tasks} currentEmployeeId={employeeId} readOnly={readOnly} />
             )}
           </CardContent>
         </Card>
@@ -323,7 +356,13 @@ async function AdminDashboard() {
   );
 }
 
-async function EmployeeDashboard({ employeeId }: { employeeId: string | null }) {
+async function EmployeeDashboard({
+  employeeId,
+  readOnly = false,
+}: {
+  employeeId: string | null;
+  readOnly?: boolean;
+}) {
   const [projects, tasks, events, inbox] = await Promise.all([
     getProjects(),
     employeeId ? getMyOpenTasks(employeeId) : Promise.resolve([]),
@@ -368,7 +407,7 @@ async function EmployeeDashboard({ employeeId }: { employeeId: string | null }) 
             <CardTitle className="text-base">Meine Aufgaben</CardTitle>
           </CardHeader>
           <CardContent>
-            <MyTasksPanel tasks={tasks} currentEmployeeId={employeeId} />
+            <MyTasksPanel tasks={tasks} currentEmployeeId={employeeId} readOnly={readOnly} />
           </CardContent>
         </Card>
 
