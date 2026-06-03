@@ -118,15 +118,29 @@ export function ProjectFileDrop({
         <ul className="divide-y rounded-lg border">
           {files.map((f) => (
             <li key={f.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
-              <a
-                href={publicUrl(f.storage_path)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex min-w-0 items-center gap-2 hover:underline"
-              >
-                <FileText className="size-4 shrink-0" />
-                <span className="truncate">{f.name}</span>
-              </a>
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <a
+                  href={publicUrl(f.storage_path)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex min-w-0 items-center gap-2 hover:underline"
+                >
+                  <FileText className="size-4 shrink-0" />
+                  <span className="truncate">{f.name}</span>
+                </a>
+                {f.doc_meta ? (
+                  <span className="text-muted-foreground flex flex-wrap gap-x-2 gap-y-0.5 pl-6 text-xs">
+                    {f.doc_meta.supplier ? <span>{f.doc_meta.supplier}</span> : null}
+                    {f.doc_meta.invoice_number ? <span>Nr. {f.doc_meta.invoice_number}</span> : null}
+                    {f.doc_meta.invoice_date ? <span>{f.doc_meta.invoice_date}</span> : null}
+                    {f.doc_meta.amount != null && f.doc_meta.amount !== "" ? (
+                      <span className="text-foreground font-medium">
+                        {f.doc_meta.amount} {f.doc_meta.currency ?? "€"}
+                      </span>
+                    ) : null}
+                  </span>
+                ) : null}
+              </div>
               <form action={deleteProjectFile}>
                 <input type="hidden" name="id" value={f.id} />
                 <input type="hidden" name="path" value={f.storage_path} />

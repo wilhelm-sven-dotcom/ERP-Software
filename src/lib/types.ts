@@ -326,6 +326,19 @@ export interface ProjectFile {
   size: number | null;
   uploaded_by: string | null;
   created_at: string;
+  /** KI-interpretierte Beleg-Felder (Lieferant, Nr., Betrag, Datum …). */
+  doc_meta?: DocMeta | null;
+}
+
+/** Von der KI ausgelesene Beleg-/Dokumentfelder (siehe Datei-Drop/Classify). */
+export interface DocMeta {
+  docType?: string;
+  supplier?: string;
+  invoice_number?: string;
+  invoice_date?: string;
+  due_date?: string;
+  amount?: number | string;
+  currency?: string;
 }
 
 export type DocumentKind =

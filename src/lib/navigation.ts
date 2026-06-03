@@ -2,7 +2,6 @@ import {
   LayoutGrid,
   Sparkles,
   FolderKanban,
-  Target,
   GitBranch,
   Users,
   Calculator,
@@ -43,15 +42,9 @@ export interface NavItem {
  * (legacy/ip3_PV_Tool_6_19.html, #mainNav).
  */
 export const navItems: NavItem[] = [
-  { key: "dashboard", label: "Dashboard", href: "/dashboard", icon: LayoutGrid },
   { key: "assistent", label: "KI-Assistent", href: "/assistent", icon: Sparkles },
+  { key: "dashboard", label: "Dashboard", href: "/dashboard", icon: LayoutGrid },
   { key: "projekte", label: "Projekte", href: "/projekte", icon: FolderKanban },
-  {
-    key: "projekt-detail",
-    label: "Aktives Projekt",
-    href: "/projekt-detail",
-    icon: Target,
-  },
   { key: "pipeline", label: "Pipeline", href: "/pipeline", icon: GitBranch },
   { key: "kunden", label: "Kunden", href: "/kunden", icon: Users },
   {

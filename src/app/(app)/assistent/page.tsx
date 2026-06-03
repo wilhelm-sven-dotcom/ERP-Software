@@ -1,58 +1,56 @@
 import type { Metadata } from "next";
-import { Sparkles } from "lucide-react";
 
-import { PageHeader } from "@/components/shared/page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { AssistantChat } from "@/components/assistant/assistant-chat";
-import { GlobalFileDrop } from "@/components/shared/global-file-drop";
 import { isAiConfigured } from "@/lib/ai/openai";
+import { getCurrentEmployee } from "@/lib/supabase/auth";
 import { getProjects } from "@/lib/data/projects";
 import { getProducts } from "@/lib/data/products";
+import { getConversations } from "@/lib/data/ai-conversations";
 
 export const metadata: Metadata = { title: "KI-Assistent" };
 
+/** Vorname aus „Max Mustermann" → „Max". */
+function firstNameOf(name: string | null, email: string): string {
+  const base = (name ?? "").trim();
+  if (base) return base.split(/\s+/)[0];
+  return email.split("@")[0] ?? "";
+}
+
 export default async function AssistentPage() {
   const aiEnabled = isAiConfigured();
-  const [projects, products] = await Promise.all([getProjects(), getProducts()]);
+  const [me, projects, products, conversations] = await Promise.all([
+    getCurrentEmployee(),
+    getProjects(),
+    getProducts(),
+    getConversations(),
+  ]);
+  const firstName = me ? firstNameOf(me.name, me.email) : "";
   const projectOptions = projects.map((p) => ({ id: p.id, title: p.title ?? "Ohne Titel" }));
+  const initialConversations = conversations.map((c) => ({
+    id: c.id,
+    title: c.title,
+    updated_at: c.updated_at,
+  }));
+
+  if (!aiEnabled) {
+    return (
+      <Card>
+        <CardContent className="text-muted-foreground py-10 text-center text-sm">
+          Die KI ist noch nicht aktiviert. Bitte <code>OPENAI_API_KEY</code> in den
+          Umgebungsvariablen setzen (siehe <code>supabase/SETUP.md</code>).
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
-    <div>
-      <PageHeader
-        title="KI-Assistent"
-        description="Fragen stellen, Auswertungen erstellen, Aufgaben vergeben und Dokumente ablegen."
-      />
-
-      {!aiEnabled ? (
-        <Card>
-          <CardContent className="text-muted-foreground py-8 text-center text-sm">
-            Die KI ist noch nicht aktiviert. Bitte <code>OPENAI_API_KEY</code> in den
-            Umgebungsvariablen setzen (siehe <code>supabase/SETUP.md</code>).
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4 lg:grid-cols-3">
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Sparkles className="size-4" /> Assistent
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <AssistantChat />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Dokument ablegen</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <GlobalFileDrop projects={projectOptions} products={products} aiEnabled={aiEnabled} />
-            </CardContent>
-          </Card>
-        </div>
-      )}
-    </div>
+    <AssistantChat
+      firstName={firstName}
+      projects={projectOptions}
+      products={products}
+      aiEnabled={aiEnabled}
+      initialConversations={initialConversations}
+    />
   );
 }
