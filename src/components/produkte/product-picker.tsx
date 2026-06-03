@@ -13,7 +13,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/format";
 import { productMatches } from "@/lib/search";
+import { cn } from "@/lib/utils";
 import type { Product, ProductGroup } from "@/lib/types";
+
+const ALL = "__alle__";
 
 /**
  * Produkt-Auswahl als Dialog mit Suche + Gruppen-Gliederung.
@@ -32,6 +35,7 @@ export function ProductPicker({
 }) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
+  const [maker, setMaker] = React.useState<string>(ALL);
 
   const groupName = React.useCallback(
     (id: string | null) =>
@@ -39,18 +43,30 @@ export function ProductPicker({
     [groups],
   );
 
-  // Nach Suche filtern (tokenisiert) und nach Gruppe gliedern.
+  // Vorhandene Hersteller (für den Filter), alphabetisch.
+  const makers = React.useMemo(
+    () =>
+      Array.from(
+        new Set(products.map((p) => p.manufacturer?.trim()).filter((m): m is string => Boolean(m))),
+      ).sort((a, b) => a.localeCompare(b)),
+    [products],
+  );
+
+  // Nach Hersteller + Suche filtern und nach Gruppe gliedern.
   const grouped = React.useMemo(() => {
     const q = query.trim();
-    const filtered = q ? products.filter((p) => productMatches(p, q)) : products;
-
+    const filtered = products.filter(
+      (p) =>
+        (maker === ALL || p.manufacturer?.trim() === maker) &&
+        (q ? productMatches(p, q) : true),
+    );
     const map = new Map<string, Product[]>();
     for (const p of filtered) {
       const key = groupName(p.group_id);
       (map.get(key) ?? map.set(key, []).get(key)!).push(p);
     }
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [products, query, groupName]);
+  }, [products, query, maker, groupName]);
 
   function pick(p: Product) {
     onSelect(p);
@@ -76,6 +92,29 @@ export function ProductPicker({
             className="pl-8"
           />
         </div>
+
+        {makers.length > 1 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {[ALL, ...makers].map((m) => {
+              const active = maker === m;
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setMaker(m)}
+                  className={cn(
+                    "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                    active
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "hover:bg-muted text-foreground/70",
+                  )}
+                >
+                  {m === ALL ? "Alle Hersteller" : m}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
 
         <div className="-mx-1 flex-1 overflow-y-auto px-1">
           {grouped.length === 0 ? (

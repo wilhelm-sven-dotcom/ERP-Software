@@ -74,11 +74,14 @@ export default async function ProduktePage() {
     const key = p.group_id && items[p.group_id] ? p.group_id : NONE;
     items[key].push(p);
   }
-  // Innerhalb jeder Gruppe nach Kategorie-Reihenfolge (Einstellungen), dann
-  // manueller Sortierung, dann Name gliedern.
+  // Innerhalb jeder Gruppe nach HERSTELLER gliedern (alphabetisch), dann
+  // Kategorie-Reihenfolge, manueller Sortierung und Name.
   for (const key of Object.keys(items)) {
     items[key].sort(
       (a, b) =>
+        (a.manufacturer?.trim() || "￿").localeCompare(
+          b.manufacturer?.trim() || "￿",
+        ) ||
         rankOf(a) - rankOf(b) ||
         (a.category ?? "").localeCompare(b.category ?? "") ||
         a.sort - b.sort ||

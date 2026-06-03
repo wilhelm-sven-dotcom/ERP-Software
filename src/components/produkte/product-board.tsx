@@ -54,18 +54,18 @@ type WholesalerLinks = Record<string, ProductWholesaler[]>;
 type BoardEntry = { header?: string; product?: Product };
 
 /**
- * Produktliste mit Kategorie-Zwischenüberschriften anreichern: vor dem ersten
- * Produkt einer Kategorie (bei Wechsel gegenüber dem vorigen) wird ein Header
+ * Produktliste mit Hersteller-Zwischenüberschriften anreichern: vor dem ersten
+ * Produkt eines Herstellers (bei Wechsel gegenüber dem vorigen) wird ein Header
  * eingeschoben. Die Produktreihenfolge selbst bleibt unverändert (DnD-kompatibel).
  */
 function withSubHeaders(products: Product[]): BoardEntry[] {
   const out: BoardEntry[] = [];
   let last: string | null = null;
   for (const p of products) {
-    const cat = p.category?.trim() || "Ohne Kategorie";
-    if (cat !== last) {
-      out.push({ header: cat });
-      last = cat;
+    const maker = p.manufacturer?.trim() || "Ohne Hersteller";
+    if (maker !== last) {
+      out.push({ header: maker });
+      last = maker;
     }
     out.push({ product: p });
   }
