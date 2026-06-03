@@ -341,6 +341,37 @@ export function ProductFormDialog({
             </div>
           </div>
 
+          {/* Wechselrichter-Kenndaten — für die automatische Auslegung/Dimensionierung. */}
+          <div className="grid gap-2 sm:grid-cols-4">
+            <div className="grid gap-2 sm:col-span-2">
+              <Label htmlFor="inverter_kw">Wechselrichter-Nennleistung (kW)</Label>
+              <Input
+                id="inverter_kw"
+                name="inverter_kw"
+                type="number"
+                step="0.1"
+                min={0}
+                defaultValue={typeof product?.specs?.inverter_kw === "number" ? (product.specs.inverter_kw as number) : ""}
+                placeholder="z. B. 10"
+              />
+              <p className="text-muted-foreground text-xs">
+                Nur Wechselrichter: AC-Nennleistung → für die Auto-Dimensionierung.
+              </p>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="mppt_count">MPPT-Tracker</Label>
+              <Input id="mppt_count" name="mppt_count" type="number" step="1" min={0}
+                defaultValue={typeof product?.specs?.mppt_count === "number" ? (product.specs.mppt_count as number) : ""}
+                placeholder="z. B. 2" />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="max_input_voltage">max. DC-Spannung (V)</Label>
+              <Input id="max_input_voltage" name="max_input_voltage" type="number" step="1" min={0}
+                defaultValue={typeof product?.specs?.max_input_voltage === "number" ? (product.specs.max_input_voltage as number) : ""}
+                placeholder="z. B. 1000" />
+            </div>
+          </div>
+
           <div className="grid gap-2">
             <Label htmlFor="split_pv_pct">Hybrid – Anteil PV (%)</Label>
             <Input

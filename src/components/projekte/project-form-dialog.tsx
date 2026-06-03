@@ -68,6 +68,13 @@ export function ProjectFormDialog({
   const [zip, setZip] = React.useState(project?.zip ?? "");
   const [city, setCity] = React.useState(project?.city ?? "");
 
+  // Technische Stammdaten aus projects.details lesen (für Default-Werte).
+  const projectDetails = (project?.details as Record<string, unknown> | undefined) ?? {};
+  const detail = (k: string) => {
+    const v = projectDetails[k];
+    return v == null ? "" : String(v);
+  };
+
   React.useEffect(() => {
     if (state.ok && open) {
       toast.success(isEdit ? "Projekt aktualisiert" : "Projekt angelegt");
@@ -203,6 +210,34 @@ export function ProjectFormDialog({
                   defaultValue={project?.storage_kwh ?? ""}
                 />
               </div>
+            </div>
+          </div>
+
+          {/* Technische Stammdaten für Auslegung & Ertragsprognose */}
+          <div className="grid gap-2 sm:grid-cols-3">
+            <div className="grid gap-2">
+              <Label htmlFor="dach_ausrichtung">Dachausrichtung</Label>
+              <Input id="dach_ausrichtung" name="dach_ausrichtung" placeholder="z. B. Süd / SO-NW"
+                defaultValue={detail("dach_ausrichtung")} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="dach_neigung">Dachneigung (°)</Label>
+              <Input id="dach_neigung" name="dach_neigung" type="number" step="1" min={0} max={90}
+                placeholder="z. B. 30" defaultValue={detail("dach_neigung")} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="dach_flaeche">Dachfläche (m²)</Label>
+              <Input id="dach_flaeche" name="dach_flaeche" type="number" step="1" min={0}
+                placeholder="z. B. 60" defaultValue={detail("dach_flaeche")} />
+            </div>
+            <div className="grid gap-2 sm:col-span-2">
+              <Label htmlFor="jahresverbrauch_kwh">Jahresverbrauch (kWh)</Label>
+              <Input id="jahresverbrauch_kwh" name="jahresverbrauch_kwh" type="number" step="1" min={0}
+                placeholder="z. B. 4500" defaultValue={detail("jahresverbrauch_kwh")} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="zaehlernummer">Zählernummer</Label>
+              <Input id="zaehlernummer" name="zaehlernummer" defaultValue={detail("zaehlernummer")} />
             </div>
           </div>
 

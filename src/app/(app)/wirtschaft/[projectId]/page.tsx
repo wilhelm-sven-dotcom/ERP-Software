@@ -10,8 +10,7 @@ import { Button } from "@/components/ui/button";
 import { WirtschaftRechner } from "@/components/wirtschaft/wirtschaft-rechner";
 import { getProject } from "@/lib/data/projects";
 import { getCalculationByProject } from "@/lib/data/calculations";
-import { getSetting } from "@/lib/data/settings";
-import { DEFAULT_WIRTSCHAFT } from "@/lib/calc/wirtschaft";
+import { getWirtschaftDefaults } from "@/lib/data/settings";
 import { customerName } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Wirtschaftlichkeit" };
@@ -25,9 +24,9 @@ export default async function WirtschaftDetailPage({
   const project = await getProject(projectId);
   if (!project) notFound();
 
-  const [calc, defaults] = await Promise.all([
+  const [calc, params2] = await Promise.all([
     getCalculationByProject(projectId),
-    getSetting("defaults", {} as { strompreis?: number; einspeisung?: number }),
+    getWirtschaftDefaults(),
   ]);
 
   const kwp = project.system_size_kwp ?? 0;
@@ -39,14 +38,6 @@ export default async function WirtschaftDetailPage({
     typeof (calc?.totals as Record<string, unknown>)?.brutto === "number"
       ? ((calc!.totals as Record<string, number>).brutto ?? 0)
       : 0;
-
-  // Defaults: Legacy-Werte, ggf. mit Firmen-Einstellungen überschrieben
-  const params2 = {
-    ...DEFAULT_WIRTSCHAFT,
-    strompreis: defaults?.strompreis ?? DEFAULT_WIRTSCHAFT.strompreis,
-    einspeiseverguetung:
-      defaults?.einspeisung ?? DEFAULT_WIRTSCHAFT.einspeiseverguetung,
-  };
 
   return (
     <div>

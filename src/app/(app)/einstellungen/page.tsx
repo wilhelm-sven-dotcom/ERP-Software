@@ -5,7 +5,8 @@ import { SupabaseNotice } from "@/components/shared/supabase-notice";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CompanyForm } from "@/components/einstellungen/company-form";
-import { getCompanySettings } from "@/lib/data/settings";
+import { WirtschaftDefaultsForm } from "@/components/einstellungen/wirtschaft-defaults-form";
+import { getCompanySettings, getWirtschaftDefaults } from "@/lib/data/settings";
 import { getCurrentEmployee } from "@/lib/supabase/auth";
 import { getIntegration, isGoogleConfigured } from "@/lib/google/calendar";
 import { disconnectGoogle } from "@/app/(app)/einstellungen/actions";
@@ -18,10 +19,11 @@ export default async function EinstellungenPage({
 }: {
   searchParams: Promise<{ google?: string }>;
 }) {
-  const [company, me, { google }] = await Promise.all([
+  const [company, me, { google }, wirtschaft] = await Promise.all([
     getCompanySettings(),
     getCurrentEmployee(),
     searchParams,
+    getWirtschaftDefaults(),
   ]);
   const isAdmin = me?.role === "admin";
   const googleConfigured = isGoogleConfigured();
@@ -49,6 +51,24 @@ export default async function EinstellungenPage({
             </p>
           ) : null}
           <CompanyForm company={company} disabled={!isAdmin} />
+        </CardContent>
+      </Card>
+
+      <Card className="mb-4 max-w-3xl">
+        <CardHeader>
+          <CardTitle className="text-base">Wirtschaftlichkeits-Defaults</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!isAdmin ? (
+            <p className="text-muted-foreground mb-4 text-sm">
+              Nur Administratoren können diese Werte ändern.
+            </p>
+          ) : null}
+          <p className="text-muted-foreground mb-3 text-sm">
+            Standardwerte für die Wirtschaftlichkeitsberechnung (gelten projektübergreifend, je
+            Projekt überschreibbar).
+          </p>
+          <WirtschaftDefaultsForm defaults={wirtschaft} disabled={!isAdmin} />
         </CardContent>
       </Card>
 

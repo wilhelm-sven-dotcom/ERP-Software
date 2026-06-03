@@ -42,8 +42,7 @@ import { RueckfrageDialog } from "@/components/projekte/rueckfrage-dialog";
 import { ProjectTabs } from "@/components/projekte/project-tabs";
 import { ProjectPipeline } from "@/components/projekte/project-pipeline";
 import { WirtschaftRechner } from "@/components/wirtschaft/wirtschaft-rechner";
-import { DEFAULT_WIRTSCHAFT } from "@/lib/calc/wirtschaft";
-import { getSetting } from "@/lib/data/settings";
+import { getWirtschaftDefaults } from "@/lib/data/settings";
 import { deleteProject } from "@/app/(app)/projekte/actions";
 import { createOfferFromCalculation } from "@/app/(app)/angebot/actions";
 import { createDeliveryNote } from "@/app/(app)/dokumente/actions";
@@ -101,7 +100,7 @@ export default async function ProjectDetailPage({
       getProjectFiles(id),
       getMeasurements(id),
       getSiteLog(id),
-      getSetting("defaults", {} as { strompreis?: number; einspeisung?: number }),
+      getWirtschaftDefaults(),
     ]);
   // Kandidaten je Aufgabe (für „angeboten an …" und „Annehmen").
   const candidatesByTask: Record<string, string[]> = {};
@@ -183,11 +182,7 @@ export default async function ProjectDetailPage({
     typeof (selectedCalc?.totals as Record<string, unknown>)?.brutto === "number"
       ? (selectedCalc!.totals as Record<string, number>).brutto
       : 0;
-  const wParams = {
-    ...DEFAULT_WIRTSCHAFT,
-    strompreis: wirtschaftDefaults?.strompreis ?? DEFAULT_WIRTSCHAFT.strompreis,
-    einspeiseverguetung: wirtschaftDefaults?.einspeisung ?? DEFAULT_WIRTSCHAFT.einspeiseverguetung,
-  };
+  const wParams = wirtschaftDefaults;
 
   return (
     <div>

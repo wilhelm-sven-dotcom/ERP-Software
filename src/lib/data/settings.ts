@@ -2,6 +2,7 @@ import { cache } from "react";
 
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
+import { DEFAULT_WIRTSCHAFT, type WirtschaftParams } from "@/lib/calc/wirtschaft";
 
 export interface CompanySettings {
   name: string;
@@ -79,6 +80,15 @@ export async function getCompanySettings(): Promise<CompanySettings> {
 
 export async function getDefaults(): Promise<{ vat_percent: number }> {
   return getSetting("defaults", { vat_percent: 19 });
+}
+
+/**
+ * Wirtschaftlichkeits-Defaults (Strompreis, Einspeisung, spez. Ertrag …) —
+ * firmenweit einstellbar; fällt auf die Legacy-Defaults zurück.
+ */
+export async function getWirtschaftDefaults(): Promise<WirtschaftParams> {
+  const stored = await getSetting<Partial<WirtschaftParams>>("wirtschaft", {});
+  return { ...DEFAULT_WIRTSCHAFT, ...stored };
 }
 
 /** Eine in settings hinterlegte Stringliste (oder Defaults). */

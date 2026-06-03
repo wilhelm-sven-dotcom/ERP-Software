@@ -161,6 +161,13 @@ export async function saveProduct(
   if (storageKwh === null) delete specs.storage_kwh;
   else specs.storage_kwh = Math.max(storageKwh, 0);
 
+  // Wechselrichter-Kenndaten (für die automatische Auslegung/Dimensionierung).
+  for (const key of ["inverter_kw", "mppt_count", "max_input_voltage", "max_input_current"]) {
+    const v = n(fd, key);
+    if (v === null) delete specs[key];
+    else specs[key] = Math.max(v, 0);
+  }
+
   // Preisbildung (Aufschläge) in specs ablegen; price_purchase/price_sell
   // werden bereits effektiv (berechnet oder manuell) im Formular übergeben.
   const basePurchase = n(fd, "base_purchase");

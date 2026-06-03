@@ -62,3 +62,39 @@ export async function saveCompanySettings(
   revalidatePath("/einstellungen");
   return OK;
 }
+
+/** Wirtschaftlichkeits-Defaults speichern (Strompreis, Einspeisung, Ertrag …). */
+export async function saveWirtschaftDefaults(
+  _prev: ActionResult,
+  fd: FormData,
+): Promise<ActionResult> {
+  const guard = ensureConfigured();
+  if (guard) return guard;
+  const me = await getCurrentEmployee();
+  if (me?.role !== "admin") return fail("Nur Administratoren dürfen die Einstellungen ändern.");
+
+  const num = (k: string, d: number) => {
+    const v = fd.get(k);
+    if (v === null || String(v).trim() === "") return d;
+    const n = Number(String(v).replace(",", "."));
+    return Number.isFinite(n) ? n : d;
+  };
+  const value = {
+    ertragKwhProKwp: num("ertragKwhProKwp", 950),
+    eigenverbrauchsAnteil: num("eigenverbrauchsAnteil", 30),
+    strompreis: num("strompreis", 0.32),
+    einspeiseverguetung: num("einspeiseverguetung", 0.0786),
+    strompreissteigerung: num("strompreissteigerung", 3.0),
+    degradation: num("degradation", 0.5),
+    laufzeit: num("laufzeit", 25),
+  };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("settings")
+    .upsert({ key: "wirtschaft", value }, { onConflict: "key" });
+  if (error) return fail(error.message);
+
+  revalidatePath("/einstellungen");
+  return OK;
+}

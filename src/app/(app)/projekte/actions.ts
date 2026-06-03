@@ -81,6 +81,24 @@ export async function saveProject(
 
   const supabase = await createClient();
 
+  // Technische Stammdaten (Dachdaten, Jahresverbrauch, Zähler) in details mergen,
+  // damit andere details-Felder (z. B. speicherKwh) erhalten bleiben.
+  const detailKeys = ["dach_ausrichtung", "dach_neigung", "dach_flaeche", "jahresverbrauch_kwh", "zaehlernummer"];
+  if (detailKeys.some((k) => fd.has(k))) {
+    let details: Record<string, unknown> = {};
+    if (id) {
+      const { data: ex } = await supabase.from("projects").select("details").eq("id", id).maybeSingle();
+      if (ex?.details && typeof ex.details === "object") details = { ...(ex.details as Record<string, unknown>) };
+    }
+    for (const k of ["dach_ausrichtung", "zaehlernummer"]) {
+      if (fd.has(k)) details[k] = s(fd, k);
+    }
+    for (const k of ["dach_neigung", "dach_flaeche", "jahresverbrauch_kwh"]) {
+      if (fd.has(k)) details[k] = n(fd, k);
+    }
+    payload.details = details;
+  }
+
   // Geokoordinaten für die Karte: nur ermitteln, wenn eine Adresse vorhanden ist
   // und (neu angelegt oder Adresse geändert) — schont die Nominatim-Nutzung.
   const street = payload.street as string | null;
