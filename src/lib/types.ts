@@ -458,6 +458,57 @@ export type DispoEntryWithProject = DispoEntry & {
   project: { id: string; title: string | null } | null;
 };
 
+export interface ServiceTicket {
+  id: string;
+  title: string;
+  customer_id: string | null;
+  project_id: string | null;
+  location: string | null;
+  status: string;
+  assignee_employee_id: string | null;
+  due_date: string | null;
+  description: string | null;
+  cover_path: string | null;
+  sort: number;
+  source: string | null;
+  external_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Service-Ticket mit eingebettetem Kunden + Zählern (für die Board-Karten). */
+export type ServiceTicketCard = ServiceTicket & {
+  customer: { id: string; first_name: string | null; last_name: string | null; company: string | null } | null;
+  comment_count: number;
+  file_count: number;
+  cover_url: string | null;
+};
+
+export interface ServiceTicketMessage {
+  id: string;
+  ticket_id: string;
+  author_employee_id: string | null;
+  body: string;
+  kind: string;
+  created_at: string;
+}
+
+export type ServiceTicketMessageWithAuthor = ServiceTicketMessage & {
+  author?: { name: string | null } | null;
+};
+
+export interface ServiceTicketFile {
+  id: string;
+  ticket_id: string;
+  name: string;
+  storage_path: string;
+  mime: string | null;
+  size: number | null;
+  uploaded_by: string | null;
+  created_at: string;
+}
+
 export interface Setting {
   key: string;
   value: unknown;

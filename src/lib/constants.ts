@@ -99,6 +99,16 @@ export const DEFAULT_CATEGORIES = [
 /** Default-Aufschläge für die Preisbildung (Basis-EK → EK → VK). */
 export const PRICE_DEFAULTS = { safety_pct: 0, margin_pct: 20 };
 
+/** Spalten des Service-Boards (Kanban). */
+export const SERVICE_STATUSES = [
+  "Eingang",
+  "In Arbeit",
+  "Warten auf Extern",
+  "Terminiert",
+  "Behoben",
+  "Keine Rechnung stellen",
+] as const;
+
 /** Quelle einer Anfrage (Vertriebs-Lead). */
 export const LEAD_SOURCES = [
   "Telefon",

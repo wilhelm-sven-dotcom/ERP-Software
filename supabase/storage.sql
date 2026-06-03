@@ -57,3 +57,22 @@ create policy "project_files_insert" on storage.objects
 drop policy if exists "project_files_delete" on storage.objects;
 create policy "project_files_delete" on storage.objects
   for delete using (bucket_id = 'project-files' and public.is_staff());
+
+-- ============================================================================
+-- Service-Dateien (Fotos/Anhänge je Service-Ticket) — Paket Service-Board
+-- ============================================================================
+insert into storage.buckets (id, name, public)
+values ('service-files', 'service-files', true)
+on conflict (id) do nothing;
+
+drop policy if exists "service_files_read" on storage.objects;
+create policy "service_files_read" on storage.objects
+  for select using (bucket_id = 'service-files' and public.is_staff());
+
+drop policy if exists "service_files_insert" on storage.objects;
+create policy "service_files_insert" on storage.objects
+  for insert with check (bucket_id = 'service-files' and public.is_staff());
+
+drop policy if exists "service_files_delete" on storage.objects;
+create policy "service_files_delete" on storage.objects
+  for delete using (bucket_id = 'service-files' and public.is_staff());
