@@ -4,9 +4,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { AssistantChat } from "@/components/assistant/assistant-chat";
 import { isAiConfigured } from "@/lib/ai/openai";
 import { getCurrentEmployee } from "@/lib/supabase/auth";
-import { getProjects } from "@/lib/data/projects";
+import { getProjects, getMyLeads } from "@/lib/data/projects";
 import { getProducts } from "@/lib/data/products";
 import { getConversations } from "@/lib/data/ai-conversations";
+import { getMyOpenTasks } from "@/lib/data/workflow";
+import { getInbox } from "@/lib/data/notifications";
+import { getDocumentsByKind } from "@/lib/data/documents";
+import { getDueServiceContracts } from "@/lib/data/service-contracts";
 
 export const metadata: Metadata = { title: "KI-Assistent" };
 
@@ -33,6 +37,26 @@ export default async function AssistentPage() {
     updated_at: c.updated_at,
   }));
 
+  // Proaktiver Tagesüberblick: was steht heute an?
+  const today = new Date().toISOString().slice(0, 10);
+  const [myTasks, inbox, leads, invoices, dueMaint] = await Promise.all([
+    me?.id ? getMyOpenTasks(me.id) : Promise.resolve([]),
+    me?.id ? getInbox(me.id) : Promise.resolve({ offered: [], unread: [], overdue: [], total: 0 }),
+    me?.id && me.is_sales ? getMyLeads(me.id) : Promise.resolve([]),
+    getDocumentsByKind("rechnung"),
+    getDueServiceContracts(14),
+  ]);
+  const overdueTasks = myTasks.filter((t) => t.due_date && t.due_date < today).length;
+  const overdueInvoices = invoices.filter(
+    (d) => d.payment_status !== "bezahlt" && d.due_date && d.due_date < today,
+  ).length;
+  const briefing: { label: string; href: string; tone?: "warn" }[] = [];
+  if (overdueTasks > 0) briefing.push({ label: `${overdueTasks} überfällige Aufgabe(n)`, href: "/dashboard", tone: "warn" });
+  if (inbox.offered.length > 0) briefing.push({ label: `${inbox.offered.length} dir angebotene Aufgabe(n)`, href: "/dashboard" });
+  if (leads.length > 0) briefing.push({ label: `${leads.length} offene Leads`, href: "/pipeline" });
+  if (overdueInvoices > 0) briefing.push({ label: `${overdueInvoices} überfällige Rechnung(en)`, href: "/buchhaltung", tone: "warn" });
+  if (dueMaint.length > 0) briefing.push({ label: `${dueMaint.length} fällige Wartung(en)`, href: "/wartung" });
+
   if (!aiEnabled) {
     return (
       <Card>
@@ -51,6 +75,7 @@ export default async function AssistentPage() {
       products={products}
       aiEnabled={aiEnabled}
       initialConversations={initialConversations}
+      briefing={briefing}
     />
   );
 }

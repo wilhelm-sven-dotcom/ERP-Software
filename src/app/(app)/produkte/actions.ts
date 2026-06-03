@@ -334,6 +334,31 @@ export async function registerProductAsset(input: {
   return OK;
 }
 
+/**
+ * Von der KI aus einem Datenblatt ausgelesene technische Kenndaten in das
+ * Produkt übernehmen (in `specs` jsonb mergen — bestehende Werte bleiben,
+ * neue/aktualisierte kommen hinzu).
+ */
+export async function updateProductSpecs(
+  productId: string,
+  specs: Record<string, string | number>,
+): Promise<ActionResult> {
+  const guard = ensureConfigured();
+  if (guard) return guard;
+  if (!productId || !specs || Object.keys(specs).length === 0) return fail("Keine Daten.");
+  const supabase = await createClient();
+  const { data: product } = await supabase
+    .from("products")
+    .select("specs")
+    .eq("id", productId)
+    .maybeSingle();
+  const merged = { ...((product?.specs as Record<string, unknown>) ?? {}), ...specs };
+  const { error } = await supabase.from("products").update({ specs: merged }).eq("id", productId);
+  if (error) return fail(error.message);
+  revalidatePath("/produkte");
+  return OK;
+}
+
 export async function deleteProductAsset(fd: FormData): Promise<void> {
   const id = String(fd.get("id") ?? "");
   const path = String(fd.get("path") ?? "");

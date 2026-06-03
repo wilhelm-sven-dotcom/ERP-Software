@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import { createClient } from "@/lib/supabase/client";
 import { registerProjectFile } from "@/app/(app)/projekte/actions";
-import { registerProductAsset } from "@/app/(app)/produkte/actions";
+import { registerProductAsset, updateProductSpecs } from "@/app/(app)/produkte/actions";
 import { rankProductsForFilename, matchProductsInText } from "@/lib/asset-match";
 import {
   extractImagesFromPdf,
@@ -63,6 +63,10 @@ type Row = {
   aiReason: string;
   /** KI-interpretierte Beleg-Felder (Rechnung/Dokument). */
   docMeta: DocMeta | null;
+  /** KI-ausgelesene technische Kenndaten aus einem Datenblatt. */
+  specs: Record<string, string | number> | null;
+  /** Specs beim Ablegen ins Produkt übernehmen? */
+  applySpecs: boolean;
   done: boolean;
   busy: boolean;
 };
@@ -114,6 +118,8 @@ export function GlobalFileDrop({
         aiBusy: false,
         aiReason: "",
         docMeta: null,
+        specs: null,
+        applySpecs: true,
         done: false,
         busy: false,
       };
@@ -184,6 +190,7 @@ export function GlobalFileDrop({
           confidence: number;
           reason: string;
           document?: DocMeta | null;
+          specs?: Record<string, string | number> | null;
         } | null;
       };
       const r = data.result;
@@ -207,6 +214,7 @@ export function GlobalFileDrop({
               suggestedIds: Array.from(new Set([...x.suggestedIds, ...validProductIds])),
               kind: r.kind === "image" ? "image" : "datasheet",
               docMeta: r.document ?? null,
+              specs: r.specs ?? null,
             };
           }
           return {
@@ -321,6 +329,15 @@ export function GlobalFileDrop({
         return;
       }
 
+      // Technische Kenndaten aus dem Datenblatt in die Produkt-Specs übernehmen.
+      let specsApplied = 0;
+      if (row.applySpecs && row.specs && Object.keys(row.specs).length > 0) {
+        for (const productId of row.productIds) {
+          const r = await updateProductSpecs(productId, row.specs);
+          if (r.ok) specsApplied += 1;
+        }
+      }
+
       // Aus dem PDF ausgewählte Bilder als Produktbild(er) mit ablegen.
       const chosenImages = row.extracted.filter((img) => row.selectedImageIds.includes(img.id));
       const baseName = row.file.name.replace(/\.pdf$/i, "");
@@ -344,7 +361,7 @@ export function GlobalFileDrop({
       toast.success(
         `„${row.file.name}" ${ok} Produkt(en) zugeordnet${
           chosenImages.length > 0 ? ` · ${chosenImages.length} Bild(er) übernommen` : ""
-        }`,
+        }${specsApplied > 0 ? ` · Kenndaten übernommen` : ""}`,
       );
     } else {
       const path = `${row.projectId}/${Date.now()}-${rand}.${ext}`;
@@ -466,13 +483,35 @@ export function GlobalFileDrop({
             </Button>
           </div>
 
-          {!row.done && (row.aiBusy || row.aiReason || row.docMeta) ? (
+          {!row.done && (row.aiBusy || row.aiReason || row.docMeta || row.specs) ? (
             <div className="border-primary/30 bg-primary/5 mt-2 rounded-md border p-2 text-xs">
               <p className="text-primary flex items-center gap-1 font-medium">
                 <Sparkles className="size-3" />
                 {row.aiBusy ? "KI analysiert die Datei …" : "KI-Vorschlag"}
               </p>
               {row.aiReason ? <p className="mt-1">{row.aiReason}</p> : null}
+              {row.specs && Object.keys(row.specs).length > 0 ? (
+                <div className="mt-2 border-t pt-2">
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      className="size-4"
+                      checked={row.applySpecs}
+                      onChange={(e) => patch(row.uid, { applySpecs: e.target.checked })}
+                    />
+                    <span className="font-medium">
+                      Technische Daten ins Produkt übernehmen ({Object.keys(row.specs).length} Felder)
+                    </span>
+                  </label>
+                  <div className="text-muted-foreground mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                    {Object.entries(row.specs).slice(0, 8).map(([k, v]) => (
+                      <span key={k}>
+                        {k.replace(/_/g, " ")}: <span className="text-foreground">{String(v)}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               {row.docMeta ? (
                 <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-muted-foreground">
                   {row.docMeta.docType ? <span>Art: {row.docMeta.docType}</span> : null}

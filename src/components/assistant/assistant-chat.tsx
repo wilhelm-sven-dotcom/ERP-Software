@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { Send, Loader2, Plus, MessageSquare, Trash2, Sparkles } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
@@ -52,12 +53,14 @@ export function AssistantChat({
   products = [],
   aiEnabled = false,
   initialConversations = [],
+  briefing = [],
 }: {
   firstName?: string;
   projects?: { id: string; title: string }[];
   products?: Product[];
   aiEnabled?: boolean;
   initialConversations?: ConversationRow[];
+  briefing?: { label: string; href: string; tone?: "warn" }[];
 }) {
   const [chat, setChat] = React.useState<ChatMessage[]>([]);
   const [query, setQuery] = React.useState("");
@@ -269,6 +272,28 @@ export function AssistantChat({
                 </button>
               ))}
             </div>
+
+            {briefing.length > 0 ? (
+              <div className="mt-8 w-full max-w-2xl">
+                <p className="text-muted-foreground mb-2 text-center text-xs">Heute für dich:</p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {briefing.map((b) => (
+                    <Link
+                      key={b.label}
+                      href={b.href}
+                      className={cn(
+                        "rounded-lg border px-3 py-1.5 text-sm transition-colors",
+                        b.tone === "warn"
+                          ? "border-destructive/40 bg-destructive/5 text-destructive hover:bg-destructive/10"
+                          : "hover:border-primary",
+                      )}
+                    >
+                      {b.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : (
           <>

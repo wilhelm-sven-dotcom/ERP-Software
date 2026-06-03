@@ -26,6 +26,8 @@ export interface ClassifyResult {
     amount?: number | string;
     currency?: string;
   } | null;
+  /** Bei Datenblättern: ausgelesene technische Kenndaten (key→Wert). */
+  specs?: Record<string, string | number> | null;
 }
 
 /**
@@ -65,9 +67,12 @@ export async function POST(req: Request) {
         "dokument|datenblatt|plan|foto|rechnung|sonstiges. Ist die Datei ein Beleg/eine Rechnung, " +
         "fülle 'document' mit docType (z. B. 'eingangsrechnung','ausgangsrechnung','lieferschein'," +
         "'angebot'), supplier, invoice_number, invoice_date (YYYY-MM-DD), due_date (YYYY-MM-DD), " +
-        "amount (Bruttobetrag als Zahl), currency. Unbekannte Felder weglassen, nichts erfinden. " +
+        "amount (Bruttobetrag als Zahl), currency. Ist die Datei ein DATENBLATT, fülle zusätzlich " +
+        "'specs' mit den zentralen technischen Kenndaten als key→Wert (z. B. leistung_wp, " +
+        "wirkungsgrad_prozent, kapazitaet_kwh, masse, gewicht_kg, garantie_jahre, hersteller, modell). " +
+        "Nur belegbare Werte aus dem Text, nichts erfinden. " +
         "confidence 0..1. Antworte ausschließlich als JSON mit den Feldern target, productIds, " +
-        "projectId, kind, confidence, reason, document.",
+        "projectId, kind, confidence, reason, document, specs.",
     },
     {
       role: "user",
@@ -86,6 +91,10 @@ export async function POST(req: Request) {
     confidence: typeof result.confidence === "number" ? result.confidence : 0,
     reason: typeof result.reason === "string" ? result.reason : "",
     document: result.document ?? null,
+    specs:
+      result.specs && typeof result.specs === "object" && !Array.isArray(result.specs)
+        ? result.specs
+        : null,
   };
   return NextResponse.json({ enabled: true, result: normalized });
 }
