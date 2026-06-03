@@ -29,6 +29,8 @@ import { POSITION_GROUPS, type CalcPosition, type PositionGroup } from "@/lib/ca
 import { saveCalculation } from "@/app/(app)/kalkulation/actions";
 import { ProductPicker } from "@/components/produkte/product-picker";
 import { TemplateLoadDialog } from "@/components/kalkulation/template-load-dialog";
+import { ConfigWizard } from "@/components/kalkulation/config-wizard";
+import { scaleQuantity } from "@/lib/calc/configurator";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import type { CalcTemplate, Product, ProductGroup } from "@/lib/types";
 
@@ -194,6 +196,13 @@ export function CalcEditor({
     });
   }
 
+  /** Aus dem Schnell-Konfigurator erzeugte Positionen übernehmen. */
+  function applyConfigurator(generated: CalcPosition[]) {
+    if (generated.length === 0) return;
+    setPositions(generated);
+    toast.success(`${generated.length} Positionen aus der Schnell-Konfiguration übernommen.`);
+  }
+
   /** Eine Kalkulationsvorlage laden: Positionen + Default-Rabatte/MwSt. */
   /** Ausgewählte Vorlagen-Positionen übernehmen (aus dem Auswahl-Dialog). */
   function applyTemplate(
@@ -201,13 +210,15 @@ export function CalcEditor({
     d: Record<string, unknown>,
     templateName: string,
   ) {
-    // Frische, eindeutige IDs vergeben; Menge als Vorschlag übernehmen.
+    // Frische, eindeutige IDs vergeben; bei parametrischen Vorlagen (qtyPerKwp/
+    // qtyPerModule) die Menge aus der Anlagengröße ableiten, sonst feste Menge.
+    const sizeKwp = systemSizeKwp ?? effKwp ?? 0;
     const loaded: CalcPosition[] = selected.map((p) => {
       rowSeq += 1;
       return {
         ...p,
         id: `tpl-${Date.now()}-${rowSeq}`,
-        menge: typeof p.menge === "number" ? p.menge : 0,
+        menge: scaleQuantity(p as CalcPosition & { qtyPerKwp?: number | null; qtyPerModule?: number | null }, sizeKwp, 0),
       };
     });
     setPositions(loaded);
@@ -535,6 +546,12 @@ export function CalcEditor({
         <Button variant="outline" size="sm" onClick={addRow}>
           <Plus className="size-4" /> Position
         </Button>
+        <ConfigWizard
+          products={products}
+          defaultKwp={systemSizeKwp}
+          defaultKwh={storageKwh}
+          onApply={applyConfigurator}
+        />
         {templates.length > 0 ? (
           <TemplateLoadDialog templates={templates} onApply={applyTemplate} />
         ) : null}
