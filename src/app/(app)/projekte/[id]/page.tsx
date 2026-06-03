@@ -39,6 +39,10 @@ import { TaskList } from "@/components/projekte/task-list";
 import { ProgressBar } from "@/components/projekte/progress-bar";
 import { InvoiceActions } from "@/components/dokumente/invoice-actions";
 import { RueckfrageDialog } from "@/components/projekte/rueckfrage-dialog";
+import { ProjectTabs } from "@/components/projekte/project-tabs";
+import { WirtschaftRechner } from "@/components/wirtschaft/wirtschaft-rechner";
+import { DEFAULT_WIRTSCHAFT } from "@/lib/calc/wirtschaft";
+import { getSetting } from "@/lib/data/settings";
 import { deleteProject } from "@/app/(app)/projekte/actions";
 import { createOfferFromCalculation } from "@/app/(app)/angebot/actions";
 import { createDeliveryNote } from "@/app/(app)/dokumente/actions";
@@ -86,7 +90,7 @@ export default async function ProjectDetailPage({
     getDocumentsByProject(id, "lieferschein"),
     getDocumentsByProject(id, "rechnung"),
   ]);
-  const [tasks, taskCandidates, timeEntries, laborRate, me, projectFiles, measurements, siteLog] =
+  const [tasks, taskCandidates, timeEntries, laborRate, me, projectFiles, measurements, siteLog, wirtschaftDefaults] =
     await Promise.all([
       getProjectTasks(id),
       getTaskCandidatesByProject(id),
@@ -96,6 +100,7 @@ export default async function ProjectDetailPage({
       getProjectFiles(id),
       getMeasurements(id),
       getSiteLog(id),
+      getSetting("defaults", {} as { strompreis?: number; einspeisung?: number }),
     ]);
   // Kandidaten je Aufgabe (für „angeboten an …" und „Annehmen").
   const candidatesByTask: Record<string, string[]> = {};
@@ -164,6 +169,25 @@ export default async function ProjectDetailPage({
     .filter(Boolean)
     .join(", ");
 
+  // Wirtschaftlichkeit (im Kalkulations-Tab): Investition aus der gewählten/
+  // neuesten Kalkulation, Defaults aus den Firmen-Einstellungen.
+  const selectedCalc = variants.find((v) => v.is_selected) ?? variants[0] ?? null;
+  const wKwp = project.system_size_kwp ?? 0;
+  const wSpeicher =
+    project.storage_kwh ??
+    (typeof (project.details as Record<string, unknown>)?.speicherKwh === "number"
+      ? (project.details as Record<string, number>).speicherKwh
+      : 0);
+  const wInvest =
+    typeof (selectedCalc?.totals as Record<string, unknown>)?.brutto === "number"
+      ? (selectedCalc!.totals as Record<string, number>).brutto
+      : 0;
+  const wParams = {
+    ...DEFAULT_WIRTSCHAFT,
+    strompreis: wirtschaftDefaults?.strompreis ?? DEFAULT_WIRTSCHAFT.strompreis,
+    einspeiseverguetung: wirtschaftDefaults?.einspeisung ?? DEFAULT_WIRTSCHAFT.einspeiseverguetung,
+  };
+
   return (
     <div>
       <div className="mb-2">
@@ -197,524 +221,389 @@ export default async function ProjectDetailPage({
         </form>
       </PageHeader>
 
-      {project.system_size_kwp || project.storage_kwh ? (
-        <div className="mb-4 grid grid-cols-2 gap-4 sm:max-w-md">
-          <Card>
-            <CardContent className="py-4">
-              <p className="text-muted-foreground text-xs">Anlagenleistung</p>
-              <p className="text-2xl font-semibold">
-                {formatNumber(project.system_size_kwp)}{" "}
-                <span className="text-muted-foreground text-base font-normal">
-                  kWp
-                </span>
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="py-4">
-              <p className="text-muted-foreground text-xs">Speicher</p>
-              <p className="text-2xl font-semibold">
-                {formatNumber(project.storage_kwh)}{" "}
-                <span className="text-muted-foreground text-base font-normal">
-                  kWh
-                </span>
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      ) : null}
+      <ProjectTabs
+        uebersicht={
+          <div className="space-y-4">
+            {project.system_size_kwp || project.storage_kwh ? (
+              <div className="grid grid-cols-2 gap-4 sm:max-w-md">
+                <Card>
+                  <CardContent className="py-4">
+                    <p className="text-muted-foreground text-xs">Anlagenleistung</p>
+                    <p className="text-2xl font-semibold">
+                      {formatNumber(project.system_size_kwp)}{" "}
+                      <span className="text-muted-foreground text-base font-normal">kWp</span>
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="py-4">
+                    <p className="text-muted-foreground text-xs">Speicher</p>
+                    <p className="text-2xl font-semibold">
+                      {formatNumber(project.storage_kwh)}{" "}
+                      <span className="text-muted-foreground text-base font-normal">kWh</span>
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            ) : null}
 
-      <div className="mb-4 grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">
-              Kalkulationen{" "}
-              <span className="text-muted-foreground font-normal">
-                ({variants.length})
-              </span>
-            </CardTitle>
-            <Button variant="outline" size="sm" asChild>
-              <Link href={`/kalkulation/${project.id}`}>Öffnen</Link>
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {variants.length === 0 ? (
-              <p className="text-muted-foreground text-sm">
-                Noch keine Kalkulation.
-              </p>
-            ) : (
-              <ul className="divide-y">
-                {variants.map((v) => (
-                  <li
-                    key={v.id}
-                    className="flex items-center justify-between gap-2 py-2"
-                  >
-                    <Link
-                      href={`/kalkulation/${project.id}?calc=${v.id}`}
-                      className="text-sm font-medium hover:underline"
-                    >
-                      {v.is_selected ? "★ " : ""}
-                      {v.name ?? "Variante"}
-                      <span className="text-muted-foreground ml-1 font-normal">
-                        {v.system_size_kwp
-                          ? `${formatNumber(v.system_size_kwp)} kWp`
-                          : ""}
-                        {v.storage_kwh
-                          ? ` / ${formatNumber(v.storage_kwh)} kWh`
-                          : ""}
-                      </span>
-                    </Link>
-                    <form action={createOfferFromCalculation}>
-                      <input type="hidden" name="calc_id" value={v.id} />
-                      <input
-                        type="hidden"
-                        name="project_id"
-                        value={project.id}
-                      />
-                      <Button variant="ghost" size="sm" type="submit">
-                        Angebot erstellen
-                      </Button>
-                    </form>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
+            <div className="grid gap-4 lg:grid-cols-3">
+              <Card className="lg:col-span-1">
+                <CardHeader>
+                  <CardTitle className="text-base">Projektdaten</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <dl className="grid grid-cols-2 gap-3">
+                    <Field label="Kunde" value={project.customer ? customerName(project.customer) : "–"} />
+                    <Field label="Status" value={project.status} />
+                    <Field label="Anlagentyp" value={project.project_type ?? "–"} />
+                    <Field
+                      label="Anlagengröße"
+                      value={project.system_size_kwp ? `${formatNumber(project.system_size_kwp)} kWp` : "–"}
+                    />
+                    <Field
+                      label="Speicher"
+                      value={project.storage_kwh ? `${formatNumber(project.storage_kwh)} kWh` : "–"}
+                    />
+                    <Field label="Montageort" value={address} />
+                  </dl>
+                  {project.customer ? (
+                    <Button variant="link" className="mt-2 h-auto p-0" asChild>
+                      <Link href={`/kunden/${project.customer.id}`}>Zum Kunden →</Link>
+                    </Button>
+                  ) : null}
+                  {project.notes ? (
+                    <p className="text-muted-foreground mt-4 text-sm whitespace-pre-wrap">{project.notes}</p>
+                  ) : null}
+                  {project.lat != null && project.lon != null ? (
+                    <div className="mt-4">
+                      <LocationMap lat={project.lat} lon={project.lon} label={address || project.title || "Montageort"} />
+                    </div>
+                  ) : address ? (
+                    <p className="text-muted-foreground mt-4 text-xs">
+                      Keine Koordinaten — Projekt mit Adresse speichern, um die Karte zu laden.{" "}
+                      <a className="underline" href={`https://www.openstreetmap.org/search?query=${encodeURIComponent(address)}`} target="_blank" rel="noreferrer">
+                        Auf OpenStreetMap suchen
+                      </a>
+                    </p>
+                  ) : null}
+                </CardContent>
+              </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">
-              Angebote{" "}
-              <span className="text-muted-foreground font-normal">
-                ({offers.length})
-              </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {offers.length === 0 ? (
-              <p className="text-muted-foreground text-sm">
-                Noch keine Angebote. Über die Schaltfläche bei einer Variante
-                anlegen.
-              </p>
-            ) : (
-              <ul className="divide-y">
-                {offers.map((o) => (
-                  <li
-                    key={o.id}
-                    className="flex items-center justify-between gap-2 py-2"
-                  >
-                    <Link
-                      href={`/angebot/${o.id}`}
-                      className="text-sm font-medium hover:underline"
-                    >
-                      Nr. {o.offer_number ?? "–"} · {o.title ?? "Angebot"}
-                      <span className="text-muted-foreground ml-1 font-normal">
-                        {typeof o.totals?.brutto === "number"
-                          ? formatCurrency(o.totals.brutto)
-                          : ""}
-                      </span>
-                    </Link>
-                    <Badge variant={offerStatusVariant(o.status)}>
-                      {o.status}
-                    </Badge>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+              <Card className="lg:col-span-2">
+                <CardHeader>
+                  <CardTitle className="text-base">Logbuch</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <AddProjectActivityForm projectId={project.id} customerId={project.customer_id} />
+                  <ActivityTimeline activities={activities} />
+                </CardContent>
+              </Card>
+            </div>
 
-      {/* Projektablauf / Aufgaben */}
-      <Card className="mb-4">
-        <CardHeader className="gap-2">
-          <div className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Projektablauf</CardTitle>
-            <RueckfrageDialog projectId={id} employees={employees} />
+            {fullCustomer ? (
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="text-base">Kunde</CardTitle>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={`/kunden/${fullCustomer.id}`}>Kundenakte öffnen</Link>
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <Field label="Kundennr." value={fullCustomer.customer_nr ? String(fullCustomer.customer_nr) : "–"} />
+                    <Field label="Typ" value={fullCustomer.kind} />
+                    <Field
+                      label="Name"
+                      value={[fullCustomer.salutation, fullCustomer.academic_title, fullCustomer.first_name, fullCustomer.last_name].filter(Boolean).join(" ") || "–"}
+                    />
+                    <Field label="Firma" value={fullCustomer.company} />
+                    <Field label="Wohnort / Adresse" value={customerAddress} />
+                    <div>
+                      <dt className="text-muted-foreground text-xs">Telefon</dt>
+                      <dd className="text-sm">
+                        {fullCustomer.phone ? <a className="hover:underline" href={`tel:${fullCustomer.phone}`}>{fullCustomer.phone}</a> : "–"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground text-xs">Mobil</dt>
+                      <dd className="text-sm">
+                        {fullCustomer.mobile ? <a className="hover:underline" href={`tel:${fullCustomer.mobile}`}>{fullCustomer.mobile}</a> : "–"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground text-xs">E-Mail</dt>
+                      <dd className="text-sm">
+                        {fullCustomer.email ? <a className="hover:underline" href={`mailto:${fullCustomer.email}`}>{fullCustomer.email}</a> : "–"}
+                      </dd>
+                    </div>
+                  </dl>
+                  {fullCustomer.notes ? (
+                    <p className="text-muted-foreground mt-3 text-sm whitespace-pre-wrap">{fullCustomer.notes}</p>
+                  ) : null}
+                </CardContent>
+              </Card>
+            ) : null}
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-base">Stunden & Nachkalkulation</CardTitle>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href="/zeiterfassung">Stunden erfassen</Link>
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {refOffer ? (
+                  <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <Field label="Geleistete Stunden" value={`${formatNumber(istHours)} Std`} />
+                    <Field label="Ist-Arbeitskosten" value={formatCurrency(istLaborCost)} />
+                    <Field label="Plan-DB (Angebot)" value={formatCurrency(planDb)} />
+                    <Field
+                      label="Ist-DB (nach Lohn)"
+                      value={`${formatCurrency(istDb)} (${formatNumber(offNetto > 0 ? (istDb / offNetto) * 100 : 0, 1)} %)`}
+                    />
+                  </dl>
+                ) : (
+                  <p className="text-muted-foreground text-sm">
+                    {formatNumber(istHours)} Std erfasst. Für die Nachkalkulation ein Angebot anlegen (liefert Erlös & Material-EK).
+                  </p>
+                )}
+              </CardContent>
+            </Card>
           </div>
-          {tasks.length > 0 ? (
-            <ProgressBar
-              done={tasks.filter((t) => t.status === "erledigt").length}
-              total={tasks.length}
-              overdue={
-                tasks.filter(
-                  (t) =>
-                    t.status !== "erledigt" &&
-                    t.due_date != null &&
-                    t.due_date < new Date().toISOString().slice(0, 10),
-                ).length
-              }
-              showLabel
-            />
-          ) : null}
-        </CardHeader>
-        <CardContent>
-          <TaskList
-            projectId={id}
-            tasks={tasks}
-            employees={employees}
-            candidatesByTask={candidatesByTask}
-            predsByTask={predsByTask}
-            currentEmployeeId={me?.id ?? null}
-          />
-        </CardContent>
-      </Card>
-
-      {/* Aufmaß */}
-      <Card className="mb-4">
-        <CardHeader>
-          <CardTitle className="text-base">Aufmaß</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <AufmassCard projectId={id} measurements={measurements} />
-        </CardContent>
-      </Card>
-
-      {/* Bautagebuch */}
-      <Card className="mb-4">
-        <CardHeader>
-          <CardTitle className="text-base">Bautagebuch</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <SiteLogCard projectId={id} entries={siteLog} />
-        </CardContent>
-      </Card>
-
-      {/* Projekt-Dateien (Datenblätter, Handbücher, Pläne) */}
-      <Card className="mb-4">
-        <CardHeader>
-          <CardTitle className="text-base">Dateien</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ProjectFileDrop projectId={id} files={projectFiles} />
-        </CardContent>
-      </Card>
-
-      {/* Stunden & Nachkalkulation */}
-      <Card className="mb-4">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Stunden & Nachkalkulation</CardTitle>
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/zeiterfassung">Stunden erfassen</Link>
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {refOffer ? (
-            <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Field label="Geleistete Stunden" value={`${formatNumber(istHours)} Std`} />
-              <Field label="Ist-Arbeitskosten" value={formatCurrency(istLaborCost)} />
-              <Field label="Plan-DB (Angebot)" value={formatCurrency(planDb)} />
-              <Field
-                label="Ist-DB (nach Lohn)"
-                value={`${formatCurrency(istDb)} (${formatNumber(
-                  offNetto > 0 ? (istDb / offNetto) * 100 : 0,
-                  1,
-                )} %)`}
-              />
-            </dl>
-          ) : (
-            <p className="text-muted-foreground text-sm">
-              {formatNumber(istHours)} Std erfasst. Für die Nachkalkulation ein
-              Angebot anlegen (liefert Erlös & Material-EK).
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Folgedokumente: Auftragsbestätigungen, Lieferscheine & Rechnungen */}
-      {offers.length > 0 ||
-      auftraege.length > 0 ||
-      lieferscheine.length > 0 ||
-      rechnungen.length > 0 ? (
-        <div className="mb-4 grid gap-4 lg:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Aufträge</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {auftraege.length === 0 ? (
-                <p className="text-muted-foreground text-sm">
-                  Noch keine Auftragsbestätigung. Bei einem angenommenen Angebot
-                  oben „Auftragsbestätigung“ erstellen.
-                </p>
-              ) : (
-                <ul className="divide-y">
-                  {auftraege.map((d) => (
-                    <li
-                      key={d.id}
-                      className="flex items-center justify-between gap-2 py-2"
-                    >
-                      <Link
-                        href={`/auftrag/${d.id}`}
-                        className="text-sm font-medium hover:underline"
-                      >
-                        AB Nr. {d.doc_number ?? "–"}
-                      </Link>
-                      <div className="flex items-center gap-1">
-                        <Badge variant="outline">{d.status}</Badge>
-                        <InvoiceActions sourceId={d.id} />
-                        <form action={createDeliveryNote}>
-                          <input type="hidden" name="document_id" value={d.id} />
-                          <Button variant="ghost" size="sm" type="submit">
-                            Lieferschein
-                          </Button>
-                        </form>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Lieferscheine</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {lieferscheine.length === 0 ? (
-                <p className="text-muted-foreground text-sm">
-                  Noch keine Lieferscheine.
-                </p>
-              ) : (
-                <ul className="divide-y">
-                  {lieferscheine.map((d) => (
-                    <li
-                      key={d.id}
-                      className="flex items-center justify-between gap-2 py-2"
-                    >
-                      <Link
-                        href={`/lieferschein/${d.id}`}
-                        className="text-sm font-medium hover:underline"
-                      >
-                        LS Nr. {d.doc_number ?? "–"}
-                      </Link>
-                      <Badge variant="outline">{d.status}</Badge>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Rechnungen</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {rechnungen.length === 0 ? (
-                <p className="text-muted-foreground text-sm">
-                  Noch keine Rechnungen. Bei einer Auftragsbestätigung oben über
-                  „Rechnung“ eine Abschlags-, Schluss- oder Vollrechnung erstellen.
-                </p>
-              ) : (
-                <ul className="divide-y">
-                  {rechnungen.map((d) => {
-                    const overdue =
-                      d.payment_status !== "bezahlt" &&
-                      d.due_date != null &&
-                      d.due_date < new Date().toISOString().slice(0, 10);
-                    return (
-                      <li
-                        key={d.id}
-                        className="flex items-center justify-between gap-2 py-2"
-                      >
-                        <Link
-                          href={`/rechnung/${d.id}`}
-                          className="text-sm font-medium hover:underline"
-                        >
-                          {d.title ?? "Rechnung"} Nr. {d.doc_number ?? "–"}
+        }
+        kalkulation={
+          <div className="space-y-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-base">
+                  Kalkulationen <span className="text-muted-foreground font-normal">({variants.length})</span>
+                </CardTitle>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/kalkulation/${project.id}`}>Editor öffnen</Link>
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {variants.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">Noch keine Kalkulation.</p>
+                ) : (
+                  <ul className="divide-y">
+                    {variants.map((v) => (
+                      <li key={v.id} className="flex items-center justify-between gap-2 py-2">
+                        <Link href={`/kalkulation/${project.id}?calc=${v.id}`} className="text-sm font-medium hover:underline">
+                          {v.is_selected ? "★ " : ""}
+                          {v.name ?? "Variante"}
+                          <span className="text-muted-foreground ml-1 font-normal">
+                            {v.system_size_kwp ? `${formatNumber(v.system_size_kwp)} kWp` : ""}
+                            {v.storage_kwh ? ` / ${formatNumber(v.storage_kwh)} kWh` : ""}
+                          </span>
                         </Link>
-                        <Badge
-                          variant={
-                            d.payment_status === "bezahlt"
-                              ? "default"
-                              : overdue
-                                ? "destructive"
-                                : "outline"
-                          }
-                        >
-                          {d.payment_status === "bezahlt"
-                            ? "bezahlt"
-                            : overdue
-                              ? "überfällig"
-                              : "offen"}
-                        </Badge>
+                        <form action={createOfferFromCalculation}>
+                          <input type="hidden" name="calc_id" value={v.id} />
+                          <input type="hidden" name="project_id" value={project.id} />
+                          <Button variant="ghost" size="sm" type="submit">Angebot erstellen</Button>
+                        </form>
                       </li>
-                    );
-                  })}
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+
+            <div>
+              <h2 className="mb-3 text-lg font-semibold tracking-tight">Wirtschaftlichkeit</h2>
+              {wKwp <= 0 ? (
+                <p className="text-muted-foreground text-sm">
+                  Trage im Projekt die Anlagengröße (kWp) ein, um die Wirtschaftlichkeit zu berechnen.
+                </p>
+              ) : (
+                <>
+                  {wInvest <= 0 ? (
+                    <p className="border-warning/40 bg-warning/10 mb-3 rounded-md border p-3 text-sm">
+                      Noch keine Kalkulation — die Investition wird mit 0 € angesetzt. Lege oben eine Kalkulation an.
+                    </p>
+                  ) : null}
+                  <WirtschaftRechner kwp={wKwp} speicherKwh={wSpeicher} investBrutto={wInvest} defaults={wParams} />
+                </>
+              )}
+            </div>
+          </div>
+        }
+        angebot={
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">
+                Angebote <span className="text-muted-foreground font-normal">({offers.length})</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {offers.length === 0 ? (
+                <p className="text-muted-foreground text-sm">
+                  Noch keine Angebote. Im Tab „Kalkulation &amp; Wirtschaftlichkeit“ bei einer Variante anlegen.
+                </p>
+              ) : (
+                <ul className="divide-y">
+                  {offers.map((o) => (
+                    <li key={o.id} className="flex items-center justify-between gap-2 py-2">
+                      <Link href={`/angebot/${o.id}`} className="text-sm font-medium hover:underline">
+                        Nr. {o.offer_number ?? "–"} · {o.title ?? "Angebot"}
+                        <span className="text-muted-foreground ml-1 font-normal">
+                          {typeof o.totals?.brutto === "number" ? formatCurrency(o.totals.brutto) : ""}
+                        </span>
+                      </Link>
+                      <Badge variant={offerStatusVariant(o.status)}>{o.status}</Badge>
+                    </li>
+                  ))}
                 </ul>
               )}
             </CardContent>
           </Card>
-        </div>
-      ) : null}
+        }
+        belege={
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Aufträge (AB)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {auftraege.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">
+                    Noch keine Auftragsbestätigung. Aus einem angenommenen Angebot erstellen.
+                  </p>
+                ) : (
+                  <ul className="divide-y">
+                    {auftraege.map((d) => (
+                      <li key={d.id} className="flex items-center justify-between gap-2 py-2">
+                        <Link href={`/auftrag/${d.id}`} className="text-sm font-medium hover:underline">
+                          AB Nr. {d.doc_number ?? "–"}
+                        </Link>
+                        <div className="flex items-center gap-1">
+                          <Badge variant="outline">{d.status}</Badge>
+                          <InvoiceActions sourceId={d.id} />
+                          <form action={createDeliveryNote}>
+                            <input type="hidden" name="document_id" value={d.id} />
+                            <Button variant="ghost" size="sm" type="submit">Lieferschein</Button>
+                          </form>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
 
-      {fullCustomer ? (
-        <Card className="mb-4">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Kunde</CardTitle>
-            <Button variant="outline" size="sm" asChild>
-              <Link href={`/kunden/${fullCustomer.id}`}>Kundenakte öffnen</Link>
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Field
-                label="Kundennr."
-                value={
-                  fullCustomer.customer_nr
-                    ? String(fullCustomer.customer_nr)
-                    : "–"
-                }
-              />
-              <Field label="Typ" value={fullCustomer.kind} />
-              <Field
-                label="Name"
-                value={
-                  [
-                    fullCustomer.salutation,
-                    fullCustomer.academic_title,
-                    fullCustomer.first_name,
-                    fullCustomer.last_name,
-                  ]
-                    .filter(Boolean)
-                    .join(" ") || "–"
-                }
-              />
-              <Field label="Firma" value={fullCustomer.company} />
-              <Field label="Wohnort / Adresse" value={customerAddress} />
-              <div>
-                <dt className="text-muted-foreground text-xs">Telefon</dt>
-                <dd className="text-sm">
-                  {fullCustomer.phone ? (
-                    <a className="hover:underline" href={`tel:${fullCustomer.phone}`}>
-                      {fullCustomer.phone}
-                    </a>
-                  ) : (
-                    "–"
-                  )}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground text-xs">Mobil</dt>
-                <dd className="text-sm">
-                  {fullCustomer.mobile ? (
-                    <a className="hover:underline" href={`tel:${fullCustomer.mobile}`}>
-                      {fullCustomer.mobile}
-                    </a>
-                  ) : (
-                    "–"
-                  )}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground text-xs">E-Mail</dt>
-                <dd className="text-sm">
-                  {fullCustomer.email ? (
-                    <a
-                      className="hover:underline"
-                      href={`mailto:${fullCustomer.email}`}
-                    >
-                      {fullCustomer.email}
-                    </a>
-                  ) : (
-                    "–"
-                  )}
-                </dd>
-              </div>
-            </dl>
-            {fullCustomer.notes ? (
-              <p className="text-muted-foreground mt-3 text-sm whitespace-pre-wrap">
-                {fullCustomer.notes}
-              </p>
-            ) : null}
-          </CardContent>
-        </Card>
-      ) : null}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Lieferscheine</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {lieferscheine.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">Noch keine Lieferscheine.</p>
+                ) : (
+                  <ul className="divide-y">
+                    {lieferscheine.map((d) => (
+                      <li key={d.id} className="flex items-center justify-between gap-2 py-2">
+                        <Link href={`/lieferschein/${d.id}`} className="text-sm font-medium hover:underline">
+                          LS Nr. {d.doc_number ?? "–"}
+                        </Link>
+                        <Badge variant="outline">{d.status}</Badge>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-1">
-          <CardHeader>
-            <CardTitle className="text-base">Projektdaten</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <dl className="grid grid-cols-2 gap-3">
-              <Field
-                label="Kunde"
-                value={project.customer ? customerName(project.customer) : "–"}
-              />
-              <Field label="Status" value={project.status} />
-              <Field label="Anlagentyp" value={project.project_type ?? "–"} />
-              <Field
-                label="Anlagengröße"
-                value={
-                  project.system_size_kwp
-                    ? `${formatNumber(project.system_size_kwp)} kWp`
-                    : "–"
-                }
-              />
-              <Field
-                label="Speicher"
-                value={
-                  project.storage_kwh
-                    ? `${formatNumber(project.storage_kwh)} kWh`
-                    : "–"
-                }
-              />
-              <Field label="Montageort" value={address} />
-            </dl>
-            {project.customer ? (
-              <Button variant="link" className="mt-2 h-auto p-0" asChild>
-                <Link href={`/kunden/${project.customer.id}`}>
-                  Zum Kunden →
-                </Link>
-              </Button>
-            ) : null}
-            {project.notes ? (
-              <p className="text-muted-foreground mt-4 text-sm whitespace-pre-wrap">
-                {project.notes}
-              </p>
-            ) : null}
-            {project.lat != null && project.lon != null ? (
-              <div className="mt-4">
-                <LocationMap
-                  lat={project.lat}
-                  lon={project.lon}
-                  label={address || project.title || "Montageort"}
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle className="text-base">Rechnungen</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {rechnungen.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">
+                    Noch keine Rechnungen. Aus einer Auftragsbestätigung eine Abschlags-, Schluss- oder Vollrechnung erstellen.
+                  </p>
+                ) : (
+                  <ul className="divide-y">
+                    {rechnungen.map((d) => {
+                      const overdue =
+                        d.payment_status !== "bezahlt" &&
+                        d.due_date != null &&
+                        d.due_date < new Date().toISOString().slice(0, 10);
+                      return (
+                        <li key={d.id} className="flex items-center justify-between gap-2 py-2">
+                          <Link href={`/rechnung/${d.id}`} className="text-sm font-medium hover:underline">
+                            {d.title ?? "Rechnung"} Nr. {d.doc_number ?? "–"}
+                          </Link>
+                          <Badge variant={d.payment_status === "bezahlt" ? "default" : overdue ? "destructive" : "outline"}>
+                            {d.payment_status === "bezahlt" ? "bezahlt" : overdue ? "überfällig" : "offen"}
+                          </Badge>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        }
+        ablauf={
+          <Card>
+            <CardHeader className="gap-2">
+              <div className="flex flex-row items-center justify-between">
+                <CardTitle className="text-base">Projektablauf</CardTitle>
+                <RueckfrageDialog projectId={id} employees={employees} />
+              </div>
+              {tasks.length > 0 ? (
+                <ProgressBar
+                  done={tasks.filter((t) => t.status === "erledigt").length}
+                  total={tasks.length}
+                  overdue={tasks.filter((t) => t.status !== "erledigt" && t.due_date != null && t.due_date < new Date().toISOString().slice(0, 10)).length}
+                  showLabel
                 />
-              </div>
-            ) : address ? (
-              <p className="text-muted-foreground mt-4 text-xs">
-                Keine Koordinaten — Projekt mit Adresse speichern, um die Karte zu
-                laden.{" "}
-                <a
-                  className="underline"
-                  href={`https://www.openstreetmap.org/search?query=${encodeURIComponent(address)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Auf OpenStreetMap suchen
-                </a>
-              </p>
-            ) : null}
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base">Logbuch</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <AddProjectActivityForm
-              projectId={project.id}
-              customerId={project.customer_id}
-            />
-            <ActivityTimeline activities={activities} />
-          </CardContent>
-        </Card>
-      </div>
+              ) : null}
+            </CardHeader>
+            <CardContent>
+              <TaskList
+                projectId={id}
+                tasks={tasks}
+                employees={employees}
+                candidatesByTask={candidatesByTask}
+                predsByTask={predsByTask}
+                currentEmployeeId={me?.id ?? null}
+              />
+            </CardContent>
+          </Card>
+        }
+        dateien={
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Dateien & Dokumente</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ProjectFileDrop projectId={id} files={projectFiles} />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Aufmaß</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <AufmassCard projectId={id} measurements={measurements} />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Bautagebuch</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <SiteLogCard projectId={id} entries={siteLog} />
+              </CardContent>
+            </Card>
+          </div>
+        }
+      />
     </div>
   );
 }
