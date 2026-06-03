@@ -11,12 +11,15 @@ import {
   MessageSquare,
   Target,
   FileText,
+  Eye,
 } from "lucide-react";
+import type { Employee } from "@/lib/types";
 
 import { PageHeader } from "@/components/shared/page-header";
 import { SupabaseNotice } from "@/components/shared/supabase-notice";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { getProjects, getMyLeads } from "@/lib/data/projects";
 import { getProducts } from "@/lib/data/products";
 import { getCustomers } from "@/lib/data/customers";
@@ -25,12 +28,17 @@ import { GlobalFileDrop } from "@/components/shared/global-file-drop";
 import { MyTasksPanel } from "@/components/shared/my-tasks-panel";
 import { TeamViewSelect } from "@/components/dashboard/team-view-select";
 import { getAdminStats } from "@/lib/data/stats";
-import { getMyOpenTasks } from "@/lib/data/workflow";
+import {
+  getMyOpenTasks,
+  getEmployeesTaskLoad,
+  type EmployeeTaskLoad,
+} from "@/lib/data/workflow";
 import { getSalesEmployees } from "@/lib/data/employees";
 import { LeadIntakeDialog } from "@/components/vertrieb/lead-intake-dialog";
 import { getInbox, getOverdueTasks, type InboxItem } from "@/lib/data/notifications";
 import { listUpcomingEvents } from "@/lib/google/calendar";
 import { getCurrentEmployee } from "@/lib/supabase/auth";
+import { isAiConfigured } from "@/lib/ai/openai";
 import { GlobalSearch } from "@/components/shared/global-search";
 import { customerName, formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import { statusVariant } from "@/lib/constants";
@@ -137,18 +145,22 @@ export default async function DashboardPage({
       ) : (
         <>
           <div className="mb-4">
-            <GlobalSearch variant="dashboard" />
+            <GlobalSearch variant="dashboard" aiEnabled={isAiConfigured()} />
           </div>
           <Card className="mb-4">
             <CardHeader>
               <CardTitle className="text-base">Dateien ablegen</CardTitle>
             </CardHeader>
             <CardContent>
-              <GlobalFileDrop projects={projectOptions} products={dropProducts} />
+              <GlobalFileDrop
+                projects={projectOptions}
+                products={dropProducts}
+                aiEnabled={isAiConfigured()}
+              />
             </CardContent>
           </Card>
           {isAdmin ? (
-            <AdminDashboard />
+            <AdminDashboard meId={me?.id ?? null} />
           ) : me?.is_sales ? (
             <SalesDashboard employeeId={me.id} />
           ) : (
@@ -245,18 +257,23 @@ async function SalesDashboard({
   );
 }
 
-async function AdminDashboard() {
-  const [projects, customers, stats, overdue] = await Promise.all([
+async function AdminDashboard({ meId }: { meId: string | null }) {
+  const [projects, customers, stats, overdue, employees, taskLoad] = await Promise.all([
     getProjects(),
     getCustomers(),
     getAdminStats(),
     getOverdueTasks(),
+    getEmployees(),
+    getEmployeesTaskLoad(),
   ]);
   const recent = projects.slice(0, 6);
   const maxRevenue = Math.max(1, ...stats.months.map((m) => m.revenue));
+  const team = employees.filter((e) => e.active && e.id !== meId);
 
   return (
     <>
+      <TeamCard team={team} taskLoad={taskLoad} />
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Kpi
           label="Umsatz (angenommen)"
@@ -437,6 +454,80 @@ async function EmployeeDashboard({
         ) : null}
       </div>
     </>
+  );
+}
+
+function initials(name: string | null, email: string | null): string {
+  const base = (name ?? email ?? "?").trim();
+  const parts = base.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return base.slice(0, 2).toUpperCase();
+}
+
+/**
+ * Team-Übersicht (nur Admin): alle aktiven Mitarbeiter mit ihrer Aufgaben-
+ * last und einem Sprung in die read-only „Sicht ansehen". Ersetzt das früher
+ * leicht übersehene Dropdown im Header.
+ */
+function TeamCard({
+  team,
+  taskLoad,
+}: {
+  team: Employee[];
+  taskLoad: Record<string, EmployeeTaskLoad>;
+}) {
+  return (
+    <Card className="mb-4">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Users className="size-4" /> Team
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {team.length === 0 ? (
+          <p className="text-muted-foreground text-sm">
+            Noch keine weiteren aktiven Mitarbeiter. Lege unter{" "}
+            <Link href="/mitarbeiter" className="text-primary hover:underline">
+              Mitarbeiter
+            </Link>{" "}
+            Kollegen an, um ihre Sicht und Aufgaben einsehen zu können.
+          </p>
+        ) : (
+          <ul className="grid gap-2 sm:grid-cols-2">
+            {team.map((e) => {
+              const load = taskLoad[e.id] ?? { open: 0, overdue: 0 };
+              return (
+                <li
+                  key={e.id}
+                  className="flex items-center gap-3 rounded-lg border p-2.5"
+                >
+                  <span className="bg-primary/10 text-primary flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
+                    {initials(e.name, e.email)}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">
+                      {e.name ?? e.email ?? "Mitarbeiter"}
+                    </p>
+                    <p className="text-muted-foreground text-xs">
+                      {e.role === "admin" ? "Admin" : "Mitarbeiter"}
+                      {e.is_sales ? " · Vertrieb" : ""} · {load.open} offen
+                      {load.overdue > 0 ? (
+                        <span className="text-destructive"> · {load.overdue} überfällig</span>
+                      ) : null}
+                    </p>
+                  </div>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={`/dashboard?as=${e.id}`}>
+                      <Eye className="size-4" /> Sicht ansehen
+                    </Link>
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

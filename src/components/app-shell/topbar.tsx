@@ -13,7 +13,13 @@ import { QuickTaskButton } from "@/components/shared/quick-task-button";
 import { NotificationBell } from "@/components/app-shell/notification-bell";
 
 /** Topbar: mobiles Menü, Zurück, Breadcrumb, Theme-Toggle, „Neues Projekt". */
-export function Topbar({ logoUrl }: { logoUrl?: string | null }) {
+export function Topbar({
+  logoUrl,
+  aiEnabled = false,
+}: {
+  logoUrl?: string | null;
+  aiEnabled?: boolean;
+}) {
   const router = useRouter();
 
   return (
@@ -33,7 +39,7 @@ export function Topbar({ logoUrl }: { logoUrl?: string | null }) {
       </Button>
       <Breadcrumb />
       <div className="flex-1" />
-      <GlobalSearch />
+      <GlobalSearch aiEnabled={aiEnabled} />
       <QuickTaskButton />
       <NotificationBell />
       <ThemeToggle />

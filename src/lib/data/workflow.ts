@@ -192,6 +192,37 @@ export async function getProjectsProgress(
   return out;
 }
 
+export interface EmployeeTaskLoad {
+  open: number;
+  overdue: number;
+}
+
+/**
+ * Offene/überfällige Aufgaben je Mitarbeiter — eine gebündelte Abfrage
+ * für die Team-Übersicht im Admin-Dashboard.
+ */
+export async function getEmployeesTaskLoad(): Promise<Record<string, EmployeeTaskLoad>> {
+  const out: Record<string, EmployeeTaskLoad> = {};
+  if (!isSupabaseConfigured()) return out;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("project_tasks")
+    .select("assignee_employee_id, status, due_date")
+    .eq("status", "offen");
+  if (error) {
+    console.error("getEmployeesTaskLoad:", error.message);
+    return out;
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  for (const t of data ?? []) {
+    if (!t.assignee_employee_id) continue;
+    const e = (out[t.assignee_employee_id] ??= { open: 0, overdue: 0 });
+    e.open += 1;
+    if (t.due_date && t.due_date < today) e.overdue += 1;
+  }
+  return out;
+}
+
 /** Offene Aufgaben des aktuellen Mitarbeiters (für das Dashboard). */
 export async function getMyOpenTasks(
   employeeId: string,

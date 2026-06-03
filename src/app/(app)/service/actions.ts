@@ -105,6 +105,8 @@ export async function registerServiceFile(input: {
   mime: string | null;
   size: number | null;
   asCover?: boolean;
+  /** Extrahierter PDF-Text für die Inhaltssuche (optional). */
+  textContent?: string | null;
 }): Promise<ActionResult> {
   const guard = ensureConfigured();
   if (guard) return guard;
@@ -117,6 +119,7 @@ export async function registerServiceFile(input: {
     storage_path: input.storagePath,
     mime: input.mime,
     size: input.size,
+    text_content: input.textContent ?? null,
     uploaded_by: me?.id ?? null,
   });
   if (error) return fail(error.message);

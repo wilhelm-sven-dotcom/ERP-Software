@@ -312,6 +312,8 @@ export async function registerProductAsset(input: {
   name: string;
   storagePath: string;
   mime: string | null;
+  /** Extrahierter PDF-Text für die Inhaltssuche (optional, v. a. Datenblätter). */
+  textContent?: string | null;
 }): Promise<ActionResult> {
   const guard = ensureConfigured();
   if (guard) return guard;
@@ -324,6 +326,7 @@ export async function registerProductAsset(input: {
     name: input.name,
     storage_path: input.storagePath,
     mime: input.mime,
+    text_content: input.textContent ?? null,
   });
   if (error) return fail(error.message);
 

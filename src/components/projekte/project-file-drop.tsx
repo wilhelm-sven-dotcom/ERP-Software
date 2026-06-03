@@ -11,6 +11,7 @@ import {
   registerProjectFile,
   deleteProjectFile,
 } from "@/app/(app)/projekte/actions";
+import { extractTextFromPdf } from "@/lib/pdf/extract-images";
 import { cn } from "@/lib/utils";
 import type { ProjectFile } from "@/lib/types";
 
@@ -44,12 +45,23 @@ export function ProjectFileDrop({
         toast.error(`Upload fehlgeschlagen: ${error.message}`);
         continue;
       }
+      // PDF-Volltext für die Inhaltssuche ablegen (best-effort).
+      const isPdf = /pdf$/i.test(file.type) || /\.pdf$/i.test(file.name);
+      let text: string | null = null;
+      if (isPdf) {
+        try {
+          text = await extractTextFromPdf(file);
+        } catch {
+          text = null;
+        }
+      }
       const res = await registerProjectFile({
         projectId,
         name: file.name,
         storagePath: path,
         mime: file.type || null,
         size: file.size,
+        textContent: text,
       });
       if (res.ok) ok += 1;
     }

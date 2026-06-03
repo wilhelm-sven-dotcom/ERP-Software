@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { createClient } from "@/lib/supabase/client";
 import { registerProductAsset } from "@/app/(app)/produkte/actions";
+import { extractTextFromPdf } from "@/lib/pdf/extract-images";
 import { rankProductsForFilename } from "@/lib/asset-match";
 import type { Product } from "@/lib/types";
 
@@ -103,12 +104,21 @@ export function BulkAssetDialog({
           update(r.id, { status: "error" });
           continue;
         }
+        let text: string | null = null;
+        if (r.kind === "datasheet" && /\.pdf$/i.test(r.file.name)) {
+          try {
+            text = await extractTextFromPdf(r.file);
+          } catch {
+            text = null;
+          }
+        }
         const res = await registerProductAsset({
           productId: r.productId,
           kind: r.kind,
           name: r.file.name,
           storagePath: path,
           mime: r.file.type || null,
+          textContent: text,
         });
         update(r.id, { status: res.ok ? "done" : "error" });
         if (res.ok) ok += 1;

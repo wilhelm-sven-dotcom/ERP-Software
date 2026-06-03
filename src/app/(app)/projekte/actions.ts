@@ -198,6 +198,10 @@ export async function registerProjectFile(input: {
   mime: string | null;
   size: number | null;
   kind?: string;
+  /** Extrahierter PDF-Text für die Inhaltssuche (optional). */
+  textContent?: string | null;
+  /** KI-interpretierte Beleg-Felder (Lieferant, Betrag, Datum …). */
+  docMeta?: Record<string, unknown> | null;
 }): Promise<ActionResult> {
   const guard = ensureConfigured();
   if (guard) return guard;
@@ -211,6 +215,8 @@ export async function registerProjectFile(input: {
     mime: input.mime,
     size: input.size,
     kind: input.kind ?? "dokument",
+    text_content: input.textContent ?? null,
+    doc_meta: input.docMeta ?? null,
     uploaded_by: me?.id ?? null,
   });
   if (error) return fail(error.message);

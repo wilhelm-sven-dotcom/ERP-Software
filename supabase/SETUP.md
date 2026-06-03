@@ -124,3 +124,27 @@ Jeder Mitarbeiter verbindet seinen eigenen Google-Kalender; gelesen wird nur
 
 Hinweis: Bei vielen externen Nutzern verlangt Google ggf. eine App-Prüfung;
 für den internen Gebrauch genügen Testnutzer bzw. der App-Typ „intern".
+
+## ChatGPT / OpenAI (intelligente Suche, Assistent, KI-Dateiablage)
+
+Optional. Ohne `OPENAI_API_KEY` ist die KI schlicht aus — Suche und Datei-Ablage
+funktionieren wie bisher. Mit Key:
+
+- In der globalen Suche (⌘K) und im Dashboard-Suchfeld liefert **Enter** eine
+  interpretierte Antwort auf Deutsch und hebt die relevanten Treffer hervor;
+  freie/allgemeine Fragen sind möglich.
+- Hochgeladene PDFs werden im Volltext durchsuchbar (Datenblätter, Dokumente,
+  Service-Anhänge) — dafür einmalig die Migration `20260603000100_file_text.sql`
+  im SQL-Editor ausführen.
+- Beim Reinziehen von Dateien schlägt die KI Ziel + Ablage-Art vor und liest bei
+  Rechnungen/Dokumenten Lieferant, Nummer, Datum, Fälligkeit und Betrag aus
+  (Vorschlag + 1-Klick bestätigen).
+
+1. OpenAI-Konto + API-Key erstellen (platform.openai.com → API keys).
+2. In Vercel/`.env.local` setzen: `OPENAI_API_KEY` (optional `OPENAI_MODEL`,
+   Default `gpt-4o-mini`).
+3. Migration `20260603000100_file_text.sql` ausführen (Volltext + Beleg-Metadaten).
+
+Hinweis (Kosten/DSGVO): Pro Anfrage entstehen geringe Kosten (Cent-Bereich);
+knappe Treffer- bzw. Dokumentdaten werden an OpenAI übermittelt. Für strengere
+Anforderungen kommt später z. B. Azure-OpenAI (EU) infrage.

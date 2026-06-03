@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 export interface SearchHit {
-  type: "Kunde" | "Projekt" | "Angebot" | "Produkt" | "Mitarbeiter";
+  type: "Kunde" | "Projekt" | "Angebot" | "Produkt" | "Mitarbeiter" | "Datei";
   id: string;
   label: string;
   sub?: string;
@@ -17,6 +17,7 @@ export interface SearchResults {
   offers: SearchHit[];
   products: SearchHit[];
   employees: SearchHit[];
+  files: SearchHit[];
 }
 
 const EMPTY: SearchResults = {
@@ -25,6 +26,7 @@ const EMPTY: SearchResults = {
   offers: [],
   products: [],
   employees: [],
+  files: [],
 };
 
 /** Für das or()-Filter unsichere Zeichen entfernen. */
@@ -43,7 +45,7 @@ export async function searchAll(query: string): Promise<SearchResults> {
   const like = `%${q}%`;
   const numeric = /^\d+$/.test(q) ? Number(q) : null;
 
-  const [customers, projects, offers, products, employees] = await Promise.all([
+  const [customers, projects, offers, products, employees, projectFiles, productAssets, serviceFiles] = await Promise.all([
     supabase
       .from("customers")
       .select("id, customer_nr, first_name, last_name, company, city")
@@ -75,7 +77,26 @@ export async function searchAll(query: string): Promise<SearchResults> {
       .select("id, name, email")
       .or(`name.ilike.${like},email.ilike.${like}`)
       .limit(5),
+    // Dateien: nach Dateiname UND extrahiertem Inhalt (text_content) suchen.
+    supabase
+      .from("project_files")
+      .select("id, name, kind, project:projects(id, title)")
+      .or(`name.ilike.${like},text_content.ilike.${like}`)
+      .limit(6),
+    supabase
+      .from("product_assets")
+      .select("id, name, kind, product:products(id, name)")
+      .or(`name.ilike.${like},text_content.ilike.${like}`)
+      .limit(6),
+    supabase
+      .from("service_ticket_files")
+      .select("id, name, ticket:service_tickets(id, title)")
+      .or(`name.ilike.${like},text_content.ilike.${like}`)
+      .limit(4),
   ]);
+
+  type Rel<T> = T | T[] | null;
+  const one = <T,>(r: Rel<T>): T | null => (Array.isArray(r) ? (r[0] ?? null) : r);
 
   return {
     customers: (customers.data ?? []).map((c) => ({
@@ -118,5 +139,37 @@ export async function searchAll(query: string): Promise<SearchResults> {
       sub: e.email ?? "",
       href: `/mitarbeiter`,
     })),
+    files: [
+      ...(projectFiles.data ?? []).map((f) => {
+        const project = one(f.project as Rel<{ id: string; title: string | null }>);
+        return {
+          type: "Datei" as const,
+          id: f.id,
+          label: f.name,
+          sub: [project?.title ?? "Projekt", f.kind].filter(Boolean).join(" · "),
+          href: project ? `/projekte/${project.id}` : "/projekte",
+        };
+      }),
+      ...(productAssets.data ?? []).map((f) => {
+        const product = one(f.product as Rel<{ id: string; name: string | null }>);
+        return {
+          type: "Datei" as const,
+          id: f.id,
+          label: f.name,
+          sub: [product?.name ?? "Produkt", f.kind].filter(Boolean).join(" · "),
+          href: `/produkte`,
+        };
+      }),
+      ...(serviceFiles.data ?? []).map((f) => {
+        const ticket = one(f.ticket as Rel<{ id: string; title: string | null }>);
+        return {
+          type: "Datei" as const,
+          id: f.id,
+          label: f.name,
+          sub: ["Service", ticket?.title ?? "Ticket"].filter(Boolean).join(" · "),
+          href: `/service`,
+        };
+      }),
+    ],
   };
 }

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Upload, Check, X, Search, Images } from "lucide-react";
+import { Upload, Check, X, Search, Images, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,15 @@ const PRODUCT_BUCKET = "product-assets";
 const PROJECT_KINDS = ["dokument", "datenblatt", "plan", "foto", "rechnung", "sonstiges"];
 
 type Target = "produkt" | "projekt";
+type DocMeta = {
+  docType?: string;
+  supplier?: string;
+  invoice_number?: string;
+  invoice_date?: string;
+  due_date?: string;
+  amount?: number | string;
+  currency?: string;
+};
 type Row = {
   uid: string;
   file: File;
@@ -46,6 +55,14 @@ type Row = {
   extractDone: boolean;
   detecting: boolean;
   textMatchCount: number;
+  /** Extrahierter PDF-Volltext (für Inhaltssuche + KI). */
+  text: string;
+  /** KI-Verarbeitung läuft. */
+  aiBusy: boolean;
+  /** Kurze KI-Begründung der Zuordnung. */
+  aiReason: string;
+  /** KI-interpretierte Beleg-Felder (Rechnung/Dokument). */
+  docMeta: DocMeta | null;
   done: boolean;
   busy: boolean;
 };
@@ -55,9 +72,11 @@ let seq = 0;
 export function GlobalFileDrop({
   projects,
   products,
+  aiEnabled = false,
 }: {
   projects: { id: string; title: string }[];
   products: Product[];
+  aiEnabled?: boolean;
 }) {
   const router = useRouter();
   const [rows, setRows] = React.useState<Row[]>([]);
@@ -91,40 +110,118 @@ export function GlobalFileDrop({
         extractDone: false,
         detecting: false,
         textMatchCount: 0,
+        text: "",
+        aiBusy: false,
+        aiReason: "",
+        docMeta: null,
         done: false,
         busy: false,
       };
     });
     setRows((r) => [...r, ...next]);
-    // PDFs: Produkte aus dem Datenblatt-Text erkennen und vormarkieren.
+    // PDFs: Text auslesen (für Suche), Produkte erkennen, dann KI-Vorschlag.
     for (const row of next) {
       if (row.isPdf) void detectProductsFromText(row.uid, row.file);
+      else if (aiEnabled) void runAiSuggest(row.uid, row.file, "");
     }
   }
 
   async function detectProductsFromText(uid: string, file: File) {
     patch(uid, { detecting: true });
+    let text = "";
     try {
-      const text = await extractTextFromPdf(file);
+      text = await extractTextFromPdf(file);
       const matched = matchProductsInText(text, products);
       setRows((r) =>
         r.map((x) => {
           if (x.uid !== uid) return x;
-          if (matched.length === 0) return { ...x, detecting: false };
+          const base = { ...x, text, detecting: false };
+          if (matched.length === 0) return base;
           const suggestedIds = Array.from(new Set([...x.suggestedIds, ...matched]));
           const productIds = Array.from(new Set([...x.productIds, ...matched]));
           return {
-            ...x,
+            ...base,
             target: "produkt",
             suggestedIds,
             productIds,
             textMatchCount: matched.length,
-            detecting: false,
           };
         }),
       );
     } catch {
       patch(uid, { detecting: false });
+    }
+    // Nach der Textanalyse die KI um einen Zuordnungs-/Beleg-Vorschlag bitten.
+    if (aiEnabled) void runAiSuggest(uid, file, text);
+  }
+
+  /** KI fragen, wohin die Datei gehört + Beleg-Felder interpretieren. */
+  async function runAiSuggest(uid: string, file: File, text: string) {
+    patch(uid, { aiBusy: true });
+    try {
+      const res = await fetch("/api/files/classify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileName: file.name,
+          text,
+          projects,
+          products: products.map((p) => ({
+            id: p.id,
+            name: p.name,
+            sku: p.sku,
+            manufacturer: p.manufacturer,
+          })),
+        }),
+      });
+      const data = (await res.json()) as {
+        enabled?: boolean;
+        result?: {
+          target: Target;
+          productIds: string[];
+          projectId: string | null;
+          kind: string;
+          confidence: number;
+          reason: string;
+          document?: DocMeta | null;
+        } | null;
+      };
+      const r = data.result;
+      if (!r) {
+        patch(uid, { aiBusy: false });
+        return;
+      }
+      const validProductIds = r.productIds.filter((id) => productById.has(id));
+      const validProjectId = projects.some((p) => p.id === r.projectId) ? r.projectId! : "";
+      setRows((rows) =>
+        rows.map((x) => {
+          if (x.uid !== uid) return x;
+          if (r.target === "produkt") {
+            return {
+              ...x,
+              target: "produkt",
+              aiBusy: false,
+              aiReason: r.reason,
+              productIds:
+                validProductIds.length > 0 ? validProductIds : x.productIds,
+              suggestedIds: Array.from(new Set([...x.suggestedIds, ...validProductIds])),
+              kind: r.kind === "image" ? "image" : "datasheet",
+              docMeta: r.document ?? null,
+            };
+          }
+          return {
+            ...x,
+            target: "projekt",
+            aiBusy: false,
+            aiReason: r.reason,
+            projectId: validProjectId || x.projectId,
+            kind: PROJECT_KINDS.includes(r.kind) ? r.kind : x.kind,
+            docMeta: r.document ?? null,
+          };
+        }),
+      );
+    } catch {
+      patch(uid, { aiBusy: false });
     }
   }
 
@@ -214,6 +311,7 @@ export function GlobalFileDrop({
           name: row.file.name,
           storagePath: path,
           mime: row.file.type || null,
+          textContent: row.kind === "image" ? null : row.text || null,
         });
         if (res.ok) ok += 1;
       }
@@ -263,6 +361,8 @@ export function GlobalFileDrop({
         mime: row.file.type || null,
         size: row.file.size,
         kind: row.kind,
+        textContent: row.text || null,
+        docMeta: row.docMeta ?? null,
       });
       if (!res.ok) {
         toast.error(res.error ?? "Konnte nicht zuordnen.");
@@ -330,6 +430,18 @@ export function GlobalFileDrop({
                 <SelectItem value="projekt">Projekt</SelectItem>
               </SelectContent>
             </Select>
+            {aiEnabled && !row.done ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={row.aiBusy}
+                title="KI-Vorschlag für Ablage & Beleg-Felder"
+                onClick={() => runAiSuggest(row.uid, row.file, row.text)}
+              >
+                <Sparkles className="size-4" />
+                {row.aiBusy ? "…" : "KI-Vorschlag"}
+              </Button>
+            ) : null}
             {row.done ? (
               <span className="text-success inline-flex items-center gap-1 text-xs">
                 <Check className="size-4" /> abgelegt
@@ -353,6 +465,30 @@ export function GlobalFileDrop({
               <X className="size-4" />
             </Button>
           </div>
+
+          {!row.done && (row.aiBusy || row.aiReason || row.docMeta) ? (
+            <div className="border-primary/30 bg-primary/5 mt-2 rounded-md border p-2 text-xs">
+              <p className="text-primary flex items-center gap-1 font-medium">
+                <Sparkles className="size-3" />
+                {row.aiBusy ? "KI analysiert die Datei …" : "KI-Vorschlag"}
+              </p>
+              {row.aiReason ? <p className="mt-1">{row.aiReason}</p> : null}
+              {row.docMeta ? (
+                <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-muted-foreground">
+                  {row.docMeta.docType ? <span>Art: {row.docMeta.docType}</span> : null}
+                  {row.docMeta.supplier ? <span>Lieferant: {row.docMeta.supplier}</span> : null}
+                  {row.docMeta.invoice_number ? <span>Nr.: {row.docMeta.invoice_number}</span> : null}
+                  {row.docMeta.invoice_date ? <span>Datum: {row.docMeta.invoice_date}</span> : null}
+                  {row.docMeta.due_date ? <span>Fällig: {row.docMeta.due_date}</span> : null}
+                  {row.docMeta.amount != null && row.docMeta.amount !== "" ? (
+                    <span>
+                      Betrag: {row.docMeta.amount} {row.docMeta.currency ?? ""}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           {row.done ? null : row.target === "produkt" ? (
             <>

@@ -34,6 +34,7 @@ import {
   deleteServiceFile,
   fetchServiceTicketDetail,
 } from "@/app/(app)/service/actions";
+import { extractTextFromPdf } from "@/lib/pdf/extract-images";
 import { SERVICE_STATUSES } from "@/lib/constants";
 import { formatDate } from "@/lib/format";
 import { type ActionResult } from "@/lib/actions";
@@ -94,6 +95,14 @@ export function ServiceCardDialog({
         toast.error(`Upload: ${error.message}`);
         continue;
       }
+      let text: string | null = null;
+      if (/pdf$/i.test(file.type) || /\.pdf$/i.test(file.name)) {
+        try {
+          text = await extractTextFromPdf(file);
+        } catch {
+          text = null;
+        }
+      }
       await registerServiceFile({
         ticketId: ticket.id,
         name: file.name,
@@ -101,6 +110,7 @@ export function ServiceCardDialog({
         mime: file.type || null,
         size: file.size,
         asCover: asCover && /^image\//.test(file.type),
+        textContent: text,
       });
     }
     setBusy(false);
