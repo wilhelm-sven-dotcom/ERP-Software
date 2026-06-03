@@ -59,6 +59,7 @@ export const ASSISTANT_TOOLS: ChatTool[] = [
   fn("list_products", "Produktkatalog (optional gefiltert), mit Hersteller/Preis.", obj({ query: str("Optionaler Filter (Name, Hersteller, Artikelnr.)") })),
   fn("list_employees", "Aktive Mitarbeiter mit Name und Rolle (für Zuweisungen).", obj({})),
   fn("my_overview", "Eigener Überblick des angemeldeten Nutzers: Posteingang + offene Aufgaben.", obj({})),
+  fn("document_search", "Durchsucht den INHALT hochgeladener Dokumente (Datenblätter, Rechnungen, Pläne) per Stichwort und liefert Textausschnitte. Nutze dies, um Fragen aus Dokumentinhalten zu beantworten (z. B. Wirkungsgrad aus einem Datenblatt).", obj({ query: str("Suchbegriff für den Dokumentinhalt") }, ["query"])),
 
   // ---- AKTIONS-Werkzeuge (Vorschlag → Bestätigung) ----
   fn("propose_task", "Schlägt vor, einem/mehreren Kollegen eine Aufgabe/Rückfrage zu stellen. Wird erst nach Bestätigung angelegt.", obj({
@@ -239,6 +240,31 @@ export async function runReadTool(
       case "list_employees": {
         const e = await getEmployees();
         return JSON.stringify(e.filter((x) => x.active).map((x) => ({ id: x.id, name: x.name ?? x.email, rolle: x.role, vertrieb: Boolean(x.is_sales) })));
+      }
+      case "document_search": {
+        const q = String(args.query ?? "").trim();
+        if (q.length < 2) return JSON.stringify({ treffer: [] });
+        const supabase = await createClient();
+        const like = `%${q}%`;
+        const [pf, pa, sf] = await Promise.all([
+          supabase.from("project_files").select("name, text_content, project:projects(title)").ilike("text_content", like).limit(6),
+          supabase.from("product_assets").select("name, text_content, product:products(name)").ilike("text_content", like).limit(6),
+          supabase.from("service_ticket_files").select("name, text_content, ticket:service_tickets(title)").ilike("text_content", like).limit(4),
+        ]);
+        const snippet = (text: string | null): string => {
+          if (!text) return "";
+          const i = text.toLowerCase().indexOf(q.toLowerCase());
+          const start = Math.max(0, i - 120);
+          return (start > 0 ? "…" : "") + text.slice(start, start + 320).trim() + "…";
+        };
+        type Rel<T> = T | T[] | null;
+        const first = <T,>(r: Rel<T>): T | null => (Array.isArray(r) ? (r[0] ?? null) : r);
+        const treffer = [
+          ...(pf.data ?? []).map((f) => ({ datei: f.name, gehoert_zu: first(f.project as Rel<{ title: string | null }>)?.title ?? "Projekt", auszug: snippet(f.text_content) })),
+          ...(pa.data ?? []).map((f) => ({ datei: f.name, gehoert_zu: first(f.product as Rel<{ name: string | null }>)?.name ?? "Produkt", auszug: snippet(f.text_content) })),
+          ...(sf.data ?? []).map((f) => ({ datei: f.name, gehoert_zu: first(f.ticket as Rel<{ title: string | null }>)?.title ?? "Service", auszug: snippet(f.text_content) })),
+        ];
+        return JSON.stringify({ anzahl: treffer.length, treffer });
       }
       case "my_overview": {
         if (!me?.id) return JSON.stringify({ hinweis: "Kein angemeldeter Mitarbeiter." });

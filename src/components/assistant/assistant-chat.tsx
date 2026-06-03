@@ -260,6 +260,17 @@ export function AssistantChat({
               Was steht als Nächstes an{firstName ? `, ${firstName}` : ""}?
             </h1>
             <div className="w-full max-w-2xl">{inputBar}</div>
+            <button
+              type="button"
+              onClick={() =>
+                void ask(
+                  "Fasse zusammen, was heute für mich ansteht: überfällige Aufgaben, mir angebotene Aufgaben, offene Leads, überfällige Rechnungen und fällige Wartungen. Gib mir eine kurze, priorisierte To-do-Liste.",
+                )
+              }
+              className="text-primary hover:bg-primary/10 mt-3 inline-flex items-center gap-1.5 rounded-full border border-primary/40 px-3.5 py-1.5 text-sm font-medium"
+            >
+              <Sparkles className="size-4" /> Mein Tag — was steht an?
+            </button>
             <div className="mt-4 flex max-w-2xl flex-wrap justify-center gap-1.5">
               {SUGGESTIONS.map((s) => (
                 <button
