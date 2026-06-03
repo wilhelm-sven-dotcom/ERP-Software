@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Send, Loader2, Plus, MessageSquare, Trash2, Sparkles } from "lucide-react";
+import { Send, Loader2, Plus, MessageSquare, Trash2, Sparkles, Database } from "lucide-react";
+import { toast } from "sonner";
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -54,6 +55,7 @@ export function AssistantChat({
   aiEnabled = false,
   initialConversations = [],
   briefing = [],
+  canIndex = false,
 }: {
   firstName?: string;
   projects?: { id: string; title: string }[];
@@ -61,6 +63,7 @@ export function AssistantChat({
   aiEnabled?: boolean;
   initialConversations?: ConversationRow[];
   briefing?: { label: string; href: string; tone?: "warn" }[];
+  canIndex?: boolean;
 }) {
   const [chat, setChat] = React.useState<ChatMessage[]>([]);
   const [query, setQuery] = React.useState("");
@@ -68,7 +71,30 @@ export function AssistantChat({
   const [proposed, setProposed] = React.useState<ProposedAction | null>(null);
   const [conversationId, setConversationId] = React.useState<string | null>(null);
   const [conversations, setConversations] = React.useState<ConversationRow[]>(initialConversations);
+  const [indexing, setIndexing] = React.useState(false);
   const endRef = React.useRef<HTMLDivElement>(null);
+
+  async function indexDocuments() {
+    setIndexing(true);
+    try {
+      let total = 0;
+      for (let i = 0; i < 30; i++) {
+        const res = await fetch("/api/assistant/embed-documents", { method: "POST" });
+        const data = (await res.json()) as { enabled?: boolean; embedded?: number; remaining?: number };
+        if (data.enabled === false) {
+          toast.error("KI ist nicht aktiviert.");
+          return;
+        }
+        total += data.embedded ?? 0;
+        if (!data.remaining) break;
+      }
+      toast.success(total > 0 ? `${total} Dokument(e) für die KI-Suche indexiert.` : "Alles ist bereits indexiert.");
+    } catch {
+      toast.error("Indexierung fehlgeschlagen.");
+    } finally {
+      setIndexing(false);
+    }
+  }
 
   async function refreshList() {
     try {
@@ -250,6 +276,19 @@ export function AssistantChat({
             ))
           )}
         </div>
+        {canIndex ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground mt-2 justify-start gap-2"
+            disabled={indexing}
+            onClick={() => void indexDocuments()}
+            title="Hochgeladene Dokumente für die semantische Suche aufbereiten"
+          >
+            {indexing ? <Loader2 className="size-4 animate-spin" /> : <Database className="size-4" />}
+            Dokumente indexieren
+          </Button>
+        ) : null}
       </aside>
 
       {/* Chat / Hero */}

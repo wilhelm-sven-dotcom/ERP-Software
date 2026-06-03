@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
+import { embedFileRow } from "@/lib/ai/embed-file";
 import { getList } from "@/lib/data/settings";
 import { DEFAULT_CATEGORIES, DEFAULT_UNITS } from "@/lib/constants";
 import { ensureConfigured, fail, OK, type ActionResult } from "@/lib/actions";
@@ -320,15 +321,20 @@ export async function registerProductAsset(input: {
   if (!input.productId || !input.storagePath) return fail("Ungültige Daten.");
 
   const supabase = await createClient();
-  const { error } = await supabase.from("product_assets").insert({
-    product_id: input.productId,
-    kind: input.kind,
-    name: input.name,
-    storage_path: input.storagePath,
-    mime: input.mime,
-    text_content: input.textContent ?? null,
-  });
+  const { data: row, error } = await supabase
+    .from("product_assets")
+    .insert({
+      product_id: input.productId,
+      kind: input.kind,
+      name: input.name,
+      storage_path: input.storagePath,
+      mime: input.mime,
+      text_content: input.textContent ?? null,
+    })
+    .select("id")
+    .single();
   if (error) return fail(error.message);
+  if (row?.id) await embedFileRow("product_assets", row.id, input.textContent);
 
   revalidatePath("/produkte");
   return OK;

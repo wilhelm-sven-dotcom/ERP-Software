@@ -9,7 +9,9 @@ import "server-only";
  */
 
 const CHAT_URL = "https://api.openai.com/v1/chat/completions";
+const EMBED_URL = "https://api.openai.com/v1/embeddings";
 const DEFAULT_MODEL = "gpt-4o-mini";
+const EMBED_MODEL = "text-embedding-3-small"; // 1536 Dimensionen
 
 export function isAiConfigured(): boolean {
   return Boolean(process.env.OPENAI_API_KEY);
@@ -87,6 +89,38 @@ export async function chatJSON<T = Record<string, unknown>>(
     return JSON.parse(content) as T;
   } catch (e) {
     if ((e as Error).name !== "AbortError") console.error("OpenAI-Aufruf fehlgeschlagen:", e);
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * Embedding-Vektor für einen Text (für die semantische Dokumentsuche).
+ * Fehlertolerant → null. Text wird gekürzt (Tokenlimit/Kosten).
+ */
+export async function embed(text: string, timeoutMs = 20000): Promise<number[] | null> {
+  if (!isAiConfigured() || !text.trim()) return null;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(EMBED_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({ model: EMBED_MODEL, input: text.slice(0, 8000) }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      console.error("OpenAI-Embedding-Fehler:", res.status);
+      return null;
+    }
+    const data = (await res.json()) as { data?: { embedding?: number[] }[] };
+    return data.data?.[0]?.embedding ?? null;
+  } catch (e) {
+    if ((e as Error).name !== "AbortError") console.error("Embedding fehlgeschlagen:", e);
     return null;
   } finally {
     clearTimeout(timeout);

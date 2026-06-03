@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { ChatTool } from "@/lib/ai/openai";
+import { embed } from "@/lib/ai/openai";
 import { createClient } from "@/lib/supabase/server";
 import { searchAll } from "@/app/(app)/search/actions";
 import {
@@ -60,6 +61,7 @@ export const ASSISTANT_TOOLS: ChatTool[] = [
   fn("list_employees", "Aktive Mitarbeiter mit Name und Rolle (für Zuweisungen).", obj({})),
   fn("my_overview", "Eigener Überblick des angemeldeten Nutzers: Posteingang + offene Aufgaben.", obj({})),
   fn("document_search", "Durchsucht den INHALT hochgeladener Dokumente (Datenblätter, Rechnungen, Pläne) per Stichwort und liefert Textausschnitte. Nutze dies, um Fragen aus Dokumentinhalten zu beantworten (z. B. Wirkungsgrad aus einem Datenblatt).", obj({ query: str("Suchbegriff für den Dokumentinhalt") }, ["query"])),
+  fn("semantic_search", "BEDEUTUNGS-Suche über Dokumentinhalte (sinngemäß, nicht nur Stichwort). Gut für unscharfe/umschriebene Fragen. Liefert die ähnlichsten Dokumentstellen.", obj({ query: str("Frage/Beschreibung in natürlicher Sprache") }, ["query"])),
 
   // ---- AKTIONS-Werkzeuge (Vorschlag → Bestätigung) ----
   fn("propose_task", "Schlägt vor, einem/mehreren Kollegen eine Aufgabe/Rückfrage zu stellen. Wird erst nach Bestätigung angelegt.", obj({
@@ -265,6 +267,31 @@ export async function runReadTool(
           ...(sf.data ?? []).map((f) => ({ datei: f.name, gehoert_zu: first(f.ticket as Rel<{ title: string | null }>)?.title ?? "Service", auszug: snippet(f.text_content) })),
         ];
         return JSON.stringify({ anzahl: treffer.length, treffer });
+      }
+      case "semantic_search": {
+        const q = String(args.query ?? "").trim();
+        if (q.length < 2) return JSON.stringify({ treffer: [] });
+        const vec = await embed(q);
+        if (!vec) return JSON.stringify({ treffer: [], hinweis: "Semantische Suche nicht verfügbar." });
+        const supabase = await createClient();
+        const { data, error } = await supabase.rpc("match_documents", {
+          query_embedding: vec,
+          match_count: 8,
+        });
+        if (error) {
+          // Migration evtl. nicht eingespielt → leise auf Stichwortsuche verweisen.
+          return JSON.stringify({ treffer: [], hinweis: "Index nicht verfügbar — nutze document_search." });
+        }
+        return JSON.stringify({
+          anzahl: (data ?? []).length,
+          treffer: (data ?? []).map((r: { source: string; name: string; owner: string; content: string; similarity: number }) => ({
+            quelle: r.source,
+            datei: r.name,
+            gehoert_zu: r.owner,
+            auszug: (r.content ?? "").slice(0, 320),
+            relevanz: Math.round((r.similarity ?? 0) * 100) / 100,
+          })),
+        });
       }
       case "my_overview": {
         if (!me?.id) return JSON.stringify({ hinweis: "Kein angemeldeter Mitarbeiter." });

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/supabase/auth";
 import { getServiceTicket } from "@/lib/data/service";
+import { embedFileRow } from "@/lib/ai/embed-file";
 import { ensureConfigured, fail, OK, type ActionResult } from "@/lib/actions";
 
 /** Ticket-Detail (Felder, Kommentare, Dateien) für den Karten-Dialog laden. */
@@ -113,16 +114,21 @@ export async function registerServiceFile(input: {
   if (!input.ticketId || !input.storagePath) return fail("Ungültige Daten.");
   const me = await getCurrentEmployee();
   const supabase = await createClient();
-  const { error } = await supabase.from("service_ticket_files").insert({
-    ticket_id: input.ticketId,
-    name: input.name,
-    storage_path: input.storagePath,
-    mime: input.mime,
-    size: input.size,
-    text_content: input.textContent ?? null,
-    uploaded_by: me?.id ?? null,
-  });
+  const { data: row, error } = await supabase
+    .from("service_ticket_files")
+    .insert({
+      ticket_id: input.ticketId,
+      name: input.name,
+      storage_path: input.storagePath,
+      mime: input.mime,
+      size: input.size,
+      text_content: input.textContent ?? null,
+      uploaded_by: me?.id ?? null,
+    })
+    .select("id")
+    .single();
   if (error) return fail(error.message);
+  if (row?.id) await embedFileRow("service_ticket_files", row.id, input.textContent);
   if (input.asCover) {
     await supabase
       .from("service_tickets")

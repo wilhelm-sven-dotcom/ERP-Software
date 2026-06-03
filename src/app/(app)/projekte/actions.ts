@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/supabase/auth";
 import { logActivity } from "@/lib/data/activities";
+import { embedFileRow } from "@/lib/ai/embed-file";
 import { ensureConfigured, fail, OK, type ActionResult } from "@/lib/actions";
 
 function s(fd: FormData, key: string): string | null {
@@ -208,18 +209,24 @@ export async function registerProjectFile(input: {
   if (!input.projectId || !input.storagePath) return fail("Ungültige Daten.");
   const me = await getCurrentEmployee();
   const supabase = await createClient();
-  const { error } = await supabase.from("project_files").insert({
-    project_id: input.projectId,
-    name: input.name,
-    storage_path: input.storagePath,
-    mime: input.mime,
-    size: input.size,
-    kind: input.kind ?? "dokument",
-    text_content: input.textContent ?? null,
-    doc_meta: input.docMeta ?? null,
-    uploaded_by: me?.id ?? null,
-  });
+  const { data: row, error } = await supabase
+    .from("project_files")
+    .insert({
+      project_id: input.projectId,
+      name: input.name,
+      storage_path: input.storagePath,
+      mime: input.mime,
+      size: input.size,
+      kind: input.kind ?? "dokument",
+      text_content: input.textContent ?? null,
+      doc_meta: input.docMeta ?? null,
+      uploaded_by: me?.id ?? null,
+    })
+    .select("id")
+    .single();
   if (error) return fail(error.message);
+  // Semantische Suche: Embedding best-effort (bricht nie den Upload).
+  if (row?.id) await embedFileRow("project_files", row.id, input.textContent);
   await logActivity({
     projectId: input.projectId,
     type: "datei",

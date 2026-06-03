@@ -76,6 +76,7 @@ export default async function AssistentPage() {
       aiEnabled={aiEnabled}
       initialConversations={initialConversations}
       briefing={briefing}
+      canIndex={me?.role === "admin"}
     />
   );
 }
