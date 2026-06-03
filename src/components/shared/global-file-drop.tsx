@@ -78,9 +78,11 @@ export function GlobalFileDrop({
         file,
         isPdf,
         target: strong.length > 0 ? "produkt" : "projekt",
-        // Vorschlag: nur den besten Treffer vorauswählen — der Rest ist 1-Klick.
-        productIds: strong.length > 0 ? [strong[0]] : [],
-        suggestedIds: strong,
+        // Bei PDFs kommt die Vorauswahl AUSSCHLIESSLICH aus dem präzisen
+        // Text-Matcher (siehe detectProductsFromText) — der Dateiname bestimmt
+        // nur das Ziel, markiert aber nicht massenhaft vor. Bilder: Top-1.
+        productIds: !isPdf && strong.length > 0 ? [strong[0]] : [],
+        suggestedIds: isPdf ? [] : strong,
         projectId: "",
         kind: strong.length > 0 ? (isPdf ? "datasheet" : "image") : isPdf ? "datenblatt" : "dokument",
         extracted: [],

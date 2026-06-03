@@ -53,18 +53,51 @@ export function rankProductsForFilename(
   return scored.slice(0, limit);
 }
 
+/** Wenig aussagekräftige Wörter (Marken-/Domänen-Vokabular). */
+const STOPWORDS = new Set([
+  "energy", "energie", "system", "systeme", "hybrid", "controller", "control",
+  "inverter", "wechselrichter", "charger", "ladestation", "ladesaeule", "ladesäule",
+  "wallbox", "modul", "module", "panel", "speicher", "battery", "batterie", "storage",
+  "solar", "photovoltaik", "pv", "ac", "dc", "kw", "kwp", "kwh", "kva", "watt", "wp",
+  "pro", "plus", "max", "mini", "smart", "home", "set", "single", "phase", "phasig",
+  "dreiphasig", "einphasig", "serie", "series", "gmbh", "datenblatt", "datasheet",
+  "the", "und", "and", "der", "die", "das", "für", "fuer", "mit", "von",
+]);
+
+const hasDigit = (t: string) => /\d/.test(t);
+
 /**
- * Produkte im (klein geschriebenen) Volltext eines Datenblatts erkennen.
- * Trefferregeln: Artikelnummer (SKU, ≥ 4 Zeichen) kommt im Text vor → sicher;
- * ODER der vollständige Produktname kommt vor; ODER genügend Name-Tokens
- * (inkl. einer Modellnummer mit Ziffern) tauchen auf, gestützt vom Hersteller.
- * Liefert die IDs aller erkannten Produkte (für Mehrfach-Vorauswahl).
+ * Produkte im Volltext eines Datenblatts erkennen — präzisionsorientiert.
+ * Nur die Produkte, für die das Datenblatt tatsächlich gilt, werden geliefert.
+ *
+ * Idee: Tokens, die in VIELEN Produkten vorkommen (Serien-/Markenwörter wie
+ * „sigen", „energy"), sind nicht unterscheidend und werden ignoriert. Ein
+ * Produkt matcht nur, wenn seine ARTIKELNUMMER, sein vollständiger NAME oder
+ * ALLE seine DISTINKTIVEN Tokens (Modellnummern/seltene Wörter) im Text stehen.
  */
 export function matchProductsInText(text: string, products: Product[]): string[] {
   const hay = text.toLowerCase();
-  if (hay.trim().length < 10) return [];
-  const ids: string[] = [];
+  if (hay.trim().length < 10 || products.length === 0) return [];
 
+  // Dokumentfrequenz je Token über alle Produktnamen.
+  const df = new Map<string, number>();
+  const manTokensAll = new Set<string>();
+  const nameTokensByProduct = new Map<string, string[]>();
+  for (const p of products) {
+    const nt = Array.from(new Set(tokens(normalize(p.name ?? "")).filter((t) => t.length >= 3)));
+    nameTokensByProduct.set(p.id, nt);
+    for (const t of nt) df.set(t, (df.get(t) ?? 0) + 1);
+    for (const mt of tokens(normalize(p.manufacturer ?? ""))) manTokensAll.add(mt);
+  }
+  const n = products.length;
+  // „Häufig" = kommt in ≥ 40 % der Produkte (und in ≥ 3) vor → nicht unterscheidend.
+  const commonThreshold = Math.max(3, Math.ceil(n * 0.4));
+  const isGeneric = (t: string) =>
+    STOPWORDS.has(t) || manTokensAll.has(t) || (df.get(t) ?? 0) >= commonThreshold;
+  // „Spezifisch" = Ziffern-Modellnummer oder sehr seltenes Wort (≤ 2 Produkte).
+  const isSpecific = (t: string) => hasDigit(t) || (df.get(t) ?? 0) <= 2;
+
+  const ids: string[] = [];
   for (const p of products) {
     const sku = p.sku?.toLowerCase().trim();
     if (sku && sku.length >= 4 && hay.includes(sku)) {
@@ -72,20 +105,18 @@ export function matchProductsInText(text: string, products: Product[]): string[]
       continue;
     }
     const name = normalize(p.name ?? "");
-    if (name.length >= 5 && hay.includes(name)) {
+    if (name.length >= 6 && hay.includes(name)) {
       ids.push(p.id);
       continue;
     }
-    const nameTokens = tokens(name).filter((t) => t.length >= 3);
-    if (nameTokens.length === 0) continue;
-    const present = nameTokens.filter((t) => hay.includes(t));
-    const hasModelNumber = present.some((t) => /\d/.test(t) && t.length >= 3);
-    const man = normalize(p.manufacturer ?? "");
-    const manPresent = man.length >= 3 && hay.includes(man);
-    // Modellnummer im Text ODER (Hersteller + mehrere Name-Tokens) treffen.
-    if (hasModelNumber || (manPresent && present.length >= 2)) {
-      ids.push(p.id);
-    }
+    const nt = nameTokensByProduct.get(p.id) ?? [];
+    // Distinktive Tokens: Ziffern-Tokens immer, sonst nur nicht-generische.
+    const distinctive = nt.filter((t) => hasDigit(t) || !isGeneric(t));
+    if (distinctive.length === 0) continue;
+    const allPresent = distinctive.every((t) => hay.includes(t));
+    const anySpecific = distinctive.some((t) => isSpecific(t) && hay.includes(t));
+    if (allPresent && anySpecific) ids.push(p.id);
   }
   return ids;
 }
+
