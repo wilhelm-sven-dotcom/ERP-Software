@@ -17,8 +17,12 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { registerProjectFile } from "@/app/(app)/projekte/actions";
 import { registerProductAsset } from "@/app/(app)/produkte/actions";
-import { rankProductsForFilename } from "@/lib/asset-match";
-import { extractImagesFromPdf, type ExtractedImage } from "@/lib/pdf/extract-images";
+import { rankProductsForFilename, matchProductsInText } from "@/lib/asset-match";
+import {
+  extractImagesFromPdf,
+  extractTextFromPdf,
+  type ExtractedImage,
+} from "@/lib/pdf/extract-images";
 import { cn } from "@/lib/utils";
 import type { Product } from "@/lib/types";
 
@@ -40,6 +44,8 @@ type Row = {
   selectedImageIds: string[];
   extracting: boolean;
   extractDone: boolean;
+  detecting: boolean;
+  textMatchCount: number;
   done: boolean;
   busy: boolean;
 };
@@ -81,11 +87,43 @@ export function GlobalFileDrop({
         selectedImageIds: [],
         extracting: false,
         extractDone: false,
+        detecting: false,
+        textMatchCount: 0,
         done: false,
         busy: false,
       };
     });
     setRows((r) => [...r, ...next]);
+    // PDFs: Produkte aus dem Datenblatt-Text erkennen und vormarkieren.
+    for (const row of next) {
+      if (row.isPdf) void detectProductsFromText(row.uid, row.file);
+    }
+  }
+
+  async function detectProductsFromText(uid: string, file: File) {
+    patch(uid, { detecting: true });
+    try {
+      const text = await extractTextFromPdf(file);
+      const matched = matchProductsInText(text, products);
+      setRows((r) =>
+        r.map((x) => {
+          if (x.uid !== uid) return x;
+          if (matched.length === 0) return { ...x, detecting: false };
+          const suggestedIds = Array.from(new Set([...x.suggestedIds, ...matched]));
+          const productIds = Array.from(new Set([...x.productIds, ...matched]));
+          return {
+            ...x,
+            target: "produkt",
+            suggestedIds,
+            productIds,
+            textMatchCount: matched.length,
+            detecting: false,
+          };
+        }),
+      );
+    } catch {
+      patch(uid, { detecting: false });
+    }
   }
 
   function patch(uid: string, p: Partial<Row>) {
@@ -316,6 +354,15 @@ export function GlobalFileDrop({
 
           {row.done ? null : row.target === "produkt" ? (
             <>
+              {row.detecting ? (
+                <p className="text-muted-foreground mt-2 text-xs">
+                  Produkte im Datenblatt werden erkannt …
+                </p>
+              ) : row.textMatchCount > 0 ? (
+                <p className="text-primary mt-2 text-xs font-medium">
+                  {row.textMatchCount} Produkt(e) im Datenblatt erkannt und vormarkiert.
+                </p>
+              ) : null}
               <ProductChooser
                 products={products}
                 suggestedIds={row.suggestedIds}

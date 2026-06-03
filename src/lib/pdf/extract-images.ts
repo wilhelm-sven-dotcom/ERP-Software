@@ -81,6 +81,40 @@ async function canvasToImage(
   };
 }
 
+/** Volltext eines PDFs (alle Seiten, klein geschrieben) für die Produkterkennung. */
+export async function extractTextFromPdf(
+  file: File,
+  maxPages = 30,
+): Promise<string> {
+  const pdfjs = await import("pdfjs-dist");
+  if (!workerConfigured) {
+    pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+      "pdfjs-dist/build/pdf.worker.min.mjs",
+      import.meta.url,
+    ).toString();
+    workerConfigured = true;
+  }
+  try {
+    const buf = await file.arrayBuffer();
+    const doc = await pdfjs.getDocument({ data: buf }).promise;
+    const pages = Math.min(doc.numPages, maxPages);
+    const parts: string[] = [];
+    for (let i = 1; i <= pages; i++) {
+      const page = await doc.getPage(i);
+      const content = await page.getTextContent();
+      const text = content.items
+        .map((it) => ("str" in it ? it.str : ""))
+        .join(" ");
+      parts.push(text);
+      page.cleanup();
+    }
+    return parts.join("\n").toLowerCase();
+  } catch (e) {
+    console.error("extractTextFromPdf:", e);
+    return "";
+  }
+}
+
 export async function extractImagesFromPdf(
   file: File,
   opts: { minSize?: number; maxImages?: number; maxPages?: number } = {},
