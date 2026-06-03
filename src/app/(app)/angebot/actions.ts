@@ -84,9 +84,10 @@ export async function createOfferFromCalculation(fd: FormData): Promise<void> {
     title: `Angebot Nr. ${nextNr} erstellt (${calc.name ?? "Variante"})`,
   });
 
+  void inserted;
   revalidatePath(`/projekte/${projectId}`);
   revalidatePath("/angebot");
-  if (inserted) redirect(`/angebot/${inserted.id}`);
+  // Kein Redirect mehr: der Nutzer bleibt im Projekt (geführter Vorgang).
 }
 
 /** Angebot bearbeiten: Positionen (Reihenfolge/Inline) + Textbausteine speichern. */
@@ -149,9 +150,15 @@ export async function setOfferStatus(fd: FormData): Promise<void> {
   const status = String(fd.get("status") ?? "");
   if (!id || !status || ensureConfigured()) return;
   const supabase = await createClient();
-  await supabase.from("offers").update({ status }).eq("id", id);
+  const { data: row } = await supabase
+    .from("offers")
+    .update({ status })
+    .eq("id", id)
+    .select("project_id")
+    .maybeSingle();
   revalidatePath(`/angebot/${id}`);
   revalidatePath("/angebot");
+  if (row?.project_id) revalidatePath(`/projekte/${row.project_id}`);
 }
 
 export async function deleteOffer(fd: FormData): Promise<void> {

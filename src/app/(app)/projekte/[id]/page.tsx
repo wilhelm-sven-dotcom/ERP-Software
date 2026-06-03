@@ -40,6 +40,7 @@ import { ProgressBar } from "@/components/projekte/progress-bar";
 import { InvoiceActions } from "@/components/dokumente/invoice-actions";
 import { RueckfrageDialog } from "@/components/projekte/rueckfrage-dialog";
 import { ProjectTabs } from "@/components/projekte/project-tabs";
+import { ProjectPipeline } from "@/components/projekte/project-pipeline";
 import { WirtschaftRechner } from "@/components/wirtschaft/wirtschaft-rechner";
 import { DEFAULT_WIRTSCHAFT } from "@/lib/calc/wirtschaft";
 import { getSetting } from "@/lib/data/settings";
@@ -220,6 +221,15 @@ export default async function ProjectDetailPage({
           </Button>
         </form>
       </PageHeader>
+
+      <ProjectPipeline
+        projectId={id}
+        variants={variants}
+        offers={offers}
+        auftraege={auftraege}
+        lieferscheine={lieferscheine}
+        rechnungen={rechnungen}
+      />
 
       <ProjectTabs
         uebersicht={

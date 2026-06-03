@@ -92,9 +92,10 @@ export async function createOrderConfirmation(fd: FormData): Promise<void> {
     title: `Auftragsbestätigung Nr. ${nr} erstellt`,
   });
 
+  void inserted;
   revalidatePath(`/projekte/${offer.project_id}`);
   revalidatePath("/auftrag");
-  if (inserted) redirect(`/auftrag/${inserted.id}`);
+  // Kein Redirect: der Nutzer bleibt im Projekt (geführter Vorgang).
 }
 
 /** Aus einer Auftragsbestätigung einen Lieferschein erzeugen. */
@@ -138,9 +139,10 @@ export async function createDeliveryNote(fd: FormData): Promise<void> {
     title: `Lieferschein Nr. ${nr} erstellt`,
   });
 
+  void inserted;
   revalidatePath(`/projekte/${abRow.project_id}`);
   revalidatePath("/lieferschein");
-  if (inserted) redirect(`/lieferschein/${inserted.id}`);
+  // Kein Redirect: der Nutzer bleibt im Projekt.
 }
 
 /**
@@ -245,9 +247,11 @@ export async function createInvoice(fd: FormData): Promise<void> {
     type: "rechnung",
     title: `${title} Nr. ${nr} erstellt`,
   });
+  void inserted;
   revalidatePath(`/projekte/${src.project_id}`);
   revalidatePath("/rechnung");
-  if (inserted) redirect(`/rechnung/${inserted.id}`);
+  revalidatePath("/buchhaltung");
+  // Kein Redirect: der Nutzer bleibt im Projekt.
 }
 
 export async function setDocumentStatus(fd: FormData): Promise<void> {
