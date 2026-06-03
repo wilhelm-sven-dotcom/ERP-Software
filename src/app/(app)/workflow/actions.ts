@@ -568,7 +568,7 @@ export async function createRueckfrage(
     .split(",")
     .map((x) => x.trim())
     .filter(Boolean);
-  if (!projectId || !title) return fail("Projekt und Betreff angeben.");
+  if (!title) return fail("Betreff angeben.");
   if (ids.length === 0) return fail("Mindestens einen Kollegen wählen.");
   const me = await getCurrentEmployee();
   const supabase = await createClient();
@@ -577,7 +577,7 @@ export async function createRueckfrage(
   const { data: task, error } = await supabase
     .from("project_tasks")
     .insert({
-      project_id: projectId,
+      project_id: projectId, // darf null sein (projektlose Rückfrage)
       title,
       description: body,
       assignee_employee_id: offered ? null : ids[0],
@@ -601,11 +601,11 @@ export async function createRueckfrage(
       kind: "message",
     });
   await logActivity({
-    projectId,
+    projectId: projectId ?? null,
     type: "aufgabe",
     title: `Rückfrage „${title}" an ${ids.length > 1 ? `${ids.length} Kollegen` : "Kollegen"}`,
   });
-  revalidatePath(`/projekte/${projectId}`);
+  if (projectId) revalidatePath(`/projekte/${projectId}`);
   revalidatePath("/dashboard");
   return OK;
 }

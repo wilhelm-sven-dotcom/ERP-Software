@@ -20,7 +20,10 @@ import { Badge } from "@/components/ui/badge";
 import { getProjects, getMyLeads } from "@/lib/data/projects";
 import { getProducts } from "@/lib/data/products";
 import { getCustomers } from "@/lib/data/customers";
+import { getEmployees } from "@/lib/data/employees";
 import { GlobalFileDrop } from "@/components/shared/global-file-drop";
+import { QuickTask } from "@/components/shared/quick-task";
+import { MyTasksPanel } from "@/components/shared/my-tasks-panel";
 import { getAdminStats } from "@/lib/data/stats";
 import { getMyOpenTasks } from "@/lib/data/workflow";
 import { getSalesEmployees } from "@/lib/data/employees";
@@ -68,17 +71,22 @@ function Kpi({
 }
 
 export default async function DashboardPage() {
-  const [me, salesEmployees, dropProjects, dropProducts] = await Promise.all([
+  const [me, salesEmployees, dropProjects, dropProducts, allEmployees] = await Promise.all([
     getCurrentEmployee(),
     getSalesEmployees(),
     getProjects(),
     getProducts(),
+    getEmployees(),
   ]);
   const isAdmin = me?.role === "admin";
   const projectOptions = dropProjects.map((p) => ({
     id: p.id,
     title: p.title ?? "Ohne Titel",
   }));
+  // Kollegen für die Schnellaufgabe (ohne mich selbst).
+  const colleagues = allEmployees
+    .filter((e) => e.active && e.id !== me?.id)
+    .map((e) => ({ id: e.id, name: e.name ?? e.email ?? "Mitarbeiter" }));
 
   return (
     <div>
@@ -96,14 +104,24 @@ export default async function DashboardPage() {
       <div className="mb-4">
         <GlobalSearch variant="dashboard" />
       </div>
-      <Card className="mb-4">
-        <CardHeader>
-          <CardTitle className="text-base">Dateien ablegen</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <GlobalFileDrop projects={projectOptions} products={dropProducts} />
-        </CardContent>
-      </Card>
+      <div className="mb-4 grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Schnellaufgabe / Rückfrage</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <QuickTask employees={colleagues} projects={projectOptions} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Dateien ablegen</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <GlobalFileDrop projects={projectOptions} products={dropProducts} />
+          </CardContent>
+        </Card>
+      </div>
       {isAdmin ? (
         <AdminDashboard />
       ) : me?.is_sales ? (
@@ -125,8 +143,6 @@ async function SalesDashboard({ employeeId }: { employeeId: string }) {
   const angebote = leads.filter((l) => l.status === "Angebot");
   const today = new Date().toISOString().slice(0, 10);
   const overdue = tasks.filter((t) => t.due_date && t.due_date < today);
-  const dueToday = tasks.filter((t) => t.due_date === today);
-  const upcoming = tasks.filter((t) => !t.due_date || t.due_date > today);
 
   return (
     <>
@@ -174,11 +190,7 @@ async function SalesDashboard({ employeeId }: { employeeId: string }) {
             {tasks.length === 0 ? (
               <p className="text-muted-foreground text-sm">Keine offenen Vertriebsaufgaben.</p>
             ) : (
-              <div className="space-y-4">
-                <TaskGroup title="Überfällig" items={overdue} tone="destructive" />
-                <TaskGroup title="Heute" items={dueToday} />
-                <TaskGroup title="Als Nächstes" items={upcoming} />
-              </div>
+              <MyTasksPanel tasks={tasks} currentEmployeeId={employeeId} />
             )}
           </CardContent>
         </Card>
@@ -322,11 +334,6 @@ async function EmployeeDashboard({ employeeId }: { employeeId: string | null }) 
   ]);
   const myProjects = projects.filter((p) => p.assigned_employee_id === employeeId);
 
-  const today = new Date().toISOString().slice(0, 10);
-  const overdue = tasks.filter((t) => t.due_date && t.due_date < today);
-  const dueToday = tasks.filter((t) => t.due_date === today);
-  const upcoming = tasks.filter((t) => !t.due_date || t.due_date > today);
-
   return (
     <>
       <div className="grid gap-4 sm:grid-cols-4">
@@ -361,17 +368,7 @@ async function EmployeeDashboard({ employeeId }: { employeeId: string | null }) 
             <CardTitle className="text-base">Meine Aufgaben</CardTitle>
           </CardHeader>
           <CardContent>
-            {tasks.length === 0 ? (
-              <p className="text-muted-foreground text-sm">
-                Keine offenen Aufgaben. 🎉
-              </p>
-            ) : (
-              <div className="space-y-4">
-                <TaskGroup title="Überfällig" items={overdue} tone="destructive" />
-                <TaskGroup title="Heute" items={dueToday} />
-                <TaskGroup title="Als Nächstes" items={upcoming} />
-              </div>
-            )}
+            <MyTasksPanel tasks={tasks} currentEmployeeId={employeeId} />
           </CardContent>
         </Card>
 
@@ -430,45 +427,6 @@ function InboxGroup({ title, items }: { title: string; items: InboxItem[] }) {
                 : it.reason === "überfällig"
                   ? "überfällig"
                   : "neue Nachricht"}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function TaskGroup({
-  title,
-  items,
-  tone,
-}: {
-  title: string;
-  items: { id: string; title: string; due_date: string | null; project: { id: string; title: string | null } | null }[];
-  tone?: "destructive";
-}) {
-  if (items.length === 0) return null;
-  return (
-    <div>
-      <p className={`mb-1 text-xs font-semibold ${tone === "destructive" ? "text-destructive" : "text-muted-foreground"}`}>
-        {title} ({items.length})
-      </p>
-      <ul className="divide-y">
-        {items.map((t) => (
-          <li key={t.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-            <span>
-              {t.title}
-              {t.project ? (
-                <Link
-                  href={`/projekte/${t.project.id}`}
-                  className="text-muted-foreground ml-2 text-xs hover:underline"
-                >
-                  {t.project.title ?? "Projekt"}
-                </Link>
-              ) : null}
-            </span>
-            <span className="text-muted-foreground text-xs">
-              {t.due_date ? formatDate(t.due_date) : "—"}
             </span>
           </li>
         ))}

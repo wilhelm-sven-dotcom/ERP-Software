@@ -1544,3 +1544,13 @@ drop policy if exists "sl_update" on public.site_log;
 create policy "sl_update" on public.site_log for update using (public.is_staff()) with check (public.is_staff());
 drop policy if exists "sl_delete" on public.site_log;
 create policy "sl_delete" on public.site_log for delete using (public.is_admin() or created_by = public.current_employee_id());
+
+
+-- ============================================================================
+-- ip³ PV-Tool — Ad-hoc-Aufgaben ohne Projekt (Schnell-Rückfrage am Dashboard)
+-- project_tasks.project_id darf jetzt NULL sein (projektlose Aufgaben/Rückfragen).
+-- Die bestehende FK (on delete cascade) bleibt für projektbezogene Aufgaben gültig.
+-- Idempotent. Im Supabase SQL-Editor einmal ausführen.
+-- ============================================================================
+
+alter table public.project_tasks alter column project_id drop not null;
