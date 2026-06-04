@@ -73,6 +73,43 @@ export async function listConversations(): Promise<AiConversation[]> {
   return getConversations();
 }
 
+/**
+ * Gespräche durchsuchen — über den Titel UND den Nachrichteninhalt. RLS sichert,
+ * dass nur eigene Gespräche/Nachrichten gefunden werden. Leerer Suchbegriff →
+ * normale Liste.
+ */
+export async function searchConversations(query: string): Promise<AiConversation[]> {
+  const q = (query ?? "").trim();
+  if (!q) return getConversations();
+  const supabase = await createClient();
+  const like = `%${q.replace(/[\\%_]/g, (m) => "\\" + m)}%`;
+
+  const [titleRes, msgRes] = await Promise.all([
+    supabase
+      .from("ai_conversations")
+      .select("*")
+      .ilike("title", like)
+      .order("updated_at", { ascending: false })
+      .limit(30),
+    supabase.from("ai_messages").select("conversation_id").ilike("content", like).limit(100),
+  ]);
+
+  const byId = new Map<string, AiConversation>();
+  for (const c of (titleRes.data ?? []) as AiConversation[]) byId.set(c.id, c);
+
+  const ids = Array.from(new Set((msgRes.data ?? []).map((m) => m.conversation_id as string))).filter(
+    (id) => !byId.has(id),
+  );
+  if (ids.length > 0) {
+    const { data } = await supabase.from("ai_conversations").select("*").in("id", ids).limit(30);
+    for (const c of (data ?? []) as AiConversation[]) byId.set(c.id, c);
+  }
+
+  return Array.from(byId.values())
+    .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""))
+    .slice(0, 30);
+}
+
 /** Nachrichten eines Gesprächs laden (Client-Aufruf). */
 export async function loadConversation(id: string): Promise<AiMessage[]> {
   return getConversationMessages(id);
