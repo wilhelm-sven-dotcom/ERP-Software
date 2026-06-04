@@ -227,11 +227,21 @@ export async function saveProduct(
     }
   }
 
+  // Spalten-gebundene Felder, die fälschlich in specs gelandet sein können
+  // (z. B. aus früherer Web-Anreicherung), in die echten Spalten heben und aus
+  // specs entfernen — so verschwindet das doppelte „Hersteller"-Kenndatum.
+  const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  const specManufacturer = str(specs.manufacturer) ?? str(specs.hersteller);
+  const specCategory = str(specs.category) ?? str(specs.kategorie);
+  for (const k of ["manufacturer", "hersteller", "name", "sku", "category", "kategorie"]) {
+    delete specs[k];
+  }
+
   const payload = {
     name,
     group_id: s(fd, "group_id"),
-    manufacturer: s(fd, "manufacturer"),
-    category: s(fd, "category"),
+    manufacturer: s(fd, "manufacturer") ?? specManufacturer,
+    category: s(fd, "category") ?? specCategory,
     sku: s(fd, "sku"),
     unit: s(fd, "unit"),
     price_purchase: round2(n(fd, "price_purchase")),
