@@ -30,6 +30,7 @@ import { AssetUpload } from "@/components/produkte/asset-upload";
 import { ProductWholesalerManager } from "@/components/produkte/product-wholesaler-manager";
 import { ListSelect } from "@/components/produkte/list-select";
 import { ProductEnrichButton } from "@/components/produkte/product-enrich-button";
+import { ProductDatasheetExtractButton } from "@/components/produkte/product-datasheet-extract-button";
 import { ProductSpecEditor } from "@/components/produkte/product-spec-editor";
 import { genericSpecEntries } from "@/lib/products/spec-labels";
 import { DEFAULT_CATEGORIES, DEFAULT_UNITS, PRICE_DEFAULTS } from "@/lib/constants";
@@ -306,13 +307,16 @@ export function ProductFormDialog({
           {isEdit ? (
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-dashed p-2">
               <p className="text-muted-foreground text-xs">
-                Technische Daten fehlen? Lass sie aus dem Datenblatt im Netz ergänzen.
+                Technische Daten fehlen? Aus dem hinterlegten Datenblatt auslesen oder aus dem Netz ergänzen.
               </p>
-              <ProductEnrichButton
-                productId={product?.id ?? null}
-                name={product?.name ?? ""}
-                manufacturer={product?.manufacturer ?? null}
-              />
+              <div className="flex flex-wrap gap-2">
+                <ProductDatasheetExtractButton productId={product?.id ?? null} />
+                <ProductEnrichButton
+                  productId={product?.id ?? null}
+                  name={product?.name ?? ""}
+                  manufacturer={product?.manufacturer ?? null}
+                />
+              </div>
             </div>
           ) : null}
 

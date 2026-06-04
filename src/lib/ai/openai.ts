@@ -21,6 +21,15 @@ export function aiModel(): string {
   return process.env.OPENAI_MODEL || DEFAULT_MODEL;
 }
 
+/**
+ * Stärkeres Modell für anspruchsvolle Auslese (z. B. dichte Datenblatt-Tabellen).
+ * Default `gpt-4o`; per `OPENAI_MODEL_STRONG` überschreibbar. Fällt auf das
+ * normale Modell zurück, wenn explizit gleichgesetzt.
+ */
+export function aiModelStrong(): string {
+  return process.env.OPENAI_MODEL_STRONG || "gpt-4o";
+}
+
 /** Inhalts-Teil einer Nachricht: Text oder Bild (für Vision-fähige Modelle). */
 export type ContentPart =
   | { type: "text"; text: string }
@@ -60,7 +69,7 @@ export interface AssistantMessage {
  */
 export async function chatJSON<T = Record<string, unknown>>(
   messages: ChatMessage[],
-  opts: { maxTokens?: number; timeoutMs?: number } = {},
+  opts: { maxTokens?: number; timeoutMs?: number; model?: string } = {},
 ): Promise<T | null> {
   if (!isAiConfigured()) return null;
 
@@ -74,7 +83,7 @@ export async function chatJSON<T = Record<string, unknown>>(
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: aiModel(),
+        model: opts.model || aiModel(),
         temperature: 0,
         max_tokens: opts.maxTokens ?? 800,
         response_format: { type: "json_object" },
