@@ -24,10 +24,10 @@ import {
 import { rankProductsForFilename, matchProductsInText } from "@/lib/asset-match";
 import {
   extractImagesFromPdf,
-  extractTextFromPdf,
   renderPagesToDataUrls,
   type ExtractedImage,
 } from "@/lib/pdf/extract-images";
+import { extractDocumentText } from "@/lib/pdf/extract-text-smart";
 import { cn } from "@/lib/utils";
 import type { Product } from "@/lib/types";
 
@@ -176,7 +176,8 @@ export function GlobalFileDrop({
     patch(uid, { detecting: true });
     let text = "";
     try {
-      text = await extractTextFromPdf(file);
+      // Robuste Auslese (Azure DI, sonst pdf.js).
+      text = await extractDocumentText(file);
       const matched = matchProductsInText(text, products);
       setRows((r) =>
         r.map((x) => {

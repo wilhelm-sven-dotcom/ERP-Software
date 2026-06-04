@@ -18,7 +18,8 @@ import { createClient } from "@/lib/supabase/client";
 import { registerProjectFile } from "@/app/(app)/projekte/actions";
 import { registerProductAsset } from "@/app/(app)/produkte/actions";
 import { registerDocument, createIncomingInvoice } from "@/app/(app)/posteingang/actions";
-import { extractTextFromPdf, renderPagesToDataUrls } from "@/lib/pdf/extract-images";
+import { renderPagesToDataUrls } from "@/lib/pdf/extract-images";
+import { extractDocumentText } from "@/lib/pdf/extract-text-smart";
 import { cn } from "@/lib/utils";
 
 const PROJECT_BUCKET = "project-files";
@@ -135,14 +136,14 @@ export function PosteingangDrop({
 
   async function classify(row: Row) {
     try {
-      let text = "";
       let images: string[] = [];
+      // Robuste Auslese (Azure DI, sonst pdf.js) — auch für Scans.
+      const text = await extractDocumentText(row.file);
       if (row.isPdf) {
         try {
-          text = await extractTextFromPdf(row.file);
           images = await renderPagesToDataUrls(row.file, { maxPages: 2 });
         } catch {
-          /* Auslese fehlgeschlagen → KI nutzt nur, was da ist */
+          /* Render fehlgeschlagen → KI nutzt Text/was da ist */
         }
       } else if (/^image\//.test(row.file.type)) {
         try {
