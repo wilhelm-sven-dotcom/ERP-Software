@@ -23,6 +23,7 @@ import { getCustomers } from "@/lib/data/customers";
 import { getEmployees } from "@/lib/data/employees";
 import { getProjectsProgress, getProjectTypeOptions } from "@/lib/data/workflow";
 import { customerName, formatNumber } from "@/lib/format";
+import { NewBadge } from "@/components/shared/new-badge";
 import { statusVariant } from "@/lib/constants";
 
 export const metadata: Metadata = { title: "Projekte" };
@@ -60,7 +61,7 @@ export default async function ProjektePage({
 
   return (
     <div>
-      <PageHeader title="Projekte" description="Alle Projekte verwalten.">
+      <PageHeader title="Projekte" description="Alle Projekte verwalten." helpId="workflow">
         {newButton}
       </PageHeader>
 
@@ -90,12 +91,15 @@ export default async function ProjektePage({
               {projects.map((p) => (
                 <ClickableRow key={p.id} href={`/projekte/${p.id}`}>
                   <TableCell>
-                    <Link
-                      href={`/projekte/${p.id}`}
-                      className="font-medium hover:underline"
-                    >
-                      {p.title ?? "Ohne Titel"}
-                    </Link>
+                    <span className="flex items-center gap-2">
+                      <Link
+                        href={`/projekte/${p.id}`}
+                        className="font-medium hover:underline"
+                      >
+                        {p.title ?? "Ohne Titel"}
+                      </Link>
+                      <NewBadge createdAt={p.created_at} />
+                    </span>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {p.customer ? customerName(p.customer) : "–"}

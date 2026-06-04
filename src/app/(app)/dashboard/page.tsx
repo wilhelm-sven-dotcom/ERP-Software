@@ -113,6 +113,7 @@ export default async function DashboardPage({
             ? "Umsatz, verkaufte Leistung und Pipeline."
             : "Deine Aufgaben und Projekte."
         }
+        helpId="dashboard"
       >
         {isAdmin ? (
           <TeamViewSelect

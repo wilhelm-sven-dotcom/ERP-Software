@@ -121,6 +121,7 @@ export default async function ProduktePage() {
       <PageHeader
         title="Produkte"
         description="Produktkatalog — per Drag &amp; Drop ordnen."
+        helpId="produkte"
       >
         <CsvImportDialog
           trigger={

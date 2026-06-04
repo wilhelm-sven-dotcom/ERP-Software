@@ -49,6 +49,29 @@ export const HELP_ENTRIES: HelpEntry[] = [
     category: "Grundlagen",
   },
 
+  {
+    id: "kunden",
+    term: "Kunden",
+    short: "Kundenstamm mit fortlaufender Kundennummer; je Kunde Projekte und ein Aktivitäten-Logbuch.",
+    category: "Grundlagen",
+  },
+  {
+    id: "produkte",
+    term: "Produkte",
+    short: "Katalog mit Gruppen, Preisen und technischen Daten — Grundlage für Kalkulation & Auslegung.",
+    long:
+      "Pflege je Produkt Einkauf/Verkauf und die Kerndaten (Modul-Wp, Speicher-kWh, WR-Leistung). " +
+      "Weitere technische Daten kommen automatisch aus Datenblättern (Upload) oder »aus dem Netz« und " +
+      "werden in der Technische-Daten-Liste gespeichert.",
+    category: "Grundlagen",
+  },
+  {
+    id: "dashboard",
+    term: "Dashboard",
+    short: "Kennzahlen und To-dos auf einen Blick; Admins können die Sicht einzelner Mitarbeiter öffnen.",
+    category: "Grundlagen",
+  },
+
   // — Kalkulation —
   {
     id: "calc-kwp",
