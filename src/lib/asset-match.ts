@@ -74,10 +74,18 @@ const hasDigit = (t: string) => /\d/.test(t);
  * „sigen", „energy"), sind nicht unterscheidend und werden ignoriert. Ein
  * Produkt matcht nur, wenn seine ARTIKELNUMMER, sein vollständiger NAME oder
  * ALLE seine DISTINKTIVEN Tokens (Modellnummern/seltene Wörter) im Text stehen.
+ *
+ * Zusätzlich: reine WORT-Treffer (ohne Modellnummer) gelten nur, wenn sie im
+ * TITEL-/Kopfbereich des Dokuments stehen. So werden kompatible Zubehörteile,
+ * die ein Datenblatt nur im Fließtext nennt (z. B. „SMA Energy Meter",
+ * „Home Manager"), NICHT fälschlich als Datenblatt-Produkt markiert — während
+ * echte Mehrfach-Datenblätter (Modellnummern wie 5.0/6.0/8.0) weiter greifen.
  */
 export function matchProductsInText(text: string, products: Product[]): string[] {
   const hay = text.toLowerCase();
   if (hay.trim().length < 10 || products.length === 0) return [];
+  // Titel-/Kopfbereich: erste ~500 Zeichen (Produktname/Modell des Datenblatts).
+  const title = hay.slice(0, 500);
 
   // Dokumentfrequenz je Token über alle Produktnamen.
   const df = new Map<string, number>();
@@ -105,7 +113,9 @@ export function matchProductsInText(text: string, products: Product[]): string[]
       continue;
     }
     const name = normalize(p.name ?? "");
-    if (name.length >= 6 && hay.includes(name)) {
+    // Vollständiger Name: bei Modellnummern (Ziffern) überall, sonst nur im Titel
+    // (verhindert Zubehör-Treffer aus dem Fließtext).
+    if (name.length >= 6 && hay.includes(name) && (hasDigit(name) || title.includes(name))) {
       ids.push(p.id);
       continue;
     }
@@ -114,8 +124,13 @@ export function matchProductsInText(text: string, products: Product[]): string[]
     const distinctive = nt.filter((t) => hasDigit(t) || !isGeneric(t));
     if (distinctive.length === 0) continue;
     const allPresent = distinctive.every((t) => hay.includes(t));
-    const anySpecific = distinctive.some((t) => isSpecific(t) && hay.includes(t));
-    if (allPresent && anySpecific) ids.push(p.id);
+    if (!allPresent) continue;
+    // Akzeptiere nur mit echtem Beleg: eine Modellnummer (Ziffern-Token) irgendwo
+    // im Text ODER ein spezifisches Wort im TITEL-/Kopfbereich. Reine Zubehör-
+    // Erwähnungen im Fließtext (Wort ohne Modellnummer) zählen nicht.
+    const hasDigitToken = distinctive.some((t) => hasDigit(t) && hay.includes(t));
+    const specificWordInTitle = distinctive.some((t) => !hasDigit(t) && isSpecific(t) && title.includes(t));
+    if (hasDigitToken || specificWordInTitle) ids.push(p.id);
   }
   return ids;
 }

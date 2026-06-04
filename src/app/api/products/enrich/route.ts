@@ -62,9 +62,10 @@ export async function POST(req: Request) {
           "Modul, Speicher, Wallbox) aus Web-Quellen. Nutze NUR Angaben, die zum genannten Produkt/ " +
           "Modell passen und in den Quellen wirklich stehen — NICHTS erfinden, keine Werte anderer " +
           "Modelle. Gib ein JSON { specs: { … }, reason } zurück. Verwende, wo passend, diese " +
-          "Schlüssel (Zahlen ohne Einheit): module_wp, inverter_kw, storage_kwh, wirkungsgrad_prozent, " +
-          "max_input_voltage, mppt_count, strom_a, max_charge_current_a, max_discharge_current_a, " +
-          "spannung_v, garantie_jahre, gewicht_kg, masse (BxHxT als Text), hersteller, modell. " +
+          "Schlüssel (Zahlen ohne Einheit): manufacturer, model, module_wp, inverter_kw, storage_kwh, " +
+          "efficiency_pct, max_dc_voltage, mppt_count, max_input_current_a, max_output_current_a, phases, " +
+          "nominal_voltage_v, dimensions (BxHxT als Text), weight_kg, warranty_years, ip_rating, " +
+          "operating_temp, cell_type. " +
           "Weitere belegte Kenndaten als zusätzliche Schlüssel erlaubt. Sind keine sicheren Daten " +
           "auffindbar, gib specs: {} und erkläre es kurz in reason.",
       },

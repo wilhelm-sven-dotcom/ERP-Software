@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { embedFileRow } from "@/lib/ai/embed-file";
 import { getList } from "@/lib/data/settings";
 import { DEFAULT_CATEGORIES, DEFAULT_UNITS } from "@/lib/constants";
+import { RESERVED_SPEC_KEYS } from "@/lib/products/spec-labels";
 import { ensureConfigured, fail, OK, type ActionResult } from "@/lib/actions";
 
 /** Einen neuen Wert zu einer definierten Liste (Einheiten/Kategorien) hinzufügen. */
@@ -201,6 +202,29 @@ export async function saveProduct(
   } else {
     delete specs.is_service;
     delete specs.pricing;
+  }
+
+  // Generische „Technische Daten" (freie key/value-Liste, z. B. Hersteller,
+  // Gewicht, Maße, Wirkungsgrad) — als JSON aus dem Formular. Reservierte
+  // Schlüssel werden ignoriert, damit die getippten Kernfelder nicht überschrieben
+  // werden. Vorhandene generische Felder werden ersetzt (Liste ist die Wahrheit).
+  const extraRaw = s(fd, "extra_specs");
+  if (extraRaw) {
+    // Bisherige generische Felder entfernen, dann die aus dem Formular setzen.
+    for (const k of Object.keys(specs)) {
+      if (!RESERVED_SPEC_KEYS.has(k)) delete specs[k];
+    }
+    try {
+      const parsed = JSON.parse(extraRaw) as Record<string, unknown>;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        for (const [k, v] of Object.entries(parsed)) {
+          if (RESERVED_SPEC_KEYS.has(k)) continue;
+          if (typeof v === "string" || typeof v === "number") specs[k] = v;
+        }
+      }
+    } catch {
+      /* ungültiges JSON → generische Felder bleiben entfernt */
+    }
   }
 
   const payload = {

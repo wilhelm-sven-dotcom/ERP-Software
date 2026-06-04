@@ -56,6 +56,9 @@ export async function POST(req: Request) {
 
   const fileName = (body.fileName ?? "").slice(0, 300);
   const text = (body.text ?? "").slice(0, 6000);
+  // Titel-/Kopfbereich (Dateiname + Textanfang) — hier steht das HAUPTPRODUKT
+  // des Datenblatts; Zubehör wird meist nur im Fließtext erwähnt.
+  const title = `${fileName}\n${(body.text ?? "").slice(0, 600)}`.trim();
   const images = (body.images ?? []).filter((u) => typeof u === "string" && u.startsWith("data:")).slice(0, 2);
   // Kandidatenlisten klein halten (Token-/Kostenkontrolle).
   const projects = (body.projects ?? []).slice(0, 80);
@@ -69,7 +72,7 @@ export async function POST(req: Request) {
       type: "text",
       text:
         "Klassifiziere und interpretiere dieses Dokument. Daten:\n" +
-        JSON.stringify({ fileName, projects, products }) +
+        JSON.stringify({ fileName, titel: title, projects, products }) +
         (text ? `\n\nExtrahierter Text (Hilfe, evtl. unvollständig):\n${text}` : ""),
     },
     ...images.map((url): ContentPart => ({ type: "image_url", image_url: { url } })),
@@ -90,17 +93,27 @@ export async function POST(req: Request) {
           "im Dokument vorkommt. STRENG: Wähle ein Produkt NIEMALS nur, weil es vom selben Hersteller " +
           "oder aus derselben Kategorie stammt (z. B. ein SMA-Datenblatt darf KEINE Sigenergy-/Fox-/ " +
           "Huawei-Produkte markieren). Prüfe zuerst den Hersteller im Dokument und schließe alle " +
-          "Produkte anderer Hersteller aus. Wenn KEIN Produkt aus der Liste wörtlich passt, gib " +
-          "productIds: [] zurück. Steht ein Produkt im Datenblatt, das NICHT in der Liste ist, " +
-          "fülle 'product_suggestion' { name, manufacturer, category } für ein neu anzulegendes Produkt. " +
+          "Produkte anderer Hersteller aus. WICHTIG: Das HAUPTPRODUKT des Datenblatts steht im Titel/Kopf " +
+          "(Feld 'titel' = Dateiname + Textanfang). Wähle NUR Produkte, die das Datenblatt SELBST " +
+          "beschreibt. Schließe Produkte AUS, die nur als kompatibles Zubehör / Energiezähler (Energy " +
+          "Meter) / Home Manager / Smart Meter / Monitoring / Backup-Box / im Lieferumfang ODER in einer " +
+          "Kompatibilitätsliste erwähnt werden — diese sind NICHT der Gegenstand des Datenblatts. " +
+          "Wenn KEIN Produkt aus der Liste das Hauptprodukt ist, gib " +
+          "productIds: [] zurück. Steht das Hauptprodukt des Datenblatts NICHT in der Liste, " +
+          "fülle IMMER 'product_suggestion' { name, manufacturer, category } für ein neu anzulegendes " +
+          "Produkt (category z. B. 'Wechselrichter'|'Modul'|'Speicher'|'Wallbox'|'Zubehör'). " +
           "Bei Projekten die beste projectId (oder null). Setze 'kind': für Produkte 'datasheet' oder " +
           "'image'; für Projekte eines von dokument|datenblatt|plan|foto|rechnung|sonstiges. Ist die " +
           "Datei ein Beleg/eine Rechnung, fülle 'document' mit docType ('eingangsrechnung'|" +
           "'ausgangsrechnung'|'lieferschein'|'angebot'), supplier, invoice_number, invoice_date " +
           "(YYYY-MM-DD), due_date (YYYY-MM-DD), amount (Bruttobetrag als Zahl), currency. Ist die Datei " +
-          "ein DATENBLATT, fülle 'specs' mit den zentralen technischen Kenndaten (z. B. leistung_wp, " +
-          "wirkungsgrad_prozent, kapazitaet_kwh, strom_a, spannung_v, masse, gewicht_kg, garantie_jahre, " +
-          "hersteller, modell). Wenn das Datenblatt MEHRERE Produkte mit UNTERSCHIEDLICHEN Werten zeigt, " +
+          "ein DATENBLATT, fülle 'specs' so VOLLSTÄNDIG wie belegbar mit den technischen Kenndaten. " +
+          "Nutze, wo passend, diese englischen Schlüssel (Zahlen ohne Einheit): manufacturer, model, " +
+          "module_wp (PV-Modul Wp), inverter_kw (WR-Nennleistung kW), storage_kwh (Speicher kWh), " +
+          "efficiency_pct (Wirkungsgrad %), max_dc_voltage, mppt_count, max_input_current_a, " +
+          "max_output_current_a, phases, nominal_voltage_v, dimensions (BxHxT als Text), weight_kg, " +
+          "warranty_years, ip_rating, operating_temp, cell_type. Weitere belegte Kenndaten als " +
+          "zusätzliche Schlüssel erlaubt. Wenn das Datenblatt MEHRERE Produkte mit UNTERSCHIEDLICHEN Werten zeigt, " +
           "fülle zusätzlich 'productSpecs' als Objekt { <productId aus der Liste>: { kenndaten… } } je " +
           "Produkt. Nur was wirklich sichtbar/belegbar ist, nichts erfinden. confidence 0..1. Antworte " +
           "ausschließlich als JSON mit target, productIds, projectId, kind, confidence, reason, document, " +

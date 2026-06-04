@@ -30,6 +30,8 @@ import { AssetUpload } from "@/components/produkte/asset-upload";
 import { ProductWholesalerManager } from "@/components/produkte/product-wholesaler-manager";
 import { ListSelect } from "@/components/produkte/list-select";
 import { ProductEnrichButton } from "@/components/produkte/product-enrich-button";
+import { ProductSpecEditor } from "@/components/produkte/product-spec-editor";
+import { genericSpecEntries } from "@/lib/products/spec-labels";
 import { DEFAULT_CATEGORIES, DEFAULT_UNITS, PRICE_DEFAULTS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/format";
 import type {
@@ -313,6 +315,9 @@ export function ProductFormDialog({
               />
             </div>
           ) : null}
+
+          {/* Generische technische Daten (frei erweiterbar, aus Datenblatt/Netz). */}
+          <ProductSpecEditor initial={genericSpecEntries(product?.specs)} />
 
           <div className="grid gap-2 sm:grid-cols-2">
             <div className="grid gap-2">
