@@ -436,15 +436,24 @@ export function PosteingangDrop({
           </p>
           <div className="flex items-center gap-3">
             {rows.some((r) => r.done) ? (
-              <label className="text-muted-foreground inline-flex cursor-pointer items-center gap-1.5 text-xs">
-                <input
-                  type="checkbox"
-                  checked={hideDone}
-                  onChange={(e) => setHideDone(e.target.checked)}
-                  className="size-4"
-                />
-                Erledigte ausblenden
-              </label>
+              <>
+                <label className="text-muted-foreground inline-flex cursor-pointer items-center gap-1.5 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={hideDone}
+                    onChange={(e) => setHideDone(e.target.checked)}
+                    className="size-4"
+                  />
+                  Erledigte ausblenden
+                </label>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setRows((rs) => rs.filter((r) => !r.done))}
+                >
+                  Erledigte entfernen
+                </Button>
+              </>
             ) : null}
             {pending.length > 0 ? (
               <Button onClick={commitAll} disabled={committing}>
