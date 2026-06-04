@@ -35,6 +35,21 @@ const PROJECT_BUCKET = "project-files";
 const PRODUCT_BUCKET = "product-assets";
 const PROJECT_KINDS = ["dokument", "datenblatt", "plan", "foto", "rechnung", "sonstiges"];
 
+/**
+ * Aus einem Dateinamen einen brauchbaren Produktnamen ableiten: Endung weg und
+ * generische Dokument-Wörter (Datenblatt, Manual, …) am Rand entfernen, damit
+ * z. B. „Sigenergy … Controller Datenblatt.pdf" → „Sigenergy … Controller".
+ */
+function productNameFromFile(fileName: string): string {
+  return fileName
+    .replace(/\.[^.]+$/, "")
+    .replace(/[_]+/g, " ")
+    .replace(/\b(datenblatt|datasheet|manual|handbuch|anleitung|spezifikation|specs?|spec sheet|produktdatenblatt|installationsanleitung)\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/[\s\-–—]+$/g, "")
+    .trim();
+}
+
 type Target = "produkt" | "projekt";
 type DocMeta = {
   docType?: string;
@@ -254,8 +269,14 @@ export function GlobalFileDrop({
           products: rankedProducts,
         }),
       });
+      if (!res.ok) {
+        patch(uid, { aiBusy: false });
+        toast.error(`KI-Vorschlag fehlgeschlagen (Server ${res.status}). Bitte erneut versuchen.`);
+        return;
+      }
       const data = (await res.json()) as {
         enabled?: boolean;
+        reason?: string;
         result?: {
           target: Target;
           productIds: string[];
@@ -269,9 +290,15 @@ export function GlobalFileDrop({
           product_suggestion?: { name?: string; manufacturer?: string; category?: string } | null;
         } | null;
       };
+      if (data.enabled === false) {
+        patch(uid, { aiBusy: false });
+        toast.error(data.reason || "KI ist nicht konfiguriert (OPENAI_API_KEY fehlt).");
+        return;
+      }
       const r = data.result;
       if (!r) {
         patch(uid, { aiBusy: false });
+        toast.error(data.reason || "Die KI konnte keinen Vorschlag erstellen. Bitte erneut versuchen.");
         return;
       }
       const validProductIds = r.productIds.filter((id) => productById.has(id));
@@ -325,7 +352,7 @@ export function GlobalFileDrop({
 
   /** Neues Produkt aus dem Datenblatt anlegen und der Datei zuordnen. */
   async function createNewProduct(row: Row) {
-    const name = (row.newProductName || row.productSuggestion?.name || row.file.name.replace(/\.[^.]+$/, "")).trim();
+    const name = (row.newProductName || row.productSuggestion?.name || productNameFromFile(row.file.name)).trim();
     if (!name) {
       toast.error("Bitte einen Produktnamen angeben.");
       return;
@@ -683,7 +710,7 @@ export function GlobalFileDrop({
                       value={
                         row.newProductName ||
                         row.productSuggestion?.name ||
-                        row.file.name.replace(/\.[^.]+$/, "").replace(/[_]+/g, " ").trim()
+                        productNameFromFile(row.file.name)
                       }
                       onChange={(e) => patch(row.uid, { newProductName: e.target.value })}
                       placeholder="Produktname"
