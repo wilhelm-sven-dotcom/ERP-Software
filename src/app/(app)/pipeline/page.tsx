@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/shared/page-header";
 import { SupabaseNotice } from "@/components/shared/supabase-notice";
 import { PipelineBoard } from "@/components/pipeline/pipeline-board";
+import { LeadPriorisierung } from "@/components/pipeline/lead-priorisierung";
 import { LeadIntakeDialog } from "@/components/vertrieb/lead-intake-dialog";
 import { getProjects } from "@/lib/data/projects";
 import { getSalesEmployees } from "@/lib/data/employees";
@@ -27,6 +28,8 @@ export default async function PipelinePage() {
       </PageHeader>
 
       <SupabaseNotice />
+
+      <LeadPriorisierung />
 
       <PipelineBoard projects={projects} progress={progress} />
     </div>
