@@ -212,6 +212,26 @@ export function GlobalFileDrop({
       } catch {
         images = [];
       }
+      // Produkte nach Relevanz zum Dateinamen + Text vorsortieren, damit die
+      // passenden Kandidaten (richtiger Hersteller!) sicher im Limit landen —
+      // sonst „rät" die KI an artverwandten Produkten anderer Marken.
+      const hay = `${file.name} ${text.slice(0, 4000)}`.toLowerCase();
+      const tok = (s: string) =>
+        s.toLowerCase().replace(/[_\-.]+/g, " ").split(/\s+/).filter((t) => t.length >= 3);
+      const hayTokens = new Set(tok(hay));
+      const scoreOf = (p: Product) => {
+        let s = 0;
+        const sku = p.sku?.toLowerCase().trim();
+        if (sku && sku.length >= 4 && hay.includes(sku)) s += 100;
+        for (const t of tok(p.name ?? "")) if (hayTokens.has(t)) s += 3;
+        for (const t of tok(p.manufacturer ?? "")) if (hayTokens.has(t)) s += 4;
+        return s;
+      };
+      const rankedProducts = [...products]
+        .map((p) => ({ p, s: scoreOf(p) }))
+        .sort((a, b) => b.s - a.s)
+        .slice(0, 140)
+        .map(({ p }) => ({ id: p.id, name: p.name, sku: p.sku, manufacturer: p.manufacturer }));
       const res = await fetch("/api/files/classify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -220,12 +240,7 @@ export function GlobalFileDrop({
           text,
           images,
           projects,
-          products: products.map((p) => ({
-            id: p.id,
-            name: p.name,
-            sku: p.sku,
-            manufacturer: p.manufacturer,
-          })),
+          products: rankedProducts,
         }),
       });
       const data = (await res.json()) as {

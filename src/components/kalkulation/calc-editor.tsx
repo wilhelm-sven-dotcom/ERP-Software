@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { Minus, Plus, Split, Trash2 } from "lucide-react";
+import { ArrowLeft, FileText, Minus, Plus, Split, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ import { calculate, round2 } from "@/lib/calc/engine";
 import { computeServicePrice } from "@/lib/calc/service-pricing";
 import { POSITION_GROUPS, type CalcPosition, type PositionGroup } from "@/lib/calc/types";
 import { saveCalculation } from "@/app/(app)/kalkulation/actions";
+import { createOfferFromCalculation } from "@/app/(app)/angebot/actions";
 import { ProductPicker } from "@/components/produkte/product-picker";
 import { TemplateLoadDialog } from "@/components/kalkulation/template-load-dialog";
 import { ConfigWizard } from "@/components/kalkulation/config-wizard";
@@ -105,6 +107,9 @@ export function CalcEditor({
   }));
   const [skonto, setSkonto] = React.useState(String(initialSkonto));
   const [saving, setSaving] = React.useState(false);
+  // ID der gespeicherten Kalkulation (für „Angebot erstellen" direkt im Anschluss).
+  const [savedCalcId, setSavedCalcId] = React.useState<string | null>(calcId);
+  const offerFormRef = React.useRef<HTMLFormElement>(null);
 
   // Anlagengröße (kWp) und Speicher (kWh) live aus den Positionen berechnen:
   // Σ(Menge·Wp)/1000 bzw. Σ(Menge·kWh je Einheit). Übersteuert die Projektfelder.
@@ -268,11 +273,30 @@ export function CalcEditor({
     const res = await saveCalculation({ ok: false }, fd);
     setSaving(false);
     if (res.ok) {
+      const id = res.id ?? calcId ?? null;
+      if (id) setSavedCalcId(id);
       toast.success("Kalkulation gespeichert");
-      router.refresh();
-    } else {
-      toast.error(res.error ?? "Fehler beim Speichern");
+      return id;
     }
+    toast.error(res.error ?? "Fehler beim Speichern");
+    return null;
+  }
+
+  // „Speichern" → bleibt in der Kalkulation (aktualisiert die Ansicht).
+  async function onSaveOnly() {
+    const id = await onSave();
+    if (id) router.refresh();
+  }
+
+  // „Speichern & Angebot erstellen" → speichert und springt direkt ins Angebot.
+  async function onSaveAndOffer() {
+    const id = await onSave();
+    if (!id) return;
+    const form = offerFormRef.current;
+    if (!form) return;
+    const input = form.elements.namedItem("calc_id") as HTMLInputElement | null;
+    if (input) input.value = id;
+    form.requestSubmit();
   }
 
   const t = result.totals;
@@ -674,9 +698,26 @@ export function CalcEditor({
         </div>
       </div>
 
-      <div>
-        <Button onClick={onSave} disabled={saving}>
+      {/* Verstecktes Formular: erzeugt das Angebot aus dieser Kalkulation und
+          leitet (serverseitig) direkt zur Angebotsansicht weiter. */}
+      <form ref={offerFormRef} action={createOfferFromCalculation} className="hidden">
+        <input type="hidden" name="project_id" value={projectId} />
+        <input type="hidden" name="calc_id" defaultValue={savedCalcId ?? ""} />
+      </form>
+
+      {/* Apple-like Aktionsleiste: bleibt unten sichtbar, klarer „nächster Schritt". */}
+      <div className="bg-background/85 sticky bottom-0 -mx-1 flex flex-wrap items-center gap-2 border-t px-1 py-3 backdrop-blur">
+        <Button onClick={onSaveOnly} disabled={saving} variant="outline">
           {saving ? "Speichern …" : "Kalkulation speichern"}
+        </Button>
+        <Button onClick={onSaveAndOffer} disabled={saving}>
+          <FileText className="size-4" />
+          Speichern &amp; Angebot erstellen
+        </Button>
+        <Button asChild variant="ghost" className="ml-auto">
+          <Link href={`/projekte/${projectId}`}>
+            <ArrowLeft className="size-4" /> Zur Projektübersicht
+          </Link>
         </Button>
       </div>
     </div>

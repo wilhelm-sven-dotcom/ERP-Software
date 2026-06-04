@@ -115,7 +115,7 @@ export function ConfigWizard({
           <Zap className="size-4" /> Schnell-Konfiguration
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Schnell-Konfiguration</DialogTitle>
           <DialogDescription>
@@ -124,7 +124,7 @@ export function ConfigWizard({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4">
+        <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-1.5">
               <Label>Anlagengröße (kWp)</Label>
@@ -143,8 +143,10 @@ export function ConfigWizard({
 
           {preview.length > 0 ? (
             <div className="rounded-md border p-2 text-sm">
-              <p className="text-muted-foreground mb-1 text-xs">Vorschau:</p>
-              <ul className="divide-y">
+              <p className="text-muted-foreground mb-1 text-xs">
+                Vorschau ({preview.length} Positionen):
+              </p>
+              <ul className="max-h-64 divide-y overflow-y-auto">
                 {preview.map((p) => (
                   <li key={p.id} className="flex justify-between py-1">
                     <span className="truncate">{p.bezeichnung}</span>

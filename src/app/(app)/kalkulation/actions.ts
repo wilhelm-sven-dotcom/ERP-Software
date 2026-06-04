@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/supabase/auth";
 import { logActivity } from "@/lib/data/activities";
-import { ensureConfigured, fail, OK, type ActionResult } from "@/lib/actions";
+import { ensureConfigured, fail, type ActionResult } from "@/lib/actions";
 import { calculate } from "@/lib/calc/engine";
 import { computeServicePrice } from "@/lib/calc/service-pricing";
 import type { CalcInput, CalcPosition } from "@/lib/calc/types";
@@ -135,7 +135,7 @@ export async function saveCalculation(
   revalidatePath(`/kalkulation/${projectId}`);
   revalidatePath("/kalkulation");
   revalidatePath(`/projekte/${projectId}`);
-  return OK;
+  return { ok: true, id: savedId };
 }
 
 /** Neue leere Variante anlegen und in deren Editor springen. */

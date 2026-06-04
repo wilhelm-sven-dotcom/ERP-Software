@@ -124,23 +124,94 @@ export function generatePositions(input: ConfiguratorInput): CalcPosition[] {
     }
   }
 
-  // 4) Material-Stückliste: Montage/Unterkonstruktion ~ je Modul; Kabel/Stecker
-  //    je 1 (grobe Mengen, danach anpassbar). Nur „echte" Materialprodukte
-  //    (keine Module/WR/Speicher/Dienstleistungen).
+  // --- Helfer für die brand-/größenbewusste Auswahl von Material & Dienstleistung
+  // Größenklasse aus kWp ableiten (entspricht den Import-Flags specs.sizes).
+  const bucket: "bis10" | "bis30" | "bis135" =
+    kwp <= 10 ? "bis10" : kwp <= 30 ? "bis30" : "bis135";
+
+  // Tatsächlich gewählte Hersteller (Modul/WR/Speicher) — bestimmt, welche
+  // markenspezifischen Dienstleistungen passen (z. B. „… SMA" vs. „… Sigenergy").
+  const chosenMakers = new Set<string>();
+  for (const p of out) {
+    const m = products.find((x) => x.id === p.product_id)?.manufacturer?.toLowerCase().trim();
+    if (m) chosenMakers.add(m);
+  }
+  for (const m of [prefs?.moduleManufacturer, prefs?.inverterManufacturer, prefs?.storageManufacturer]) {
+    if (m) chosenMakers.add(m.toLowerCase().trim());
+  }
+  // Alle bekannten Herstellernamen — um Markennennungen in Positionsnamen zu erkennen.
+  const allMakers = new Set<string>();
+  for (const p of products) {
+    const m = p.manufacturer?.toLowerCase().trim();
+    if (m && m.length >= 3) allMakers.add(m);
+  }
+  // Nennt der Name eine FREMDE Marke (nicht unter den gewählten)? → nicht passend.
+  const mentionsForeignMaker = (name: string): boolean => {
+    const hay = name.toLowerCase();
+    for (const m of allMakers) {
+      if (hay.includes(m) && !chosenMakers.has(m)) return true;
+    }
+    return false;
+  };
+  // Passt die Position zur Größenklasse? 3 = exakt, 2 = „alle", 1 = unbekannt, 0 = falsche Klasse.
+  const sizeScore = (p: Product): number => {
+    const sizes = specsOf(p).sizes as Record<string, boolean> | undefined;
+    if (!sizes || typeof sizes !== "object") return 1;
+    if (sizes[bucket]) return 3;
+    if (sizes.alle) return 2;
+    if (kwh > 0 && sizes.speicher && matches(p, ["speicher", "batterie", "storage"])) return 3;
+    return 0;
+  };
+  // Basis-Schlüssel: Name ohne Größen-/Markensuffix → dedupliziert Varianten
+  // („UK + Modulmontage (bis 10 kWp)" und „… (30–135 kVA)" werden ein Eintrag).
+  const baseKey = (name: string): string => {
+    let s = name.toLowerCase().replace(/\([^)]*\)/g, " ");
+    for (const m of allMakers) s = s.split(m).join(" ");
+    return s.replace(/\s+/g, " ").trim();
+  };
+  // Aus einer Gruppe gleichartiger Positionen die beste wählen (Größe, dann Marke).
+  const pickBest = (group: Product[]): Product | null => {
+    const eligible = group.filter((p) => sizeScore(p) > 0 && !mentionsForeignMaker(p.name));
+    if (eligible.length === 0) return null;
+    return eligible.sort((a, b) => {
+      const s = sizeScore(b) - sizeScore(a);
+      if (s !== 0) return s;
+      const am = chosenMakers.has((a.manufacturer ?? "").toLowerCase().trim()) ? 1 : 0;
+      const bm = chosenMakers.has((b.manufacturer ?? "").toLowerCase().trim()) ? 1 : 0;
+      return bm - am;
+    })[0];
+  };
+
   const usedIds = new Set(out.map((p) => p.product_id));
+
+  // 4) Material (kein Modul/WR/Speicher/Dienstleistung): je Art genau EIN Produkt.
+  const materialGroups = new Map<string, Product[]>();
   for (const p of products) {
     if (usedIds.has(p.id) || specsOf(p).is_service) continue;
     if ((num(specsOf(p).module_wp) ?? 0) > 0 || (num(specsOf(p).storage_kwh) ?? 0) > 0 || (num(specsOf(p).inverter_kw) ?? 0) > 0) continue;
-    if (matches(p, ["montage", "unterkonstruktion", "gestell", "schiene", "befestig"])) {
-      out.push(makePosition(p, Math.max(1, moduleCount), "PV-Anlage", kwp));
-    } else if (matches(p, ["kabel", "leitung", "stecker", "kleinmaterial", "zubehör", "zubehoer"])) {
-      out.push(makePosition(p, 1, "PV-Anlage", kwp));
-    }
+    if (!matches(p, ["montage", "unterkonstruktion", "gestell", "schiene", "befestig", "kabel", "leitung", "stecker", "kleinmaterial", "zubehör", "zubehoer"])) continue;
+    const key = baseKey(p.name);
+    (materialGroups.get(key) ?? materialGroups.set(key, []).get(key)!).push(p);
+  }
+  for (const group of materialGroups.values()) {
+    const best = pickBest(group);
+    if (!best) continue;
+    const perModule = matches(best, ["montage", "unterkonstruktion", "gestell", "schiene", "befestig"]);
+    out.push(makePosition(best, perModule ? Math.max(1, moduleCount) : 1, "PV-Anlage", kwp));
   }
 
-  // 5) Dienstleistungen (is_service): nach kWp-Staffel bepreist, Menge 1.
-  for (const p of products.filter((x) => Boolean(specsOf(x).is_service))) {
-    out.push(makePosition(p, 1, "Sonstiges", kwp));
+  // 5) Dienstleistungen (is_service): je Art genau EINE, passend zu Größe + Marke.
+  const serviceGroups = new Map<string, Product[]>();
+  for (const p of products) {
+    if (!specsOf(p).is_service) continue;
+    // Speicher-Dienstleistungen nur bei vorhandenem Speicher.
+    if (kwh <= 0 && matches(p, ["speicher", "batterie", "storage"])) continue;
+    const key = baseKey(p.name);
+    (serviceGroups.get(key) ?? serviceGroups.set(key, []).get(key)!).push(p);
+  }
+  for (const group of serviceGroups.values()) {
+    const best = pickBest(group);
+    if (best) out.push(makePosition(best, 1, "Sonstiges", kwp));
   }
 
   return out;

@@ -59,7 +59,8 @@ export async function POST(req: Request) {
   const images = (body.images ?? []).filter((u) => typeof u === "string" && u.startsWith("data:")).slice(0, 2);
   // Kandidatenlisten klein halten (Token-/Kostenkontrolle).
   const projects = (body.projects ?? []).slice(0, 80);
-  const products = (body.products ?? []).slice(0, 60);
+  // Mehr Kandidaten zulassen; der Client schickt die relevantesten zuerst.
+  const products = (body.products ?? []).slice(0, 140);
 
   // Nutzer-Nachricht: zuerst Daten/Text, dann das/die Seitenbild(er) für die
   // Vision-Auslese (funktioniert auch bei gescannten PDFs).
@@ -85,8 +86,12 @@ export async function POST(req: Request) {
           "PRODUKT (z. B. Datenblatt, Produktbild) oder einem PROJEKT (z. B. Rechnung, Plan, Foto, " +
           "Dokument) gehört. WICHTIG: Ein DATENBLATT gehört IMMER zu Produkten (target='produkt'), " +
           "auch wenn kein passendes Produkt in der Liste steht. Ein Datenblatt kann MEHRERE Produkte " +
-          "abdecken — wähle ALLE productIds aus der Liste, die im Dokument vorkommen (Modellnamen/ " +
-          "Artikelnummern vergleichen). Steht ein Produkt im Datenblatt, das NICHT in der Liste ist, " +
+          "abdecken — wähle ALLE productIds aus der Liste, deren MODELLNAME oder ARTIKELNUMMER WÖRTLICH " +
+          "im Dokument vorkommt. STRENG: Wähle ein Produkt NIEMALS nur, weil es vom selben Hersteller " +
+          "oder aus derselben Kategorie stammt (z. B. ein SMA-Datenblatt darf KEINE Sigenergy-/Fox-/ " +
+          "Huawei-Produkte markieren). Prüfe zuerst den Hersteller im Dokument und schließe alle " +
+          "Produkte anderer Hersteller aus. Wenn KEIN Produkt aus der Liste wörtlich passt, gib " +
+          "productIds: [] zurück. Steht ein Produkt im Datenblatt, das NICHT in der Liste ist, " +
           "fülle 'product_suggestion' { name, manufacturer, category } für ein neu anzulegendes Produkt. " +
           "Bei Projekten die beste projectId (oder null). Setze 'kind': für Produkte 'datasheet' oder " +
           "'image'; für Projekte eines von dokument|datenblatt|plan|foto|rechnung|sonstiges. Ist die " +
