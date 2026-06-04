@@ -92,7 +92,10 @@ export function matchProductsInText(text: string, products: Product[]): string[]
   const manTokensAll = new Set<string>();
   const nameTokensByProduct = new Map<string, string[]>();
   for (const p of products) {
-    const nt = Array.from(new Set(tokens(normalize(p.name ?? "")).filter((t) => t.length >= 3)));
+    // Namens-Tokens ab 3 Zeichen ODER reine Modellnummern (z. B. „10") behalten.
+    const nt = Array.from(
+      new Set(tokens(normalize(p.name ?? "")).filter((t) => t.length >= 3 || /^\d+$/.test(t))),
+    );
     nameTokensByProduct.set(p.id, nt);
     for (const t of nt) df.set(t, (df.get(t) ?? 0) + 1);
     for (const mt of tokens(normalize(p.manufacturer ?? ""))) manTokensAll.add(mt);
@@ -113,9 +116,18 @@ export function matchProductsInText(text: string, products: Product[]): string[]
       continue;
     }
     const name = normalize(p.name ?? "");
-    // Vollständiger Name: bei Modellnummern (Ziffern) überall, sonst nur im Titel
-    // (verhindert Zubehör-Treffer aus dem Fließtext).
-    if (name.length >= 6 && hay.includes(name) && (hasDigit(name) || title.includes(name))) {
+    // Vollständiger Name: als zusammenhängender Substring ODER alle Namens-Tokens
+    // im Text (toleriert Zeilenumbrüche/Umformatierung im PDF). Akzeptiert nur,
+    // wenn der Name eine Modellnummer (Ziffer) enthält oder im Titel steht — so
+    // matchen echte Produkte (auch umformatiert), Zubehör im Fließtext nicht.
+    const nameTokensAll = tokens(name);
+    const nameTokensPresent =
+      nameTokensAll.length > 0 && nameTokensAll.every((t) => hay.includes(t));
+    if (
+      name.length >= 6 &&
+      (hay.includes(name) || nameTokensPresent) &&
+      (hasDigit(name) || title.includes(name))
+    ) {
       ids.push(p.id);
       continue;
     }

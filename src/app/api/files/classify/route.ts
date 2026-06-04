@@ -94,10 +94,13 @@ export async function POST(req: Request) {
           "oder aus derselben Kategorie stammt (z. B. ein SMA-Datenblatt darf KEINE Sigenergy-/Fox-/ " +
           "Huawei-Produkte markieren). Prüfe zuerst den Hersteller im Dokument und schließe alle " +
           "Produkte anderer Hersteller aus. WICHTIG: Das HAUPTPRODUKT des Datenblatts steht im Titel/Kopf " +
-          "(Feld 'titel' = Dateiname + Textanfang). Wähle NUR Produkte, die das Datenblatt SELBST " +
-          "beschreibt. Schließe Produkte AUS, die nur als kompatibles Zubehör / Energiezähler (Energy " +
+          "(Feld 'titel' = Dateiname + Textanfang). Kommt der NAME oder die MODELLNUMMER eines Kandidaten " +
+          "aus der Liste wörtlich im 'titel'/Dateinamen vor, ist es SEHR WAHRSCHEINLICH das Hauptprodukt — " +
+          "dann WÄHLE diese productId (nicht auslassen!). " +
+          "Schließe NUR Produkte AUS, die EXPLIZIT als kompatibles Zubehör / Energiezähler (Energy " +
           "Meter) / Home Manager / Smart Meter / Monitoring / Backup-Box / im Lieferumfang ODER in einer " +
-          "Kompatibilitätsliste erwähnt werden — diese sind NICHT der Gegenstand des Datenblatts. " +
+          "Kompatibilitätsliste genannt werden UND NICHT im Titel stehen — diese sind nicht der " +
+          "Gegenstand des Datenblatts. " +
           "Wenn KEIN Produkt aus der Liste das Hauptprodukt ist, gib " +
           "productIds: [] zurück. Steht das Hauptprodukt des Datenblatts NICHT in der Liste, " +
           "fülle IMMER 'product_suggestion' { name, manufacturer, category } für ein neu anzulegendes " +

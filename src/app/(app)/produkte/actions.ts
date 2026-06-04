@@ -402,9 +402,12 @@ export async function createProductFromDatasheet(input: {
 }
 
 /**
- * Von der KI aus einem Datenblatt ausgelesene technische Kenndaten in das
- * Produkt übernehmen (in `specs` jsonb mergen — bestehende Werte bleiben,
- * neue/aktualisierte kommen hinzu).
+ * Von der KI aus einem Datenblatt/Netz ausgelesene technische Kenndaten in das
+ * Produkt übernehmen (in `specs` jsonb mergen — bestehende Werte bleiben).
+ *
+ * Kopf-Felder werden zusätzlich in die echten Spalten gehoben: `manufacturer`
+ * korrigiert den Hersteller (im Preislisten-Import steckt dort fälschlich der
+ * Großhändler), `category` nur wenn bislang leer. `model` bleibt als Kenndatum.
  */
 export async function updateProductSpecs(
   productId: string,
@@ -416,11 +419,32 @@ export async function updateProductSpecs(
   const supabase = await createClient();
   const { data: product } = await supabase
     .from("products")
-    .select("specs")
+    .select("specs, manufacturer, category")
     .eq("id", productId)
     .maybeSingle();
-  const merged = { ...((product?.specs as Record<string, unknown>) ?? {}), ...specs };
-  const { error } = await supabase.from("products").update({ specs: merged }).eq("id", productId);
+
+  const rest = { ...specs };
+  const columnUpdate: Record<string, string> = {};
+
+  // Hersteller aus den Kenndaten in die echte Spalte heben (überschreibt den
+  // ggf. falschen Großhändler-Wert) und aus dem jsonb entfernen.
+  const man = typeof rest.manufacturer === "string" ? rest.manufacturer.trim() : "";
+  if (man) {
+    columnUpdate.manufacturer = man;
+    delete rest.manufacturer;
+  }
+  // Kategorie nur setzen, wenn das Produkt noch keine hat (nicht überschreiben).
+  const cat = typeof rest.category === "string" ? rest.category.trim() : "";
+  if (cat && !((product?.category as string | null) ?? "").trim()) {
+    columnUpdate.category = cat;
+  }
+  if (cat) delete rest.category;
+
+  const merged = { ...((product?.specs as Record<string, unknown>) ?? {}), ...rest };
+  const { error } = await supabase
+    .from("products")
+    .update({ specs: merged, ...columnUpdate })
+    .eq("id", productId);
   if (error) return fail(error.message);
   revalidatePath("/produkte");
   return OK;

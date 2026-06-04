@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Send, Loader2, Plus, MessageSquare, Trash2, Sparkles, Database, Mic } from "lucide-react";
+import { Send, Loader2, Plus, MessageSquare, Trash2, Sparkles, Database, Mic, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,7 @@ import {
   createConversation,
   appendMessages,
   listConversations,
+  searchConversations,
   loadConversation,
   deleteConversation,
 } from "@/app/(app)/assistent/actions";
@@ -82,6 +83,29 @@ export function AssistantChat({
   const [mode, setMode] = React.useState<"crm" | "general">("crm");
   const [recording, setRecording] = React.useState(false);
   const [transcribing, setTranscribing] = React.useState(false);
+  // Datei direkt aufs Eingabefeld ziehen → Upload-Dialog öffnen + Dateien füllen.
+  const [attachOpen, setAttachOpen] = React.useState(false);
+  const [pendingFiles, setPendingFiles] = React.useState<File[]>([]);
+  const [dragOver, setDragOver] = React.useState(false);
+  // Verlauf durchsuchen (Titel + Nachrichteninhalt, debounced).
+  const [histQuery, setHistQuery] = React.useState("");
+  const [histResults, setHistResults] = React.useState<ConversationRow[] | null>(null);
+
+  React.useEffect(() => {
+    const q = histQuery.trim();
+    const id = window.setTimeout(
+      async () => {
+        if (!q) {
+          setHistResults(null);
+          return;
+        }
+        const list = await searchConversations(q);
+        setHistResults(list.map((c) => ({ id: c.id, title: c.title, updated_at: c.updated_at })));
+      },
+      q ? 250 : 0,
+    );
+    return () => window.clearTimeout(id);
+  }, [histQuery]);
   const recorderRef = React.useRef<MediaRecorder | null>(null);
   const chunksRef = React.useRef<Blob[]>([]);
   const endRef = React.useRef<HTMLDivElement>(null);
@@ -262,13 +286,32 @@ export function AssistantChat({
   const canAttach = projects.length > 0;
   const inputBar = (
     <div className="flex items-center gap-2">
-      <div className="bg-card focus-within:border-primary flex flex-1 items-center gap-2 rounded-full border px-4 py-1 shadow-sm transition-colors">
+      <div
+        onDragOver={canAttach ? (e) => {
+          e.preventDefault();
+          setDragOver(true);
+        } : undefined}
+        onDragLeave={canAttach ? () => setDragOver(false) : undefined}
+        onDrop={canAttach ? (e) => {
+          e.preventDefault();
+          setDragOver(false);
+          const files = Array.from(e.dataTransfer.files ?? []);
+          if (files.length > 0) {
+            setPendingFiles(files);
+            setAttachOpen(true);
+          }
+        } : undefined}
+        className={
+          "bg-card flex flex-1 items-center gap-2 rounded-full border px-4 py-1 shadow-sm transition-colors " +
+          (dragOver ? "border-primary ring-primary/30 ring-2" : "focus-within:border-primary")
+        }
+      >
         {canAttach ? (
-          <Dialog>
+          <Dialog open={attachOpen} onOpenChange={(o) => { setAttachOpen(o); if (!o) setPendingFiles([]); }}>
             <DialogTrigger asChild>
               <button
                 type="button"
-                title="Dokument hochladen (KI ordnet zu)"
+                title="Dokument hochladen (KI ordnet zu) — oder Datei direkt hierher ziehen"
                 className="text-muted-foreground hover:text-foreground shrink-0"
               >
                 <Plus className="size-5" />
@@ -282,7 +325,12 @@ export function AssistantChat({
                 Datenblatt, Rechnung, Plan oder Foto hierher ziehen — die KI liest es aus und schlägt
                 die richtige Zuordnung vor.
               </p>
-              <GlobalFileDrop projects={projects} products={products} aiEnabled={aiEnabled} />
+              <GlobalFileDrop
+                projects={projects}
+                products={products}
+                aiEnabled={aiEnabled}
+                initialFiles={pendingFiles}
+              />
             </DialogContent>
           </Dialog>
         ) : (
@@ -333,11 +381,26 @@ export function AssistantChat({
         <Button variant="outline" size="sm" className="mb-2 justify-start gap-2" onClick={newChat}>
           <Plus className="size-4" /> Neuer Chat
         </Button>
+        <div className="relative mb-2">
+          <Search className="text-muted-foreground absolute top-2.5 left-2.5 size-3.5" />
+          <Input
+            value={histQuery}
+            onChange={(e) => setHistQuery(e.target.value)}
+            placeholder="Verlauf durchsuchen …"
+            className="h-9 pl-8 text-sm"
+          />
+        </div>
         <div className="flex-1 space-y-0.5 overflow-y-auto">
-          {conversations.length === 0 ? (
-            <p className="text-muted-foreground px-2 py-1 text-xs">Noch keine Gespräche.</p>
-          ) : (
-            conversations.map((c) => (
+          {(() => {
+            const visible = histResults ?? conversations;
+            if (visible.length === 0) {
+              return (
+                <p className="text-muted-foreground px-2 py-1 text-xs">
+                  {histQuery.trim() ? "Keine Treffer." : "Noch keine Gespräche."}
+                </p>
+              );
+            }
+            return visible.map((c) => (
               <div
                 key={c.id}
                 className={cn(
@@ -362,8 +425,8 @@ export function AssistantChat({
                   <Trash2 className="size-3.5" />
                 </button>
               </div>
-            ))
-          )}
+            ));
+          })()}
         </div>
         {canIndex ? (
           <Button
