@@ -41,6 +41,7 @@ import { InvoiceActions } from "@/components/dokumente/invoice-actions";
 import { RueckfrageDialog } from "@/components/projekte/rueckfrage-dialog";
 import { ProjectTabs } from "@/components/projekte/project-tabs";
 import { ProjectPipeline } from "@/components/projekte/project-pipeline";
+import { AiTextDialog } from "@/components/shared/ai-text-dialog";
 import { WirtschaftRechner } from "@/components/wirtschaft/wirtschaft-rechner";
 import { getWirtschaftDefaults } from "@/lib/data/settings";
 import { deleteProject, refreshPvgisYield } from "@/app/(app)/projekte/actions";
@@ -313,11 +314,24 @@ export default async function ProjectDetailPage({
 
             {fullCustomer ? (
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
+                <CardHeader className="flex flex-row items-center justify-between gap-2">
                   <CardTitle className="text-base">Kunde</CardTitle>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href={`/kunden/${fullCustomer.id}`}>Kundenakte öffnen</Link>
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <AiTextDialog
+                      label="E-Mail entwerfen"
+                      title="Kunden-E-Mail"
+                      prompt="Schreibe eine freundliche, professionelle Kunden-E-Mail zum aktuellen PV-Projekt (kurz, Sie-Form, mit Betreffzeile)."
+                      context={[
+                        project.title ? `Projekt: ${project.title}` : "",
+                        `Kunde: ${customerName(fullCustomer)}`,
+                        project.system_size_kwp ? `Anlage: ${formatNumber(project.system_size_kwp)} kWp` : "",
+                        project.status ? `Status: ${project.status}` : "",
+                      ].filter(Boolean).join(", ")}
+                    />
+                    <Button variant="outline" size="sm" asChild>
+                      <Link href={`/kunden/${fullCustomer.id}`}>Kundenakte öffnen</Link>
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">

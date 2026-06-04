@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { getDocumentsByKind } from "@/lib/data/documents";
 import { markInvoicePaid, createReminder } from "@/app/(app)/dokumente/actions";
+import { AiTextDialog } from "@/components/shared/ai-text-dialog";
 import { mahnStage } from "@/lib/constants";
 import { customerName, formatCurrency, formatDate } from "@/lib/format";
 
@@ -81,6 +82,18 @@ export async function OffenePostenSection() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-end gap-1">
+                      <AiTextDialog
+                        label="KI-Mahntext"
+                        title={`Mahntext – Rechnung Nr. ${d.doc_number ?? "–"}`}
+                        prompt={`Schreibe ein höfliches, sachliches Mahnschreiben (${nextStage.title}). Bitte um Begleichung der offenen Rechnung, mit Zahlungsfrist von 7 Tagen. Ohne Anrede-Platzhalter in Klammern.`}
+                        context={[
+                          `Rechnungsnummer: ${d.doc_number ?? "–"}`,
+                          `Kunde: ${d.project?.customer ? customerName(d.project.customer) : "–"}`,
+                          `Betrag (brutto): ${formatCurrency(num((d.totals as { brutto?: number }).brutto))}`,
+                          d.due_date ? `Fällig am: ${formatDate(d.due_date)}` : "",
+                          `Mahnstufe: ${level + 1}`,
+                        ].filter(Boolean).join(", ")}
+                      />
                       <form action={createReminder}>
                         <input type="hidden" name="invoice_id" value={d.id} />
                         <Button variant="outline" size="sm" type="submit" title={nextStage.title}>
