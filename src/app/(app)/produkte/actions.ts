@@ -405,6 +405,22 @@ export async function attachDocumentFromUrl(input: {
   if (guard) return guard;
   if (!input.productId || !/^https?:\/\//.test(input.url)) return fail("Ungültige URL.");
 
+  // 0) Dubletten-Schutz: gleiches Dokument (Name + Art) am Produkt nicht erneut anhängen.
+  const finalName =
+    input.name?.trim() ||
+    `${({ image: "Produktbild", datasheet: "Datenblatt", manual: "Anleitung", certificate: "Zertifikat" } as Record<string, string>)[input.kind]} (Web)`;
+  {
+    const sb = await createClient();
+    const { data: dupes } = await sb
+      .from("product_assets")
+      .select("id")
+      .eq("product_id", input.productId)
+      .eq("kind", input.kind)
+      .eq("name", finalName)
+      .limit(1);
+    if (dupes && dupes.length > 0) return OK; // bereits vorhanden → still überspringen
+  }
+
   // 1) Herunterladen (mit Timeout & Größenlimit).
   let bytes: ArrayBuffer;
   let mime: string;
@@ -446,16 +462,10 @@ export async function attachDocumentFromUrl(input: {
   }
 
   // 5) Registrieren.
-  const defaultName: Record<string, string> = {
-    image: "Produktbild",
-    datasheet: "Datenblatt",
-    manual: "Anleitung",
-    certificate: "Zertifikat",
-  };
   return registerProductAsset({
     productId: input.productId,
     kind: input.kind,
-    name: input.name?.trim() || `${defaultName[input.kind]} (Web)`,
+    name: finalName,
     storagePath: path,
     mime,
     textContent,
