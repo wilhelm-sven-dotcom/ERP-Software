@@ -47,6 +47,19 @@ export async function markIncomingPaid(fd: FormData): Promise<void> {
   revalidatePath("/buchhaltung");
 }
 
+/** Eine als bezahlt markierte Eingangsrechnung wieder auf „offen" setzen. */
+export async function markIncomingOpen(fd: FormData): Promise<void> {
+  if (ensureConfigured()) return;
+  const id = String(fd.get("id") ?? "");
+  if (!id) return;
+  const supabase = await createClient();
+  await supabase
+    .from("incoming_invoices")
+    .update({ status: "offen", paid_at: null })
+    .eq("id", id);
+  revalidatePath("/buchhaltung");
+}
+
 export async function deleteIncomingInvoice(fd: FormData): Promise<void> {
   if (ensureConfigured()) return;
   const id = String(fd.get("id") ?? "");

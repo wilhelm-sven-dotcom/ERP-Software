@@ -14,7 +14,8 @@ import {
 } from "@/components/ui/table";
 import { getIncomingDocuments } from "@/lib/data/project-files";
 import { getIncomingInvoices, getBookedFileIds, getInvoiceFileUrls } from "@/lib/data/incoming-invoices";
-import { bookIncomingInvoice, markIncomingPaid, deleteIncomingInvoice } from "@/app/(app)/buchhaltung/actions";
+import { bookIncomingInvoice, markIncomingPaid, markIncomingOpen, deleteIncomingInvoice } from "@/app/(app)/buchhaltung/actions";
+import { NewIncomingInvoiceDialog } from "@/components/buchhaltung/new-incoming-invoice-dialog";
 import { formatCurrency, formatDate } from "@/lib/format";
 
 const num = (v: unknown): number => (typeof v === "number" ? v : 0);
@@ -32,7 +33,15 @@ export async function EingangsbelegeSection() {
   const unbooked = docs.filter((d) => !bookedIds.has(d.id));
   const fileUrls = await getInvoiceFileUrls(invoices);
   const today = new Date().toISOString().slice(0, 10);
-  const openSum = invoices.filter((i) => i.status !== "bezahlt").reduce((s, i) => s + num(i.amount), 0);
+  const open = invoices.filter((i) => i.status !== "bezahlt");
+  const openSum = open.reduce((s, i) => s + num(i.amount), 0);
+  // Offene Summen je Lieferant (Top 5) für die Übersicht.
+  const bySupplier = new Map<string, number>();
+  for (const i of open) {
+    const key = i.supplier?.trim() || "Ohne Lieferant";
+    bySupplier.set(key, (bySupplier.get(key) ?? 0) + num(i.amount));
+  }
+  const topSuppliers = [...bySupplier.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
 
   return (
     <div className="space-y-6">
@@ -97,14 +106,30 @@ export async function EingangsbelegeSection() {
 
       {/* Gebuchte Eingangsrechnungen */}
       <div>
-        <div className="mb-2 flex items-center justify-between">
+        <div className="mb-2 flex items-center justify-between gap-2">
           <h3 className="text-sm font-semibold">Eingangsrechnungen</h3>
-          {openSum > 0 ? (
-            <span className="text-muted-foreground text-sm">
-              offen: <span className="text-foreground font-semibold">{formatCurrency(openSum)}</span>
-            </span>
-          ) : null}
+          <div className="flex items-center gap-3">
+            {openSum > 0 ? (
+              <span className="text-muted-foreground text-sm">
+                offen: <span className="text-foreground font-semibold">{formatCurrency(openSum)}</span>
+              </span>
+            ) : null}
+            <NewIncomingInvoiceDialog />
+          </div>
         </div>
+        {topSuppliers.length > 0 ? (
+          <div className="mb-3 flex flex-wrap gap-2">
+            {topSuppliers.map(([name, sum]) => (
+              <span
+                key={name}
+                className="bg-muted inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs"
+              >
+                <span className="font-medium">{name}</span>
+                <span className="text-muted-foreground">{formatCurrency(sum)}</span>
+              </span>
+            ))}
+          </div>
+        ) : null}
         {invoices.length === 0 ? (
           <EmptyState title="Keine Eingangsrechnungen" description="Verbuche oben einen erfassten Beleg." />
         ) : (
@@ -156,7 +181,14 @@ export async function EingangsbelegeSection() {
                               <input type="hidden" name="id" value={i.id} />
                               <Button variant="ghost" size="sm" type="submit"><Check className="size-4" /> Bezahlt</Button>
                             </form>
-                          ) : null}
+                          ) : (
+                            <form action={markIncomingOpen}>
+                              <input type="hidden" name="id" value={i.id} />
+                              <Button variant="ghost" size="sm" type="submit" title="Wieder als offen markieren">
+                                Offen
+                              </Button>
+                            </form>
+                          )}
                           <form action={deleteIncomingInvoice}>
                             <input type="hidden" name="id" value={i.id} />
                             <Button variant="ghost" size="icon" className="size-7" type="submit" title="Löschen">

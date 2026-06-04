@@ -45,7 +45,7 @@ export async function searchAll(query: string): Promise<SearchResults> {
   const like = `%${q}%`;
   const numeric = /^\d+$/.test(q) ? Number(q) : null;
 
-  const [customers, projects, offers, products, employees, projectFiles, productAssets, serviceFiles] = await Promise.all([
+  const [customers, projects, offers, products, employees, projectFiles, productAssets, serviceFiles, entityDocs] = await Promise.all([
     supabase
       .from("customers")
       .select("id, customer_nr, first_name, last_name, company, city")
@@ -93,6 +93,12 @@ export async function searchAll(query: string): Promise<SearchResults> {
       .select("id, name, ticket:service_tickets(id, title)")
       .or(`name.ilike.${like},text_content.ilike.${like}`)
       .limit(4),
+    // Entitäts-Dokumente (Kunde/Mitarbeiter) — nach Name & Inhalt.
+    supabase
+      .from("entity_documents")
+      .select("id, name, kind, entity_type, entity_id")
+      .or(`name.ilike.${like},text_content.ilike.${like}`)
+      .limit(6),
   ]);
 
   type Rel<T> = T | T[] | null;
@@ -168,6 +174,24 @@ export async function searchAll(query: string): Promise<SearchResults> {
           label: f.name,
           sub: ["Service", ticket?.title ?? "Ticket"].filter(Boolean).join(" · "),
           href: `/service`,
+        };
+      }),
+      ...(entityDocs.data ?? []).map((f) => {
+        const isKunde = f.entity_type === "kunde";
+        const isMa = f.entity_type === "mitarbeiter";
+        return {
+          type: "Datei" as const,
+          id: f.id,
+          label: f.name,
+          sub: [isKunde ? "Kunde" : isMa ? "Mitarbeiter" : "Dokument", f.kind]
+            .filter(Boolean)
+            .join(" · "),
+          href:
+            isKunde && f.entity_id
+              ? `/kunden/${f.entity_id}`
+              : isMa && f.entity_id
+                ? `/mitarbeiter/${f.entity_id}`
+                : "/posteingang",
         };
       }),
     ],
