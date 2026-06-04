@@ -427,7 +427,17 @@ export async function attachDocumentFromUrl(input: {
   try {
     const controller = new AbortController();
     const t = setTimeout(() => controller.abort(), 25000);
-    const res = await fetch(input.url, { signal: controller.signal, redirect: "follow" });
+    // Browser-typische Header: viele Hersteller-/CDN-Server antworten ohne
+    // User-Agent mit 403 und das Dokument ließe sich sonst nie laden.
+    const res = await fetch(input.url, {
+      signal: controller.signal,
+      redirect: "follow",
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        Accept: "application/pdf,image/*,*/*;q=0.8",
+      },
+    });
     clearTimeout(t);
     if (!res.ok) return fail(`Download fehlgeschlagen (HTTP ${res.status}).`);
     mime = (res.headers.get("content-type") ?? "").split(";")[0].trim() || "application/octet-stream";
