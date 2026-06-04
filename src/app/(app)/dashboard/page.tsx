@@ -27,6 +27,7 @@ import { getEmployees } from "@/lib/data/employees";
 import { GlobalFileDrop } from "@/components/shared/global-file-drop";
 import { MyTasksPanel } from "@/components/shared/my-tasks-panel";
 import { TeamViewSelect } from "@/components/dashboard/team-view-select";
+import { TodayBriefing } from "@/components/dashboard/today-briefing";
 import { getAdminStats } from "@/lib/data/stats";
 import {
   getMyOpenTasks,
@@ -147,6 +148,7 @@ export default async function DashboardPage({
           <div className="mb-4">
             <GlobalSearch variant="dashboard" aiEnabled={isAiConfigured()} />
           </div>
+          {me?.id ? <TodayBriefing employeeId={me.id} /> : null}
           <Card className="mb-4">
             <CardHeader>
               <CardTitle className="text-base">Dateien ablegen</CardTitle>
