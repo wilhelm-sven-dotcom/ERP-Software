@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import { embedFileRow } from "@/lib/ai/embed-file";
+import { analyzeDocument, isDocIntelConfigured } from "@/lib/ai/doc-intelligence";
 import { getList } from "@/lib/data/settings";
 import { DEFAULT_CATEGORIES, DEFAULT_UNITS } from "@/lib/constants";
 import { RESERVED_SPEC_KEYS } from "@/lib/products/spec-labels";
@@ -436,7 +437,15 @@ export async function attachDocumentFromUrl(input: {
     .upload(path, bytes, { contentType: mime });
   if (up.error) return fail(`Upload fehlgeschlagen: ${up.error.message}`);
 
-  // 4) Registrieren.
+  // 4) Bei Dokumenten (PDF) den Volltext server-seitig auslesen (Azure DI),
+  //    damit das Datenblatt/die Anleitung durchsuchbar wird (Embeddings).
+  let textContent: string | null = null;
+  if (!isImage && isDocIntelConfigured()) {
+    const di = await analyzeDocument(bytes, mime);
+    textContent = di?.text ?? null;
+  }
+
+  // 5) Registrieren.
   const defaultName: Record<string, string> = {
     image: "Produktbild",
     datasheet: "Datenblatt",
@@ -449,7 +458,7 @@ export async function attachDocumentFromUrl(input: {
     name: input.name?.trim() || `${defaultName[input.kind]} (Web)`,
     storagePath: path,
     mime,
-    textContent: null,
+    textContent,
   });
 }
 
