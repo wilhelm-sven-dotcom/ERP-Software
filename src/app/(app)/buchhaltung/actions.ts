@@ -52,6 +52,14 @@ export async function deleteIncomingInvoice(fd: FormData): Promise<void> {
   const id = String(fd.get("id") ?? "");
   if (!id) return;
   const supabase = await createClient();
+  // Hinterlegte Beleg-PDF (falls vorhanden) mit aus dem Storage entfernen.
+  const { data: row } = await supabase
+    .from("incoming_invoices")
+    .select("document_path")
+    .eq("id", id)
+    .maybeSingle();
+  const path = (row as { document_path?: string | null } | null)?.document_path;
+  if (path) await supabase.storage.from("entity-documents").remove([path]);
   await supabase.from("incoming_invoices").delete().eq("id", id);
   revalidatePath("/buchhaltung");
 }

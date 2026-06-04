@@ -62,7 +62,7 @@ interface Row {
   reason: string;
   confidence: number;
   target: Target;
-  productId: string;
+  productIds: string[];
   projectId: string;
   customerId: string;
   employeeId: string;
@@ -87,12 +87,14 @@ export function PosteingangDrop({
   customers,
   employees,
   aiEnabled,
+  azureEnabled = false,
 }: {
   projects: Opt[];
   products: Opt[];
   customers: Opt[];
   employees: Opt[];
   aiEnabled: boolean;
+  azureEnabled?: boolean;
 }) {
   const router = useRouter();
   const [rows, setRows] = React.useState<Row[]>([]);
@@ -120,7 +122,7 @@ export function PosteingangDrop({
       reason: "",
       confidence: 0,
       target: "projekt",
-      productId: "",
+      productIds: [],
       projectId: "",
       customerId: "",
       employeeId: "",
@@ -194,7 +196,7 @@ export function PosteingangDrop({
         busy: false,
         text,
         target: r.target ?? "projekt",
-        productId: r.productIds?.[0] ?? "",
+        productIds: Array.isArray(r.productIds) ? r.productIds : [],
         projectId: r.projectId ?? "",
         customerId: r.customerId ?? "",
         employeeId: r.employeeId ?? "",
@@ -208,7 +210,7 @@ export function PosteingangDrop({
       // „Alles automatisch": nur bei eindeutigem Ziel UND hoher Konfidenz (≥ 0,7).
       if (autoFileRef.current && (fields.confidence ?? 0) >= 0.7) {
         const merged = { ...row, ...fields } as Row;
-        if (!entityRequired(merged) || selectedEntity(merged)) {
+        if (!entityRequired(merged) || hasTarget(merged)) {
           patch(row.uid, { busy: true });
           const ok = await commitRow(merged);
           patch(row.uid, { busy: false, done: ok });
@@ -227,21 +229,30 @@ export function PosteingangDrop({
     return projects; // projekt + buchhaltung (optionale Projektverknüpfung)
   }
   function selectedEntity(row: Row): string {
-    if (row.target === "produkt") return row.productId;
+    if (row.target === "produkt") return row.productIds[0] ?? "";
     if (row.target === "kunde") return row.customerId;
     if (row.target === "mitarbeiter") return row.employeeId;
     return row.projectId;
   }
   function setEntity(row: Row, id: string) {
-    if (row.target === "produkt") patch(row.uid, { productId: id });
-    else if (row.target === "kunde") patch(row.uid, { customerId: id });
+    if (row.target === "kunde") patch(row.uid, { customerId: id });
     else if (row.target === "mitarbeiter") patch(row.uid, { employeeId: id });
     else patch(row.uid, { projectId: id });
+  }
+  function addProduct(row: Row, id: string) {
+    if (!id || row.productIds.includes(id)) return;
+    patch(row.uid, { productIds: [...row.productIds, id] });
+  }
+  function removeProduct(row: Row, id: string) {
+    patch(row.uid, { productIds: row.productIds.filter((x) => x !== id) });
   }
 
   function entityRequired(row: Row): boolean {
     // Buchhaltung darf ohne Projekt verbucht werden; alle anderen brauchen ein Ziel.
     return row.target !== "buchhaltung";
+  }
+  function hasTarget(row: Row): boolean {
+    return row.target === "produkt" ? row.productIds.length > 0 : Boolean(selectedEntity(row));
   }
 
   async function commitRow(row: Row): Promise<boolean> {
@@ -250,19 +261,24 @@ export function PosteingangDrop({
     const mime = row.file.type || null;
     try {
       if (row.target === "produkt") {
-        if (!row.productId) return false;
+        if (row.productIds.length === 0) return false;
         const p = path("shared");
         const up = await supabase.storage.from(PRODUCT_BUCKET).upload(p, row.file);
         if (up.error) throw new Error(up.error.message);
-        const r = await registerProductAsset({
-          productId: row.productId,
-          kind: row.isPdf ? "datasheet" : "image",
-          name: row.file.name,
-          storagePath: p,
-          mime,
-          textContent: row.isPdf ? row.text || null : null,
-        });
-        return r.ok;
+        // Dieselbe Datei mehreren Produkten zuordnen (Familien-Datenblatt).
+        let okAll = true;
+        for (const productId of row.productIds) {
+          const r = await registerProductAsset({
+            productId,
+            kind: row.isPdf ? "datasheet" : "image",
+            name: row.file.name,
+            storagePath: p,
+            mime,
+            textContent: row.isPdf ? row.text || null : null,
+          });
+          if (!r.ok) okAll = false;
+        }
+        return okAll;
       }
       if (row.target === "projekt") {
         if (!row.projectId) return false;
@@ -321,6 +337,8 @@ export function PosteingangDrop({
         amount: row.docMeta?.amount ?? null,
         currency: row.docMeta?.currency ?? null,
         projectId: row.projectId || null,
+        documentPath: p,
+        documentName: row.file.name,
       });
       return inv.ok;
     } catch (e) {
@@ -334,7 +352,7 @@ export function PosteingangDrop({
     let ok = 0;
     let fail = 0;
     for (const row of rows.filter((r) => !r.done)) {
-      if (entityRequired(row) && !selectedEntity(row)) {
+      if (entityRequired(row) && !hasTarget(row)) {
         patch(row.uid, { error: "Bitte Ziel auswählen" });
         fail++;
         continue;
@@ -385,6 +403,14 @@ export function PosteingangDrop({
           </label>{" "}
           — die KI sortiert jedes Dokument vor.
         </p>
+        {aiEnabled ? (
+          <p className="text-muted-foreground mt-1 text-xs">
+            Dokument-Auslese:{" "}
+            <span className={azureEnabled ? "font-medium text-green-600" : ""}>
+              {azureEnabled ? "Azure aktiv" : "Standard (pdf.js)"}
+            </span>
+          </p>
+        ) : null}
         {!aiEnabled ? (
           <p className="text-muted-foreground mt-1 text-xs">
             Hinweis: Ohne KI-Schlüssel musst du Ziel und Typ manuell wählen.
@@ -417,7 +443,14 @@ export function PosteingangDrop({
           <div key={row.uid} className={cn("rounded-lg border p-3", row.done && "opacity-50")}>
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{row.file.name}</p>
+                <button
+                  type="button"
+                  onClick={() => window.open(URL.createObjectURL(row.file), "_blank")}
+                  className="block max-w-full truncate text-left text-sm font-medium hover:underline"
+                  title="Vorschau öffnen"
+                >
+                  {row.file.name}
+                </button>
                 {row.busy ? (
                   <p className="text-muted-foreground flex items-center gap-1 text-xs">
                     <Sparkles className="size-3" /> KI ordnet zu …
@@ -476,14 +509,52 @@ export function PosteingangDrop({
                 </div>
                 <div>
                   <label className="text-muted-foreground text-xs">
-                    {row.target === "buchhaltung" ? "Projekt (optional)" : "Zuordnung"}
+                    {row.target === "buchhaltung"
+                      ? "Projekt (optional)"
+                      : row.target === "produkt"
+                        ? "Produkt(e)"
+                        : "Zuordnung"}
                   </label>
-                  <EntityPicker
-                    options={optionsFor(row.target)}
-                    value={selectedEntity(row)}
-                    onChange={(id) => setEntity(row, id)}
-                    placeholder={row.target === "buchhaltung" ? "Ohne Projekt" : "Auswählen …"}
-                  />
+                  {row.target === "produkt" ? (
+                    <div className="space-y-1.5">
+                      <EntityPicker
+                        options={products}
+                        value=""
+                        onChange={(id) => addProduct(row, id)}
+                        placeholder="Produkt hinzufügen …"
+                      />
+                      {row.productIds.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {row.productIds.map((id) => {
+                            const opt = products.find((o) => o.id === id);
+                            return (
+                              <span
+                                key={id}
+                                className="bg-muted inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs"
+                              >
+                                {opt?.label ?? id}
+                                <button
+                                  type="button"
+                                  onClick={() => removeProduct(row, id)}
+                                  className="hover:text-destructive"
+                                  aria-label="Entfernen"
+                                >
+                                  <X className="size-3" />
+                                </button>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <EntityPicker
+                      options={optionsFor(row.target)}
+                      value={selectedEntity(row)}
+                      onChange={(id) => setEntity(row, id)}
+                      placeholder={row.target === "buchhaltung" ? "Ohne Projekt" : "Auswählen …"}
+                    />
+                  )}
                 </div>
                 {row.target === "buchhaltung" ? (
                   <div className="grid grid-cols-2 gap-2 sm:col-span-2">

@@ -14,7 +14,28 @@ export interface IncomingInvoice {
   status: string;
   paid_at: string | null;
   created_at: string;
+  document_path: string | null;
+  document_name: string | null;
   project: { id: string; title: string | null } | null;
+}
+
+/** Signierte Download-Links (1 h) für die hinterlegten Beleg-PDFs. */
+export async function getInvoiceFileUrls(
+  invoices: IncomingInvoice[],
+): Promise<Record<string, string>> {
+  const withFile = invoices.filter((i) => i.document_path);
+  if (withFile.length === 0 || !isSupabaseConfigured()) return {};
+  const supabase = await createClient();
+  const out: Record<string, string> = {};
+  await Promise.all(
+    withFile.map(async (i) => {
+      const { data } = await supabase.storage
+        .from("entity-documents")
+        .createSignedUrl(i.document_path!, 3600);
+      if (data?.signedUrl) out[i.id] = data.signedUrl;
+    }),
+  );
+  return out;
 }
 
 /** Alle Eingangsrechnungen (neueste zuerst), inkl. Projekt-Titel. */

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BookCheck, Check, Trash2 } from "lucide-react";
+import { BookCheck, Check, FileText, Trash2 } from "lucide-react";
 
 import { EmptyState } from "@/components/shared/empty-state";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getIncomingDocuments } from "@/lib/data/project-files";
-import { getIncomingInvoices, getBookedFileIds } from "@/lib/data/incoming-invoices";
+import { getIncomingInvoices, getBookedFileIds, getInvoiceFileUrls } from "@/lib/data/incoming-invoices";
 import { bookIncomingInvoice, markIncomingPaid, deleteIncomingInvoice } from "@/app/(app)/buchhaltung/actions";
 import { formatCurrency, formatDate } from "@/lib/format";
 
@@ -30,6 +30,7 @@ export async function EingangsbelegeSection() {
     getBookedFileIds(),
   ]);
   const unbooked = docs.filter((d) => !bookedIds.has(d.id));
+  const fileUrls = await getInvoiceFileUrls(invoices);
   const today = new Date().toISOString().slice(0, 10);
   const openSum = invoices.filter((i) => i.status !== "bezahlt").reduce((s, i) => s + num(i.amount), 0);
 
@@ -143,6 +144,13 @@ export async function EingangsbelegeSection() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-end gap-1">
+                          {fileUrls[i.id] ? (
+                            <Button variant="ghost" size="sm" asChild title="Beleg-PDF öffnen">
+                              <a href={fileUrls[i.id]} target="_blank" rel="noopener noreferrer">
+                                <FileText className="size-4" /> PDF
+                              </a>
+                            </Button>
+                          ) : null}
                           {i.status !== "bezahlt" ? (
                             <form action={markIncomingPaid}>
                               <input type="hidden" name="id" value={i.id} />

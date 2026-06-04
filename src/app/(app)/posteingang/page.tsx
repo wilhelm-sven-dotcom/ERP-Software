@@ -9,6 +9,7 @@ import { getCustomers } from "@/lib/data/customers";
 import { getEmployees } from "@/lib/data/employees";
 import { customerName } from "@/lib/format";
 import { isAiConfigured } from "@/lib/ai/openai";
+import { isDocIntelConfigured } from "@/lib/ai/doc-intelligence";
 
 export const metadata: Metadata = { title: "Posteingang" };
 
@@ -30,6 +31,7 @@ export default async function PosteingangPage() {
       <SupabaseNotice />
       <PosteingangDrop
         aiEnabled={isAiConfigured()}
+        azureEnabled={isDocIntelConfigured()}
         projects={projects.map((p) => ({
           id: p.id,
           label: p.title ?? "Ohne Titel",

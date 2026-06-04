@@ -75,6 +75,9 @@ export async function createIncomingInvoice(input: {
   currency?: string | null;
   projectId?: string | null;
   sourceFileId?: string | null;
+  /** Pfad der abgelegten Beleg-PDF (Bucket entity-documents) zum Öffnen. */
+  documentPath?: string | null;
+  documentName?: string | null;
 }): Promise<ActionResult & { id?: string }> {
   const guard = ensureConfigured();
   if (guard) return guard;
@@ -86,22 +89,25 @@ export async function createIncomingInvoice(input: {
         ? Number(String(input.amount).replace(",", "."))
         : null;
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("incoming_invoices")
-    .insert({
-      supplier: input.supplier ?? null,
-      invoice_number: input.invoice_number ?? null,
-      invoice_date: ymd(input.invoice_date),
-      due_date: ymd(input.due_date),
-      amount: amount !== null && Number.isFinite(amount) ? amount : null,
-      currency: input.currency ?? "EUR",
-      project_id: input.projectId ?? null,
-      source_file_id: input.sourceFileId ?? null,
-      created_by: me?.id ?? null,
-    })
-    .select("id")
-    .single();
-  if (error || !data) return fail(error?.message ?? "Verbuchen fehlgeschlagen.");
+  const base = {
+    supplier: input.supplier ?? null,
+    invoice_number: input.invoice_number ?? null,
+    invoice_date: ymd(input.invoice_date),
+    due_date: ymd(input.due_date),
+    amount: amount !== null && Number.isFinite(amount) ? amount : null,
+    currency: input.currency ?? "EUR",
+    project_id: input.projectId ?? null,
+    source_file_id: input.sourceFileId ?? null,
+    created_by: me?.id ?? null,
+  };
+  const withFile = { ...base, document_path: input.documentPath ?? null, document_name: input.documentName ?? null };
+
+  let res = await supabase.from("incoming_invoices").insert(withFile).select("id").single();
+  // Fallback, falls die Datei-Spalten (Migration) noch nicht vorhanden sind.
+  if (res.error && /document_(path|name)/.test(res.error.message)) {
+    res = await supabase.from("incoming_invoices").insert(base).select("id").single();
+  }
+  if (res.error || !res.data) return fail(res.error?.message ?? "Verbuchen fehlgeschlagen.");
   revalidatePath("/buchhaltung");
-  return { ok: true, id: data.id };
+  return { ok: true, id: res.data.id };
 }
