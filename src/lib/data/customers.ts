@@ -1,6 +1,35 @@
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import type { ActivityWithEmployee, Customer } from "@/lib/types";
+import { customerName } from "@/lib/format";
+
+export interface DuplicateGroup {
+  key: string;
+  label: string;
+  customers: Customer[];
+}
+
+/**
+ * Mögliche Dublette-Kunden gruppieren: gleicher Name (Firma bzw. Vor-/Nachname)
+ * + gleiche PLZ/Ort. Rein heuristisch — zum manuellen Prüfen/Bereinigen.
+ */
+export async function getDuplicateCustomerGroups(): Promise<DuplicateGroup[]> {
+  const customers = await getCustomers();
+  const norm = (s: string | null | undefined) =>
+    (s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+  const groups = new Map<string, Customer[]>();
+  for (const c of customers) {
+    const name = norm(c.company) || norm(`${c.first_name ?? ""} ${c.last_name ?? ""}`);
+    if (!name) continue;
+    const loc = norm(c.zip) || norm(c.city);
+    const key = `${name}|${loc}`;
+    (groups.get(key) ?? groups.set(key, []).get(key)!).push(c);
+  }
+  return Array.from(groups.entries())
+    .filter(([, list]) => list.length > 1)
+    .map(([key, list]) => ({ key, label: customerName(list[0]), customers: list }))
+    .sort((a, b) => b.customers.length - a.customers.length);
+}
 
 /** Alle Kunden (nach Kundennummer). Leer, wenn Supabase nicht konfiguriert. */
 export async function getCustomers(): Promise<Customer[]> {

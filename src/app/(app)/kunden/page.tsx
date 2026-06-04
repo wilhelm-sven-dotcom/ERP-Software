@@ -37,6 +37,9 @@ export default async function KundenPage() {
   return (
     <div>
       <PageHeader title="Kunden" description="Kundenstamm verwalten.">
+        <Button variant="outline" asChild>
+          <Link href="/kunden/dubletten">Dubletten prüfen</Link>
+        </Button>
         {newButton}
       </PageHeader>
 
