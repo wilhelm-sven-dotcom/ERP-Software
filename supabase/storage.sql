@@ -76,3 +76,23 @@ create policy "service_files_insert" on storage.objects
 drop policy if exists "service_files_delete" on storage.objects;
 create policy "service_files_delete" on storage.objects
   for delete using (bucket_id = 'service-files' and public.is_staff());
+
+-- ============================================================================
+-- Entitäts-Dokumente (Kunde/Mitarbeiter/Eingangsrechnungen) — Posteingang
+-- PRIVAT (public=false): Zugriff nur über signierte URLs (createSignedUrl).
+-- ============================================================================
+insert into storage.buckets (id, name, public)
+values ('entity-documents', 'entity-documents', false)
+on conflict (id) do nothing;
+
+drop policy if exists "entity_documents_read" on storage.objects;
+create policy "entity_documents_read" on storage.objects
+  for select using (bucket_id = 'entity-documents' and public.is_staff());
+
+drop policy if exists "entity_documents_insert" on storage.objects;
+create policy "entity_documents_insert" on storage.objects
+  for insert with check (bucket_id = 'entity-documents' and public.is_staff());
+
+drop policy if exists "entity_documents_delete" on storage.objects;
+create policy "entity_documents_delete" on storage.objects
+  for delete using (bucket_id = 'entity-documents' and public.is_staff());

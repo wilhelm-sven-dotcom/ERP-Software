@@ -43,7 +43,8 @@ export async function searchAll(query: string): Promise<SearchResults> {
   if (!isSupabaseConfigured() || q.length < 2) return EMPTY;
   const supabase = await createClient();
   const like = `%${q}%`;
-  const numeric = /^\d+$/.test(q) ? Number(q) : null;
+  // Nur „sichere" Ganzzahlen als Nummern-Treffer (verhindert Überlauf/Inf).
+  const numeric = /^\d{1,12}$/.test(q) ? Number(q) : null;
 
   const [customers, projects, offers, products, employees, projectFiles, productAssets, serviceFiles, entityDocs] = await Promise.all([
     supabase

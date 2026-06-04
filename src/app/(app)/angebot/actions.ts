@@ -68,6 +68,7 @@ export async function createOfferFromCalculation(fd: FormData): Promise<void> {
         pauschalRabattPercent: meta.pauschalRabattPercent,
         nachlass: meta.nachlass,
         skontoPercent: meta.skontoPercent,
+        mwstPercent: meta.mwstPercent,
         mwstPerGroup: meta.mwstPerGroup ?? null,
         system_size_kwp: calc.system_size_kwp,
         storage_kwh: calc.storage_kwh,
@@ -125,7 +126,7 @@ export async function updateOffer(fd: FormData): Promise<{ ok: boolean; error?: 
     positions,
     pauschalRabattPercent: num(m.pauschalRabattPercent),
     nachlass: num(m.nachlass),
-    mwstPercent: mwstPerGroup?.["Sonstiges"] ?? 19,
+    mwstPercent: num(m.mwstPercent, mwstPerGroup?.["Sonstiges"] ?? 19),
     mwstPerGroup,
     skontoPercent: num(m.skontoPercent),
   });

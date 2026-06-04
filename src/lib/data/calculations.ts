@@ -20,7 +20,7 @@ export function readPositions(calc: Calculation | null): CalcPosition[] {
 
 export function readMeta(calc: Calculation | null): StoredCalcMeta {
   const t = (calc?.totals ?? {}) as Record<string, unknown>;
-  const n = (v: unknown, d: number) => (typeof v === "number" ? v : d);
+  const n = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) ? v : d);
   const mpg =
     t.mwstPerGroup && typeof t.mwstPerGroup === "object"
       ? (t.mwstPerGroup as Record<string, number>)
