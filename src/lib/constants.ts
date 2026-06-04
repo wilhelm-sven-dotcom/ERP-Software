@@ -1,9 +1,29 @@
 import type { ProjectStatus } from "@/lib/types";
 
-/** Pipeline-Stufen in Reihenfolge (Legacy-verifiziert). */
+/**
+ * Vertriebs-Funnel (nur Leads/Anfragen). „Anfrage" ist der Eingang und wird im
+ * Board als „Neu" angezeigt — so bleibt der bestehende Wert (Dashboard, Leads)
+ * kompatibel, ohne Daten-Migration. Gewonnene Leads werden zu aktiven Projekten
+ * (Status „Auftrag") und verlassen damit das Vertriebs-Board.
+ */
+export const SALES_STAGES = ["Anfrage", "Kontaktiert", "Qualifiziert", "Termin", "Angebot"] as const;
+
+const SALES_STAGE_LABELS: Record<string, string> = {
+  Anfrage: "Neu",
+  Kontaktiert: "Kontaktiert",
+  Qualifiziert: "Qualifiziert",
+  Termin: "Termin/Beratung",
+  Angebot: "Angebot",
+};
+
+/** Anzeige-Label einer Vertriebsstufe (intern bleibt „Anfrage"). */
+export function salesStageLabel(stage: string): string {
+  return SALES_STAGE_LABELS[stage] ?? stage;
+}
+
+/** Projekt-Status in Reihenfolge: Vertriebsstufen + aktive/abgeschlossene Stufen. */
 export const PROJECT_STATUSES: ProjectStatus[] = [
-  "Anfrage",
-  "Angebot",
+  ...SALES_STAGES,
   "Auftrag",
   "Entwurf",
   "gewonnen",

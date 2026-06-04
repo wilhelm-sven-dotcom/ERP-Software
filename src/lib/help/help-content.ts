@@ -41,12 +41,14 @@ export const HELP_ENTRIES: HelpEntry[] = [
   },
   {
     id: "pipeline",
-    term: "Pipeline",
-    short: "Kanban-Übersicht aller Projekte nach Status — Karten per Drag & Drop verschiebbar.",
+    term: "Vertrieb (Funnel)",
+    short: "Nur Leads/Anfragen: Neu → Kontaktiert → Qualifiziert → Termin → Angebot. Per Drag & Drop weiterziehen.",
     long:
-      "Die Pipeline zeigt alle Projekte in Spalten je Status (z. B. Anfrage, Angebot, Auftrag). Eine " +
-      "Karte zieht man einfach in die nächste Spalte, um den Status zu ändern.",
-    category: "Grundlagen",
+      "Das Vertriebs-Board zeigt ausschließlich Leads/Anfragen im Funnel. Eine Karte zieht man in die " +
+      "nächste Stufe. »Gewonnen« macht aus dem Lead ein aktives Projekt (es erscheint dann unter " +
+      "Projekte); »Verloren« schließt den Lead. Aktive/abgeschlossene Projekte erscheinen nicht mehr im " +
+      "Vertrieb.",
+    category: "Vertrieb",
   },
 
   {

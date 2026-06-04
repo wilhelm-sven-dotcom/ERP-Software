@@ -9,7 +9,7 @@ import { getProjects } from "@/lib/data/projects";
 import { getSalesEmployees } from "@/lib/data/employees";
 import { getProjectsProgress } from "@/lib/data/workflow";
 
-export const metadata: Metadata = { title: "Pipeline" };
+export const metadata: Metadata = { title: "Vertrieb" };
 
 export default async function PipelinePage() {
   const [projects, salesEmployees] = await Promise.all([
@@ -21,8 +21,9 @@ export default async function PipelinePage() {
   return (
     <div>
       <PageHeader
-        title="Pipeline"
-        description="Projekte nach Vertriebsstatus – per Drag & Drop verschieben."
+        title="Vertrieb"
+        description="Leads & Anfragen im Funnel — per Drag & Drop weiterziehen, „Gewonnen“ macht daraus ein Projekt."
+        helpId="pipeline"
       >
         <LeadIntakeDialog salesEmployees={salesEmployees} />
       </PageHeader>

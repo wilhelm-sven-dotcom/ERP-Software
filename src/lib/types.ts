@@ -12,6 +12,9 @@ export type CustomerKind = "privat" | "gewerbe";
 /** Pipeline-Stufen (Legacy-Werte aus /legacy; ohne harten DB-CHECK). */
 export type ProjectStatus =
   | "Anfrage"
+  | "Kontaktiert"
+  | "Qualifiziert"
+  | "Termin"
   | "Angebot"
   | "Auftrag"
   | "Entwurf"

@@ -1,5 +1,6 @@
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
+import { SALES_STAGES } from "@/lib/constants";
 import type { ActivityWithEmployee, Customer, Project } from "@/lib/types";
 
 export type ProjectWithCustomer = Project & {
@@ -54,7 +55,7 @@ export async function getMyLeads(
     .from("projects")
     .select(SELECT)
     .eq("assigned_employee_id", employeeId)
-    .in("status", ["Anfrage", "Angebot"])
+    .in("status", [...SALES_STAGES])
     .order("created_at", { ascending: false });
   if (error) {
     console.error("getMyLeads:", error.message);

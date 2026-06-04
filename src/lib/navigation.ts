@@ -38,7 +38,7 @@ export const navItems: NavItem[] = [
   { key: "assistent", label: "KI-Assistent", href: "/assistent", icon: Sparkles },
   { key: "dashboard", label: "Dashboard", href: "/dashboard", icon: LayoutGrid },
   { key: "projekte", label: "Projekte", href: "/projekte", icon: FolderKanban },
-  { key: "pipeline", label: "Pipeline", href: "/pipeline", icon: GitBranch },
+  { key: "pipeline", label: "Vertrieb", href: "/pipeline", icon: GitBranch },
   { key: "kunden", label: "Kunden", href: "/kunden", icon: Users },
   { key: "buchhaltung", label: "Buchhaltung", href: "/buchhaltung", icon: Wallet },
   { key: "wartung", label: "Wartung", href: "/wartung", icon: Wrench },
