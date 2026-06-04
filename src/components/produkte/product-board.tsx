@@ -8,6 +8,7 @@ import {
   ChevronRight,
   GripVertical,
   Search,
+  FileText,
 } from "lucide-react";
 import {
   DndContext,
@@ -408,6 +409,7 @@ export function ProductBoard({
               <RowShell
                 product={activeProduct}
                 thumb={thumbs[activeProduct.id] ?? null}
+                hasDoc={(assetsByProduct[activeProduct.id] ?? []).some((a) => a.kind !== "image")}
                 dragging
               />
             ) : activeType === "group" && activeId ? (
@@ -603,6 +605,7 @@ function SortableItem({
       <RowShell
         product={product}
         thumb={thumb}
+        hasDoc={assets.some((a) => a.kind !== "image")}
         handle={
           <button
             type="button"
@@ -662,6 +665,7 @@ function ProductRow({
     <RowShell
       product={product}
       thumb={thumb}
+      hasDoc={assets.some((a) => a.kind !== "image")}
       action={
         <ProductFormDialog
           product={product}
@@ -687,12 +691,14 @@ function ProductRow({
 function RowShell({
   product: p,
   thumb,
+  hasDoc,
   handle,
   action,
   dragging,
 }: {
   product: Product;
   thumb: string | null;
+  hasDoc?: boolean;
   handle?: React.ReactNode;
   action?: React.ReactNode;
   dragging?: boolean;
@@ -716,7 +722,12 @@ function RowShell({
         <div className="bg-muted size-9 shrink-0 rounded border" />
       )}
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{p.name}</p>
+        <p className="flex items-center gap-1.5 truncate text-sm font-medium">
+          <span className="truncate">{p.name}</span>
+          {hasDoc ? (
+            <FileText className="text-muted-foreground size-3.5 shrink-0" aria-label="Dokumente hinterlegt" />
+          ) : null}
+        </p>
         <p className="text-muted-foreground truncate text-xs">
           {[p.manufacturer, p.category].filter(Boolean).join(" · ") || "—"}
         </p>

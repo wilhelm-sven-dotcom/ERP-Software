@@ -97,6 +97,10 @@ export function PosteingangDrop({
   const [rows, setRows] = React.useState<Row[]>([]);
   const [over, setOver] = React.useState(false);
   const [committing, setCommitting] = React.useState(false);
+  // „Alles automatisch": sicher klassifizierte Dokumente direkt ablegen.
+  const [autoFile, setAutoFile] = React.useState(false);
+  const autoFileRef = React.useRef(false);
+  autoFileRef.current = autoFile;
 
   function patch(uid: string, p: Partial<Row>) {
     setRows((rs) => rs.map((r) => (r.uid === uid ? { ...r, ...p } : r)));
@@ -183,7 +187,7 @@ export function PosteingangDrop({
         patch(row.uid, { busy: false, text });
         return;
       }
-      patch(row.uid, {
+      const fields: Partial<Row> = {
         busy: false,
         text,
         target: r.target ?? "projekt",
@@ -194,7 +198,19 @@ export function PosteingangDrop({
         kind: typeof r.kind === "string" ? r.kind : "dokument",
         docMeta: r.document ?? null,
         reason: r.reason ?? "",
-      });
+      };
+      patch(row.uid, fields);
+
+      // „Alles automatisch": nur ablegen, wenn ein eindeutiges Ziel feststeht.
+      if (autoFileRef.current) {
+        const merged = { ...row, ...fields } as Row;
+        if (!entityRequired(merged) || selectedEntity(merged)) {
+          patch(row.uid, { busy: true });
+          const ok = await commitRow(merged);
+          patch(row.uid, { busy: false, done: ok });
+          if (ok) router.refresh();
+        }
+      }
     } catch {
       patch(row.uid, { busy: false, error: "KI-Auslese fehlgeschlagen" });
     }
@@ -369,7 +385,17 @@ export function PosteingangDrop({
           <p className="text-muted-foreground mt-1 text-xs">
             Hinweis: Ohne KI-Schlüssel musst du Ziel und Typ manuell wählen.
           </p>
-        ) : null}
+        ) : (
+          <label className="text-muted-foreground mt-3 inline-flex cursor-pointer items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={autoFile}
+              onChange={(e) => setAutoFile(e.target.checked)}
+              className="size-4"
+            />
+            Sicher erkannte Dokumente automatisch ablegen (ohne Bestätigung)
+          </label>
+        )}
       </div>
 
       {pending.length > 0 ? (
@@ -441,12 +467,72 @@ export function PosteingangDrop({
                     placeholder={row.target === "buchhaltung" ? "Ohne Projekt" : "Auswählen …"}
                   />
                 </div>
-                {row.target === "buchhaltung" && row.docMeta ? (
-                  <p className="text-muted-foreground sm:col-span-2 text-xs">
-                    {row.docMeta.supplier ? `Lieferant: ${row.docMeta.supplier} · ` : ""}
-                    {row.docMeta.invoice_number ? `Nr. ${row.docMeta.invoice_number} · ` : ""}
-                    {row.docMeta.amount ? `Betrag: ${row.docMeta.amount} ${row.docMeta.currency ?? "EUR"}` : ""}
-                  </p>
+                {row.target === "buchhaltung" ? (
+                  <div className="grid grid-cols-2 gap-2 sm:col-span-2">
+                    <div>
+                      <label className="text-muted-foreground text-xs">Lieferant</label>
+                      <Input
+                        className="h-9"
+                        value={row.docMeta?.supplier ?? ""}
+                        onChange={(e) =>
+                          patch(row.uid, { docMeta: { ...row.docMeta, supplier: e.target.value } })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="text-muted-foreground text-xs">Rechnungsnr.</label>
+                      <Input
+                        className="h-9"
+                        value={row.docMeta?.invoice_number ?? ""}
+                        onChange={(e) =>
+                          patch(row.uid, { docMeta: { ...row.docMeta, invoice_number: e.target.value } })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="text-muted-foreground text-xs">Rechnungsdatum</label>
+                      <Input
+                        type="date"
+                        className="h-9"
+                        value={row.docMeta?.invoice_date ?? ""}
+                        onChange={(e) =>
+                          patch(row.uid, { docMeta: { ...row.docMeta, invoice_date: e.target.value } })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="text-muted-foreground text-xs">Fällig am</label>
+                      <Input
+                        type="date"
+                        className="h-9"
+                        value={row.docMeta?.due_date ?? ""}
+                        onChange={(e) =>
+                          patch(row.uid, { docMeta: { ...row.docMeta, due_date: e.target.value } })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="text-muted-foreground text-xs">Betrag (Brutto)</label>
+                      <Input
+                        inputMode="decimal"
+                        className="h-9"
+                        value={row.docMeta?.amount != null ? String(row.docMeta.amount) : ""}
+                        onChange={(e) =>
+                          patch(row.uid, { docMeta: { ...row.docMeta, amount: e.target.value } })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="text-muted-foreground text-xs">Währung</label>
+                      <Input
+                        className="h-9"
+                        value={row.docMeta?.currency ?? "EUR"}
+                        onChange={(e) =>
+                          patch(row.uid, { docMeta: { ...row.docMeta, currency: e.target.value } })
+                        }
+                      />
+                    </div>
+                  </div>
                 ) : null}
               </div>
             ) : null}

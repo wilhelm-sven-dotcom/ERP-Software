@@ -16,6 +16,14 @@ import type { ProductAsset } from "@/lib/types";
 
 const BUCKET = "product-assets";
 
+const KIND_LABEL: Record<string, string> = {
+  datasheet: "Datenblatt",
+  manual: "Anleitung",
+  certificate: "Zertifikat",
+  image: "Bild",
+};
+const kindLabel = (k: string | null) => (k && KIND_LABEL[k]) || "Dokument";
+
 export function AssetUpload({
   productId,
   assets,
@@ -144,9 +152,13 @@ export function AssetUpload({
                 href={publicUrl(a.storage_path)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 hover:underline"
+                className="flex min-w-0 items-center gap-2 hover:underline"
               >
-                <FileText className="size-4" /> {a.name ?? "Datenblatt"}
+                <FileText className="size-4 shrink-0" />
+                <span className="bg-muted shrink-0 rounded px-1.5 py-0.5 text-xs font-medium">
+                  {kindLabel(a.kind)}
+                </span>
+                <span className="truncate">{a.name ?? "Dokument"}</span>
               </a>
               <DeleteAssetButton id={a.id} path={a.storage_path} />
             </li>
