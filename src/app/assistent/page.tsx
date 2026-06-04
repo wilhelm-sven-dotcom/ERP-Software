@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Card, CardContent } from "@/components/ui/card";
 import { AssistantChat } from "@/components/assistant/assistant-chat";
 import { isAiConfigured } from "@/lib/ai/openai";
+import { getCompanySettings } from "@/lib/data/settings";
 import { getCurrentEmployee } from "@/lib/supabase/auth";
 import { getProjects, getMyLeads } from "@/lib/data/projects";
 import { getProducts } from "@/lib/data/products";
@@ -24,12 +25,14 @@ function firstNameOf(firstName: string | null, name: string | null, email: strin
 
 export default async function AssistentPage() {
   const aiEnabled = isAiConfigured();
-  const [me, projects, products, conversations] = await Promise.all([
+  const [me, projects, products, conversations, company] = await Promise.all([
     getCurrentEmployee(),
     getProjects(),
     getProducts(),
     getConversations(),
+    getCompanySettings(),
   ]);
+  const logoUrl = company.logo_url ?? null;
   const firstName = me ? firstNameOf(me.first_name, me.name, me.email) : "";
   const projectOptions = projects.map((p) => ({ id: p.id, title: p.title ?? "Ohne Titel" }));
   const initialConversations = conversations.map((c) => ({
@@ -60,12 +63,14 @@ export default async function AssistentPage() {
 
   if (!aiEnabled) {
     return (
-      <Card>
-        <CardContent className="text-muted-foreground py-10 text-center text-sm">
-          Die KI ist noch nicht aktiviert. Bitte <code>OPENAI_API_KEY</code> in den
-          Umgebungsvariablen setzen (siehe <code>supabase/SETUP.md</code>).
-        </CardContent>
-      </Card>
+      <div className="grid h-svh place-items-center p-6">
+        <Card className="max-w-md">
+          <CardContent className="text-muted-foreground py-10 text-center text-sm">
+            Die KI ist noch nicht aktiviert. Bitte <code>OPENAI_API_KEY</code> in den
+            Umgebungsvariablen setzen (siehe <code>supabase/SETUP.md</code>).
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
@@ -78,6 +83,7 @@ export default async function AssistentPage() {
       initialConversations={initialConversations}
       briefing={briefing}
       canIndex={me?.role === "admin"}
+      logoUrl={logoUrl}
     />
   );
 }
