@@ -1,3 +1,5 @@
+import { cookies } from "next/headers";
+
 import { Sidebar } from "@/components/app-shell/sidebar";
 import { Topbar } from "@/components/app-shell/topbar";
 import { WelcomeTour } from "@/components/onboarding/welcome-tour";
@@ -12,9 +14,12 @@ export default async function AppLayout({
   const company = await getCompanySettings();
   const logoUrl = company.logo_url ?? null;
   const aiEnabled = isAiConfigured();
+  // Sidebar standardmäßig eingeklappt; Wahl wird im Cookie gemerkt.
+  const sbCookie = (await cookies()).get("sb_collapsed")?.value;
+  const sidebarCollapsed = sbCookie === undefined ? true : sbCookie === "1";
   return (
     <div className="flex min-h-svh">
-      <Sidebar logoUrl={logoUrl} />
+      <Sidebar logoUrl={logoUrl} defaultCollapsed={sidebarCollapsed} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar logoUrl={logoUrl} aiEnabled={aiEnabled} />
         <main className="mx-auto w-full max-w-[1600px] flex-1 p-5 sm:p-7 lg:p-8">{children}</main>
