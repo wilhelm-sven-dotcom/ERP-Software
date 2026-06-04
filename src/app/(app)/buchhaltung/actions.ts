@@ -30,6 +30,7 @@ export async function bookIncomingInvoice(fd: FormData): Promise<void> {
     currency: s(fd, "currency") ?? "EUR",
     project_id: s(fd, "project_id"),
     source_file_id: s(fd, "source_file_id"),
+    notes: s(fd, "notes"),
     created_by: me?.id ?? null,
   });
   revalidatePath("/buchhaltung");
