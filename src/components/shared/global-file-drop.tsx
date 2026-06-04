@@ -184,7 +184,12 @@ export function GlobalFileDrop({
           const base = { ...x, text, detecting: false };
           if (matched.length === 0) return base;
           const suggestedIds = Array.from(new Set([...x.suggestedIds, ...matched]));
-          const productIds = Array.from(new Set([...x.productIds, ...matched]));
+          // Nur bei GENAU einem eindeutigen Treffer automatisch anhaken — sonst
+          // nur vorschlagen (keine Häkchen-Flut bei Familien-/Mehrfachtreffern).
+          const productIds =
+            matched.length === 1
+              ? Array.from(new Set([...x.productIds, ...matched]))
+              : x.productIds;
           return {
             ...base,
             target: "produkt",
