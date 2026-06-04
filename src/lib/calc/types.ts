@@ -41,6 +41,23 @@ export interface CalcPosition {
   rabatt?: number | null;
   /** Hauptgruppe (für Gruppenrabatt). Default: Sonstiges. */
   group?: PositionGroup;
+  /**
+   * Hybrid-Aufteilung (z. B. Hybrid-Wechselrichter): Anteil in Prozent, der dem
+   * Topf „PV-Anlage" zugerechnet wird; der Rest geht an „Speicher". Wenn gesetzt
+   * (0–100), wird die Position **anteilig** auf beide Gruppen verteilt statt
+   * einer einzigen `group` zugeordnet. Die Position wird trotzdem nur **einmal**
+   * gezählt (Gesamtsumme bleibt korrekt).
+   */
+  splitPvPct?: number | null;
+  /** Modulleistung je Einheit in Wp (aus Produkt) → Anlagengröße in kWp. */
+  moduleWp?: number | null;
+  /** Speicherkapazität je Einheit in kWh (aus Produkt) → Speichergröße. */
+  kwhPerUnit?: number | null;
+  /**
+   * Dienstleistung mit kWp-abhängigem Preis (marginal gestaffelt). Wenn gesetzt,
+   * wird `einzelpreis` aus der Anlagengröße berechnet (Menge = 1).
+   */
+  servicePricing?: import("./service-pricing").ServicePricing | null;
 }
 
 /** Eingaben für die Summenberechnung (entspricht den calc-Feldern). */
@@ -52,10 +69,19 @@ export interface CalcInput {
   pauschalRabattPercent?: number;
   /** Nachlass absolut in € (netto). */
   nachlass?: number;
-  /** MwSt-Satz in Prozent (z. B. 19 oder 0 für PV-Nullsteuersatz). */
+  /** MwSt-Satz in Prozent (z. B. 19 oder 0 für PV-Nullsteuersatz). Fallback. */
   mwstPercent: number;
+  /**
+   * MwSt-Satz je Gruppe (§ 12 Abs. 3 UStG: PV-Anlage/Speicher 0 %, Wallbox/
+   * Sonstiges 19 %). Wenn gesetzt, übersteuert es `mwstPercent` je Gruppe.
+   */
+  mwstPerGroup?: Partial<Record<PositionGroup, number>>;
   /** Skonto in Prozent auf den Bruttobetrag (0–100). */
   skontoPercent?: number;
+  /** Anlagengröße in kWp (für spezifischen PV-Preis €/kWp). */
+  systemSizeKwp?: number | null;
+  /** Speicherkapazität in kWh (für spezifischen Speicherpreis €/kWh). */
+  storageKwh?: number | null;
 }
 
 export interface CalcPositionResult extends CalcPosition {
@@ -71,10 +97,12 @@ export interface CalcTotals {
   nettoVorPauschal: number;
   /** Summe netto (nach Pauschalrabatt & Nachlass). */
   netto: number;
-  /** MwSt-Satz in Prozent. */
+  /** MwSt-Satz in Prozent (einheitlich, sonst gewichteter Effektivsatz). */
   mwstSatz: number;
-  /** MwSt-Betrag. */
+  /** MwSt-Betrag (gesamt). */
   mwstBetrag: number;
+  /** MwSt aufgeschlüsselt je Satz (für getrennten Ausweis 0 % / 19 %). */
+  mwstSaetze: { rate: number; netto: number; betrag: number }[];
   /** Brutto = netto + MwSt. */
   brutto: number;
   /** Skonto-Betrag (auf brutto). */
@@ -89,6 +117,16 @@ export interface CalcTotals {
   margeProzent: number;
   /** Summen je Hauptgruppe (netto vor Pauschalrabatt). */
   gruppenSummen: Record<PositionGroup, number>;
+  /**
+   * Spezifischer PV-Preis netto (€/kWp) = gruppenSummen["PV-Anlage"] / kWp.
+   * null, wenn keine Anlagengröße (kWp) hinterlegt ist.
+   */
+  spezifischPvProKwp: number | null;
+  /**
+   * Spezifischer Speicherpreis netto (€/kWh) = gruppenSummen["Speicher"] / kWh.
+   * null, wenn keine Speicherkapazität (kWh) hinterlegt ist.
+   */
+  spezifischSpeicherProKwh: number | null;
 }
 
 export interface CalcResult {

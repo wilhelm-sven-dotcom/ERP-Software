@@ -7,6 +7,8 @@ export type ActionResult = {
   /** Optionale Duplikat-Warnung (z. B. ähnlicher Kunde). Nutzer kann erneut
    *  mit force=true absenden. */
   warning?: string;
+  /** Optionale ID des angelegten/gespeicherten Datensatzes (z. B. Kalkulation). */
+  id?: string;
 };
 
 export const OK: ActionResult = { ok: true };

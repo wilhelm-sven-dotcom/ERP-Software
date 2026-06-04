@@ -16,10 +16,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ProjectFormDialog } from "@/components/projekte/project-form-dialog";
+import { ClickableRow } from "@/components/projekte/clickable-row";
+import { ProgressBar } from "@/components/projekte/progress-bar";
 import { getProjects } from "@/lib/data/projects";
 import { getCustomers } from "@/lib/data/customers";
 import { getEmployees } from "@/lib/data/employees";
+import { getProjectsProgress, getProjectTypeOptions } from "@/lib/data/workflow";
 import { customerName, formatNumber } from "@/lib/format";
+import { NewBadge } from "@/components/shared/new-badge";
 import { statusVariant } from "@/lib/constants";
 
 export const metadata: Metadata = { title: "Projekte" };
@@ -35,12 +39,17 @@ export default async function ProjektePage({
     getCustomers(),
     getEmployees(),
   ]);
+  const [progress, projectTypes] = await Promise.all([
+    getProjectsProgress(projects.map((p) => p.id)),
+    getProjectTypeOptions(),
+  ]);
   const openOnMount = neu === "1";
 
   const newButton = (
     <ProjectFormDialog
       customers={customers}
       employees={employees}
+      projectTypes={projectTypes}
       openOnMount={openOnMount}
       trigger={
         <Button>
@@ -52,7 +61,7 @@ export default async function ProjektePage({
 
   return (
     <div>
-      <PageHeader title="Projekte" description="Alle Projekte verwalten.">
+      <PageHeader title="Projekte" description="Alle Projekte verwalten." helpId="workflow">
         {newButton}
       </PageHeader>
 
@@ -73,20 +82,24 @@ export default async function ProjektePage({
                 <TableHead>Titel</TableHead>
                 <TableHead>Kunde</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead className="w-40">Fortschritt</TableHead>
                 <TableHead className="text-right">kWp</TableHead>
                 <TableHead>Ort</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {projects.map((p) => (
-                <TableRow key={p.id}>
+                <ClickableRow key={p.id} href={`/projekte/${p.id}`}>
                   <TableCell>
-                    <Link
-                      href={`/projekte/${p.id}`}
-                      className="font-medium hover:underline"
-                    >
-                      {p.title ?? "Ohne Titel"}
-                    </Link>
+                    <span className="flex items-center gap-2">
+                      <Link
+                        href={`/projekte/${p.id}`}
+                        className="font-medium hover:underline"
+                      >
+                        {p.title ?? "Ohne Titel"}
+                      </Link>
+                      <NewBadge createdAt={p.created_at} />
+                    </span>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {p.customer ? customerName(p.customer) : "–"}
@@ -96,13 +109,21 @@ export default async function ProjektePage({
                       {p.status ?? "–"}
                     </Badge>
                   </TableCell>
+                  <TableCell>
+                    <ProgressBar
+                      done={progress[p.id]?.done ?? 0}
+                      total={progress[p.id]?.total ?? 0}
+                      overdue={progress[p.id]?.overdue ?? 0}
+                      showLabel
+                    />
+                  </TableCell>
                   <TableCell className="text-right">
                     {formatNumber(p.system_size_kwp)}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {p.city ?? "–"}
                   </TableCell>
-                </TableRow>
+                </ClickableRow>
               ))}
             </TableBody>
           </Table>

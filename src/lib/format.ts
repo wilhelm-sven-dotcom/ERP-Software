@@ -45,3 +45,14 @@ export function customerName(c: {
   if (c.company && person) return `${c.company} (${person})`;
   return c.company || person || "Unbenannt";
 }
+
+/**
+ * Ist ein Datensatz „neu" (innerhalb der letzten `hours` Stunden angelegt)?
+ * Für die kurzlebige „Neu"-Markierung in Listen — verschwindet automatisch.
+ */
+export function isNew(createdAt: string | null | undefined, hours = 24): boolean {
+  if (!createdAt) return false;
+  const t = new Date(createdAt).getTime();
+  if (!Number.isFinite(t)) return false;
+  return Date.now() - t < hours * 3600 * 1000;
+}

@@ -32,5 +32,5 @@ export async function login(
     return { error: `Anmeldung fehlgeschlagen: ${error.message}` };
   }
 
-  redirect("/dashboard");
+  redirect("/assistent");
 }

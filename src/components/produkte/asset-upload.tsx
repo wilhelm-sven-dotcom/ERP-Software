@@ -11,6 +11,7 @@ import {
   registerProductAsset,
   deleteProductAsset,
 } from "@/app/(app)/produkte/actions";
+import { extractTextFromPdf } from "@/lib/pdf/extract-images";
 import type { ProductAsset } from "@/lib/types";
 
 const BUCKET = "product-assets";
@@ -38,12 +39,22 @@ export function AssetUpload({
         toast.error(`Upload fehlgeschlagen: ${upErr.message}`);
         return;
       }
+      // Datenblatt-Volltext für die Inhaltssuche ablegen (best-effort).
+      let text: string | null = null;
+      if (kind === "datasheet" && /\.pdf$/i.test(file.name)) {
+        try {
+          text = await extractTextFromPdf(file);
+        } catch {
+          text = null;
+        }
+      }
       const res = await registerProductAsset({
         productId,
         kind,
         name: file.name,
         storagePath: path,
         mime: file.type || null,
+        textContent: text,
       });
       if (res.ok) {
         toast.success("Datei hochgeladen");

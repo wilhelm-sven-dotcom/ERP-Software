@@ -730,3 +730,1244 @@ create policy "product_assets_delete" on storage.objects
     bucket_id = 'product-assets' and public.is_admin()
   );
 
+
+-- ============================================================================
+-- Projekt: Speicherkapazität + Geokoordinaten (Migration 20260531120700)
+-- ============================================================================
+alter table public.projects add column if not exists storage_kwh numeric;
+alter table public.projects add column if not exists lat numeric;
+alter table public.projects add column if not exists lon numeric;
+
+-- ============================================================================
+-- Produkte: Sortier-Spalte für Drag & Drop (Migration 20260531120800)
+-- ============================================================================
+alter table public.products add column if not exists sort int not null default 0;
+create index if not exists products_group_sort_idx
+  on public.products (group_id, sort);
+
+-- ============================================================================
+-- Produktpreise auf 2 Nachkommastellen runden (Migration 20260531120900)
+-- ============================================================================
+update public.products
+set price_purchase = round(price_purchase::numeric, 2)
+where price_purchase is not null
+  and price_purchase <> round(price_purchase::numeric, 2);
+update public.products
+set price_sell = round(price_sell::numeric, 2)
+where price_sell is not null
+  and price_sell <> round(price_sell::numeric, 2);
+-- ============================================================================
+-- ip³ PV-Tool — Großhändler (wholesalers) + Produkt-Verknüpfung
+-- Pro Produkt mehrere Großhändler mit Bestellnummer und (optionalem) EK-Preis.
+-- Im Supabase SQL-Editor einmal ausführen. Idempotent.
+-- ============================================================================
+
+create table if not exists public.wholesalers (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null,
+  contact     text,
+  email       text,
+  phone       text,
+  notes       text,
+  created_by  uuid references public.employees (id) on delete set null,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+create table if not exists public.product_wholesalers (
+  id             uuid primary key default gen_random_uuid(),
+  product_id     uuid not null references public.products (id) on delete cascade,
+  wholesaler_id  uuid not null references public.wholesalers (id) on delete cascade,
+  order_number   text,
+  price_purchase numeric,
+  created_at     timestamptz not null default now()
+);
+create index if not exists product_wholesalers_product_idx
+  on public.product_wholesalers (product_id);
+
+alter table public.wholesalers          enable row level security;
+alter table public.product_wholesalers  enable row level security;
+
+-- Personal darf lesen/anlegen/ändern; löschen = Admin (analog products).
+do $$
+declare t text;
+begin
+  foreach t in array array['wholesalers', 'product_wholesalers']
+  loop
+    execute format($f$
+      drop policy if exists "%1$s_select" on public.%1$I;
+      create policy "%1$s_select" on public.%1$I for select using (public.is_staff());
+      drop policy if exists "%1$s_insert" on public.%1$I;
+      create policy "%1$s_insert" on public.%1$I for insert with check (public.is_staff());
+      drop policy if exists "%1$s_update" on public.%1$I;
+      create policy "%1$s_update" on public.%1$I for update using (public.is_staff()) with check (public.is_staff());
+      drop policy if exists "%1$s_delete" on public.%1$I;
+      create policy "%1$s_delete" on public.%1$I for delete using (public.is_admin());
+    $f$, t);
+  end loop;
+end $$;
+-- ============================================================================
+-- ip³ PV-Tool — Kalkulations-Varianten
+-- Mehrere benannte Kalkulationen je Projekt; eine ist „ausgewählt". Die
+-- berechnete Anlagen-/Speichergröße wird je Variante mitgespeichert.
+-- Im Supabase SQL-Editor einmal ausführen. Idempotent.
+-- ============================================================================
+
+alter table public.calculations add column if not exists name text;
+alter table public.calculations
+  add column if not exists is_selected boolean not null default false;
+alter table public.calculations add column if not exists system_size_kwp numeric;
+alter table public.calculations add column if not exists storage_kwh numeric;
+
+-- Bestehende Kalkulationen benennen, damit die Liste nicht leer wirkt.
+update public.calculations set name = 'Standard' where name is null;
+-- ============================================================================
+-- ip³ PV-Tool — Angebote (offers) als eigene Datensätze
+-- Eingefrorene Positionen/Summen aus einer Kalkulations-Variante, mit
+-- fortlaufender Angebotsnummer und Status. Im SQL-Editor einmal ausführen.
+-- ============================================================================
+
+create table if not exists public.offers (
+  id              uuid primary key default gen_random_uuid(),
+  project_id      uuid not null references public.projects (id) on delete cascade,
+  calculation_id  uuid references public.calculations (id) on delete set null,
+  offer_number    int unique,
+  title           text,
+  status          text not null default 'Entwurf',
+  positions       jsonb not null default '[]'::jsonb,
+  totals          jsonb not null default '{}'::jsonb,
+  meta            jsonb not null default '{}'::jsonb,
+  valid_until     date,
+  notes           text,
+  created_by      uuid references public.employees (id) on delete set null,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
+);
+create index if not exists offers_project_idx on public.offers (project_id);
+
+alter table public.offers enable row level security;
+
+drop policy if exists "offers_select" on public.offers;
+create policy "offers_select" on public.offers for select using (public.is_staff());
+drop policy if exists "offers_insert" on public.offers;
+create policy "offers_insert" on public.offers for insert with check (public.is_staff());
+drop policy if exists "offers_update" on public.offers;
+create policy "offers_update" on public.offers for update using (public.is_staff()) with check (public.is_staff());
+drop policy if exists "offers_delete" on public.offers;
+create policy "offers_delete" on public.offers for delete using (public.is_admin());
+
+-- ============================================================================
+-- Projekttyp (Anlagentyp) — Migration 20260531121300
+-- ============================================================================
+alter table public.projects add column if not exists project_type text;
+-- ============================================================================
+-- ip³ PV-Tool — Angebots-Textbausteine (Baukasten)
+-- Konfigurierbare Textblöcke je Anlagentyp (project_type NULL = Standard).
+-- Werden beim Erstellen/Anzeigen eines Angebots zusammengesetzt.
+-- Idempotent. Im Supabase SQL-Editor einmal ausführen.
+-- ============================================================================
+
+create table if not exists public.offer_text_blocks (
+  id            uuid primary key default gen_random_uuid(),
+  project_type  text,                       -- NULL = Standard (alle Typen)
+  kind          text not null,              -- intro | art_der_anlage | leistung
+                                            -- | nicht_enthalten | zahlungsbedingungen
+                                            -- | gewaehrleistung | gueltigkeit
+                                            -- | liefertermin | optionale_leistungen | schluss
+  title         text,
+  body          text,
+  sort          int not null default 0,
+  created_by    uuid references public.employees (id) on delete set null,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+create index if not exists offer_text_blocks_lookup_idx
+  on public.offer_text_blocks (project_type, kind, sort);
+
+alter table public.offer_text_blocks enable row level security;
+
+drop policy if exists "otb_select" on public.offer_text_blocks;
+create policy "otb_select" on public.offer_text_blocks for select using (public.is_staff());
+drop policy if exists "otb_insert" on public.offer_text_blocks;
+create policy "otb_insert" on public.offer_text_blocks for insert with check (public.is_admin());
+drop policy if exists "otb_update" on public.offer_text_blocks;
+create policy "otb_update" on public.offer_text_blocks for update using (public.is_admin()) with check (public.is_admin());
+drop policy if exists "otb_delete" on public.offer_text_blocks;
+create policy "otb_delete" on public.offer_text_blocks for delete using (public.is_admin());
+
+-- Standard-Bausteine (nur einfügen, wenn noch keine vorhanden sind).
+insert into public.offer_text_blocks (project_type, kind, title, body, sort)
+select * from (values
+  (null, 'intro', 'Einleitung',
+   'Sehr geehrte Damen und Herren,
+
+vielen Dank für Ihr Interesse und Ihr Vertrauen. Gerne unterbreiten wir Ihnen das folgende Angebot für Ihre Photovoltaikanlage. Wir freuen uns auf die Zusammenarbeit.', 0),
+  (null, 'art_der_anlage', 'Art der Anlage',
+   'Schlüsselfertige Errichtung einer Photovoltaikanlage inkl. Lieferung, Montage, elektrischem Anschluss, Inbetriebnahme sowie Anmeldung beim Netzbetreiber und im Marktstammdatenregister.', 0),
+  (null, 'nicht_enthalten', 'Explizit nicht enthalten',
+   'Nicht im Angebot enthalten sind: Gerüst (falls erforderlich), Erd- und Tiefbauarbeiten, Anpassungen am Zählerschrank über den beschriebenen Umfang hinaus, behördliche Gebühren sowie bauseitige Leistungen.', 0),
+  (null, 'zahlungsbedingungen', 'Zahlungsbedingungen',
+   '30 % bei Auftragserteilung, 35 % bei Materiallieferung, 30 % bei Montagebeginn, 5 % nach Inbetriebnahme. Zahlbar ohne Abzug innerhalb von 14 Tagen nach Rechnungserhalt.', 0),
+  (null, 'gewaehrleistung', 'Gewährleistung',
+   'Es gelten die gesetzlichen Gewährleistungsfristen. Auf Module und Wechselrichter gewähren die Hersteller ihre jeweiligen Produkt- und Leistungsgarantien.', 0),
+  (null, 'gueltigkeit', 'Gültigkeit',
+   'Dieses Angebot ist freibleibend und 4 Wochen ab Angebotsdatum gültig.', 0),
+  (null, 'liefertermin', 'Liefertermin',
+   'Der Liefer- und Montagetermin wird nach Auftragseingang und Materialverfügbarkeit gemeinsam abgestimmt.', 0),
+  (null, 'optionale_leistungen', 'Optionale Leistungen / Stundensätze',
+   'Zusätzliche, nicht im Pauschalpreis enthaltene Arbeiten werden nach Aufwand abgerechnet: Monteur 69,00 €/Std., Elektromeister 89,00 €/Std. (jeweils zzgl. MwSt.).', 0),
+  (null, 'schluss', 'Schlusswort',
+   'Für Rückfragen stehen wir Ihnen jederzeit gerne zur Verfügung. Wir würden uns freuen, Ihr Projekt umsetzen zu dürfen.', 0)
+) as v(project_type, kind, title, body, sort)
+where not exists (select 1 from public.offer_text_blocks);
+-- ============================================================================
+-- ip³ PV-Tool — Folgedokumente: Auftragsbestätigung (AB) & Lieferschein
+-- Eine generische documents-Tabelle (kind) für die Kette
+-- Angebot → AB → Lieferschein. Eingefrorene Positionen/Summen.
+-- Idempotent. Im Supabase SQL-Editor einmal ausführen.
+-- ============================================================================
+
+create table if not exists public.documents (
+  id                  uuid primary key default gen_random_uuid(),
+  project_id          uuid not null references public.projects (id) on delete cascade,
+  kind                text not null,            -- 'auftragsbestaetigung' | 'lieferschein'
+  doc_number          int,
+  source_offer_id     uuid references public.offers (id) on delete set null,
+  source_document_id  uuid references public.documents (id) on delete set null,
+  status              text not null default 'Entwurf',
+  title               text,
+  positions           jsonb not null default '[]'::jsonb,
+  totals              jsonb not null default '{}'::jsonb,
+  meta                jsonb not null default '{}'::jsonb,
+  commission          text,
+  created_by          uuid references public.employees (id) on delete set null,
+  created_at          timestamptz not null default now(),
+  updated_at          timestamptz not null default now()
+);
+create index if not exists documents_project_idx on public.documents (project_id);
+create index if not exists documents_kind_idx on public.documents (kind, doc_number);
+
+alter table public.documents enable row level security;
+
+drop policy if exists "documents_select" on public.documents;
+create policy "documents_select" on public.documents for select using (public.is_staff());
+drop policy if exists "documents_insert" on public.documents;
+create policy "documents_insert" on public.documents for insert with check (public.is_staff());
+drop policy if exists "documents_update" on public.documents;
+create policy "documents_update" on public.documents for update using (public.is_staff()) with check (public.is_staff());
+drop policy if exists "documents_delete" on public.documents;
+create policy "documents_delete" on public.documents for delete using (public.is_admin());
+-- ============================================================================
+-- ip³ PV-Tool — Projektablauf-Tool (Workflow-Vorlagen + Aufgaben)
+-- workflow_templates (je Anlagentyp) → workflow_steps (Schritte) →
+-- project_tasks (instanziierte Aufgaben je Projekt, Verantwortlicher/Fälligkeit).
+-- Idempotent. Im Supabase SQL-Editor einmal ausführen.
+-- ============================================================================
+
+create table if not exists public.workflow_templates (
+  id            uuid primary key default gen_random_uuid(),
+  project_type  text,
+  name          text not null,
+  active        boolean not null default true,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+
+create table if not exists public.workflow_steps (
+  id            uuid primary key default gen_random_uuid(),
+  template_id   uuid not null references public.workflow_templates (id) on delete cascade,
+  title         text not null,
+  description   text,
+  role          text,                       -- optionaler Rollen-Hinweis
+  offset_days   int not null default 0,     -- Fälligkeit = Start + offset_days
+  sort          int not null default 0
+);
+create index if not exists workflow_steps_template_idx on public.workflow_steps (template_id, sort);
+
+create table if not exists public.project_tasks (
+  id                    uuid primary key default gen_random_uuid(),
+  project_id            uuid not null references public.projects (id) on delete cascade,
+  title                 text not null,
+  description           text,
+  assignee_employee_id  uuid references public.employees (id) on delete set null,
+  due_date              date,
+  status                text not null default 'offen',   -- 'offen' | 'erledigt'
+  sort                  int not null default 0,
+  done_at               timestamptz,
+  created_by            uuid references public.employees (id) on delete set null,
+  created_at            timestamptz not null default now(),
+  updated_at            timestamptz not null default now()
+);
+create index if not exists project_tasks_project_idx on public.project_tasks (project_id, sort);
+create index if not exists project_tasks_assignee_idx on public.project_tasks (assignee_employee_id, status, due_date);
+
+alter table public.workflow_templates enable row level security;
+alter table public.workflow_steps enable row level security;
+alter table public.project_tasks enable row level security;
+
+-- Vorlagen: alle Mitarbeiter lesen, nur Admin verwaltet.
+drop policy if exists "wt_select" on public.workflow_templates;
+create policy "wt_select" on public.workflow_templates for select using (public.is_staff());
+drop policy if exists "wt_write" on public.workflow_templates;
+create policy "wt_write" on public.workflow_templates for all using (public.is_admin()) with check (public.is_admin());
+
+drop policy if exists "ws_select" on public.workflow_steps;
+create policy "ws_select" on public.workflow_steps for select using (public.is_staff());
+drop policy if exists "ws_write" on public.workflow_steps;
+create policy "ws_write" on public.workflow_steps for all using (public.is_admin()) with check (public.is_admin());
+
+-- Aufgaben: alle Mitarbeiter lesen/anlegen/aktualisieren; löschen Admin.
+drop policy if exists "pt_select" on public.project_tasks;
+create policy "pt_select" on public.project_tasks for select using (public.is_staff());
+drop policy if exists "pt_insert" on public.project_tasks;
+create policy "pt_insert" on public.project_tasks for insert with check (public.is_staff());
+drop policy if exists "pt_update" on public.project_tasks;
+create policy "pt_update" on public.project_tasks for update using (public.is_staff()) with check (public.is_staff());
+drop policy if exists "pt_delete" on public.project_tasks;
+create policy "pt_delete" on public.project_tasks for delete using (public.is_admin());
+
+-- Standard-Vorlage je Anlagentyp (nur, wenn noch keine existiert).
+insert into public.workflow_templates (project_type, name)
+select t, 'Standardablauf — ' || t
+from (values
+  ('Dachanlage bis 10 kWp'),
+  ('Dachanlage bis 100 kWp'),
+  ('Dachanlage bis 300 kWp'),
+  ('Große Dachanlage'),
+  ('Freiflächenanlage'),
+  ('Speicherprojekt')
+) as v(t)
+where not exists (select 1 from public.workflow_templates);
+
+-- Standard-Schritte für jede neu angelegte Vorlage.
+insert into public.workflow_steps (template_id, title, description, role, offset_days, sort)
+select wt.id, s.title, s.description, s.role, s.offset_days, s.sort
+from public.workflow_templates wt
+cross join (values
+  ('Aufmaß / Vor-Ort-Termin', 'Dach/Standort vermessen, Fotos, Zählerschrank prüfen.', 'mitarbeiter', 3, 0),
+  ('Planung & Auslegung', 'Stringplan, Komponentenauswahl, Statikprüfung.', 'mitarbeiter', 7, 1),
+  ('Netzanmeldung', 'Anmeldung beim Netzbetreiber einreichen.', 'mitarbeiter', 10, 2),
+  ('Materialbestellung', 'Material bei Großhändler bestellen (Bestellliste).', 'mitarbeiter', 14, 3),
+  ('Terminierung / Gerüst', 'Montagetermin abstimmen, ggf. Gerüst beauftragen.', 'mitarbeiter', 21, 4),
+  ('Montage', 'Unterkonstruktion und Module montieren.', 'mitarbeiter', 28, 5),
+  ('Elektroinstallation & Anschluss', 'Wechselrichter/Speicher anschließen, AC/DC.', 'mitarbeiter', 30, 6),
+  ('Inbetriebnahme', 'Inbetriebnahmeprotokoll, Funktionsprüfung.', 'mitarbeiter', 32, 7),
+  ('Marktstammdatenregister', 'Anlage im MaStR registrieren.', 'mitarbeiter', 35, 8),
+  ('Dokumentation & Übergabe', 'Unterlagen zusammenstellen, Kundenübergabe.', 'mitarbeiter', 37, 9)
+) as s(title, description, role, offset_days, sort)
+where not exists (select 1 from public.workflow_steps);
+-- ============================================================================
+-- ip³ PV-Tool — Zeiterfassung (Stunden je Projekt) + Stundensätze
+-- Basis für die Nachkalkulation (Plan/Ist je Projekt). Optionaler Import aus
+-- Altsoftware via source='import' + external_id (Dedupe).
+-- Idempotent. Im Supabase SQL-Editor einmal ausführen.
+-- ============================================================================
+
+alter table public.employees add column if not exists cost_rate numeric;
+
+create table if not exists public.time_entries (
+  id                    uuid primary key default gen_random_uuid(),
+  project_id            uuid not null references public.projects (id) on delete cascade,
+  employee_id           uuid references public.employees (id) on delete set null,
+  work_date             date not null default current_date,
+  hours                 numeric not null default 0,
+  activity              text,
+  description           text,
+  hourly_rate           numeric,                 -- optional übersteuert den Mitarbeitersatz
+  source                text not null default 'manual',  -- 'manual' | 'import'
+  external_id           text,
+  created_by            uuid references public.employees (id) on delete set null,
+  created_at            timestamptz not null default now(),
+  updated_at            timestamptz not null default now()
+);
+create index if not exists time_entries_project_idx on public.time_entries (project_id);
+create index if not exists time_entries_employee_idx on public.time_entries (employee_id, work_date);
+-- Import-Dedupe: gleiche externe ID nicht doppelt importieren.
+create unique index if not exists time_entries_external_uidx
+  on public.time_entries (source, external_id)
+  where external_id is not null;
+
+alter table public.time_entries enable row level security;
+
+drop policy if exists "te_select" on public.time_entries;
+create policy "te_select" on public.time_entries for select using (public.is_staff());
+drop policy if exists "te_insert" on public.time_entries;
+create policy "te_insert" on public.time_entries for insert with check (public.is_staff());
+-- Mitarbeiter ändern eigene Einträge; Admin alles.
+drop policy if exists "te_update" on public.time_entries;
+create policy "te_update" on public.time_entries for update
+  using (public.is_admin() or employee_id = public.current_employee_id())
+  with check (public.is_admin() or employee_id = public.current_employee_id());
+drop policy if exists "te_delete" on public.time_entries;
+create policy "te_delete" on public.time_entries for delete
+  using (public.is_admin() or employee_id = public.current_employee_id());
+-- ============================================================================
+-- ip³ PV-Tool — Externe Integrationen je Mitarbeiter (Google-Kalender, read-only)
+-- Speichert OAuth-Tokens je Mitarbeiter. Tokens nur serverseitig nutzen.
+-- Idempotent. Im Supabase SQL-Editor einmal ausführen.
+-- ============================================================================
+
+create table if not exists public.user_integrations (
+  id            uuid primary key default gen_random_uuid(),
+  employee_id   uuid not null references public.employees (id) on delete cascade,
+  provider      text not null default 'google',
+  refresh_token text,
+  access_token  text,
+  token_expiry  timestamptz,
+  calendar_id   text default 'primary',
+  connected_at  timestamptz not null default now(),
+  unique (employee_id, provider)
+);
+
+alter table public.user_integrations enable row level security;
+
+-- Nur Eigentümer (oder Admin) darf seine Integration sehen/verwalten.
+drop policy if exists "ui_select" on public.user_integrations;
+create policy "ui_select" on public.user_integrations for select
+  using (public.is_admin() or employee_id = public.current_employee_id());
+drop policy if exists "ui_write" on public.user_integrations;
+create policy "ui_write" on public.user_integrations for all
+  using (public.is_admin() or employee_id = public.current_employee_id())
+  with check (public.is_admin() or employee_id = public.current_employee_id());
+-- ============================================================================
+-- ip³ PV-Tool — Kollaborativer Projektablauf (UX-Paket 7)
+-- Erweitert Aufgaben um Anbieten/Annehmen (Claim), einen Messenger-Thread je
+-- Vorgang, Gelesen-Stände und Live-Updates (Realtime).
+-- Idempotent. Im Supabase SQL-Editor einmal ausführen.
+-- ============================================================================
+
+-- project_tasks erweitern: Status 'angeboten' (Logik), parallele Bündelung.
+alter table public.project_tasks add column if not exists group_label text;
+-- (status bleibt text: 'offen' | 'angeboten' | 'erledigt')
+
+-- Kandidaten: Mitarbeiter, denen eine Aufgabe angeboten wurde (Claim-Menge).
+create table if not exists public.task_candidates (
+  task_id      uuid not null references public.project_tasks (id) on delete cascade,
+  employee_id  uuid not null references public.employees (id) on delete cascade,
+  created_at   timestamptz not null default now(),
+  primary key (task_id, employee_id)
+);
+create index if not exists task_candidates_emp_idx on public.task_candidates (employee_id);
+
+-- Messenger-Thread je Aufgabe (Chat + System-Ereigniszeilen).
+create table if not exists public.task_messages (
+  id                  uuid primary key default gen_random_uuid(),
+  task_id             uuid not null references public.project_tasks (id) on delete cascade,
+  author_employee_id  uuid references public.employees (id) on delete set null,
+  body                text not null,
+  kind                text not null default 'message',  -- 'message' | 'event'
+  created_at          timestamptz not null default now()
+);
+create index if not exists task_messages_task_idx on public.task_messages (task_id, created_at);
+
+-- Gelesen-Stand je Mitarbeiter (für Ungelesen-Zähler).
+create table if not exists public.task_reads (
+  task_id       uuid not null references public.project_tasks (id) on delete cascade,
+  employee_id   uuid not null references public.employees (id) on delete cascade,
+  last_read_at  timestamptz not null default now(),
+  primary key (task_id, employee_id)
+);
+
+alter table public.task_candidates enable row level security;
+alter table public.task_messages enable row level security;
+alter table public.task_reads enable row level security;
+
+-- Kandidaten: Personal liest/verwaltet (Anbieten/Claim).
+drop policy if exists "tc_select" on public.task_candidates;
+create policy "tc_select" on public.task_candidates for select using (public.is_staff());
+drop policy if exists "tc_write" on public.task_candidates;
+create policy "tc_write" on public.task_candidates for all using (public.is_staff()) with check (public.is_staff());
+
+-- Nachrichten: Personal liest alle; schreibt als sich selbst; Löschen Admin/Autor.
+drop policy if exists "tm_select" on public.task_messages;
+create policy "tm_select" on public.task_messages for select using (public.is_staff());
+drop policy if exists "tm_insert" on public.task_messages;
+create policy "tm_insert" on public.task_messages for insert with check (public.is_staff());
+drop policy if exists "tm_delete" on public.task_messages;
+create policy "tm_delete" on public.task_messages for delete
+  using (public.is_admin() or author_employee_id = public.current_employee_id());
+
+-- Gelesen-Stände: nur eigene Zeilen.
+drop policy if exists "tr_select" on public.task_reads;
+create policy "tr_select" on public.task_reads for select
+  using (public.is_admin() or employee_id = public.current_employee_id());
+drop policy if exists "tr_write" on public.task_reads;
+create policy "tr_write" on public.task_reads for all
+  using (employee_id = public.current_employee_id())
+  with check (employee_id = public.current_employee_id());
+
+-- Realtime für die Live-Aktualisierung aktivieren (idempotent).
+do $$
+begin
+  begin
+    alter publication supabase_realtime add table public.task_messages;
+  exception when duplicate_object then null; end;
+  begin
+    alter publication supabase_realtime add table public.task_candidates;
+  exception when duplicate_object then null; end;
+  begin
+    alter publication supabase_realtime add table public.project_tasks;
+  exception when duplicate_object then null; end;
+end $$;
+-- ============================================================================
+-- ip³ PV-Tool — Projekt-Dateien (Datenblätter, Handbücher, Pläne, Fotos)
+-- Dateien werden per Drag & Drop einem Projekt zugeordnet. Datei-Inhalt liegt
+-- im Storage-Bucket `project-files` (siehe supabase/storage.sql), Metadaten hier.
+-- Idempotent. Im Supabase SQL-Editor einmal ausführen.
+-- ============================================================================
+
+create table if not exists public.project_files (
+  id            uuid primary key default gen_random_uuid(),
+  project_id    uuid not null references public.projects (id) on delete cascade,
+  name          text not null,
+  storage_path  text not null,
+  mime          text,
+  kind          text not null default 'dokument',
+  size          bigint,
+  uploaded_by   uuid references public.employees (id) on delete set null,
+  created_at    timestamptz not null default now()
+);
+create index if not exists project_files_project_idx on public.project_files (project_id);
+
+alter table public.project_files enable row level security;
+
+drop policy if exists "pf_select" on public.project_files;
+create policy "pf_select" on public.project_files for select using (public.is_staff());
+drop policy if exists "pf_insert" on public.project_files;
+create policy "pf_insert" on public.project_files for insert with check (public.is_staff());
+drop policy if exists "pf_delete" on public.project_files;
+create policy "pf_delete" on public.project_files for delete
+  using (public.is_admin() or uploaded_by = public.current_employee_id());
+
+
+-- ============================================================================
+-- ip³ PV-Tool — Vertriebsprozess + Ablauf-Abhängigkeiten (UX-Paket 9)
+--   • employees.is_sales  → Mitarbeiter als „Vertrieb" kennzeichnen
+--   • projects.source      → Quelle der Anfrage (Telefon/Web/Empfehlung …)
+--   • workflow_templates.phase ('vertrieb' | 'projekt')
+--   • workflow_steps.group_label → Phase für die Aufgaben-Gruppierung
+--   • workflow_step_deps / project_task_deps → Vorgänger (Abhängigkeiten)
+--   • project_tasks.status erweitert um 'wartet' (reine Logik, kein CHECK)
+--   • Seed: Vertriebsablauf-Vorlage + Vorgänger der Standard-Projektvorlagen
+-- Idempotent. Im Supabase SQL-Editor einmal ausführen.
+-- ============================================================================
+
+-- 1. Vertriebs-Kennzeichen je Mitarbeiter
+alter table public.employees add column if not exists is_sales boolean not null default false;
+
+-- 2. Quelle der Anfrage am Projekt
+alter table public.projects add column if not exists source text;
+
+-- 3. Phase der Vorlage: 'projekt' (Standard) oder 'vertrieb'
+alter table public.workflow_templates add column if not exists phase text not null default 'projekt';
+
+-- 4. Phasen-Label je Vorlagen-Schritt (gruppiert die Aufgaben in der Ansicht)
+alter table public.workflow_steps add column if not exists group_label text;
+
+-- 5. project_tasks.status kennt zusätzlich 'wartet' (blockiert durch Vorgänger).
+--    Bleibt text — keine Schema-Änderung nötig.
+
+-- 6. Abhängigkeiten zwischen Vorlagen-Schritten (Vorgänger)
+create table if not exists public.workflow_step_deps (
+  step_id             uuid not null references public.workflow_steps (id) on delete cascade,
+  depends_on_step_id  uuid not null references public.workflow_steps (id) on delete cascade,
+  primary key (step_id, depends_on_step_id)
+);
+
+-- 7. Abhängigkeiten zwischen konkreten Aufgaben (je Projekt)
+create table if not exists public.project_task_deps (
+  task_id             uuid not null references public.project_tasks (id) on delete cascade,
+  depends_on_task_id  uuid not null references public.project_tasks (id) on delete cascade,
+  primary key (task_id, depends_on_task_id)
+);
+create index if not exists project_task_deps_dep_idx on public.project_task_deps (depends_on_task_id);
+
+alter table public.workflow_step_deps enable row level security;
+alter table public.project_task_deps enable row level security;
+
+-- Vorlagen-Abhängigkeiten: Personal liest, Admin verwaltet.
+drop policy if exists "wsd_select" on public.workflow_step_deps;
+create policy "wsd_select" on public.workflow_step_deps for select using (public.is_staff());
+drop policy if exists "wsd_write" on public.workflow_step_deps;
+create policy "wsd_write" on public.workflow_step_deps for all using (public.is_admin()) with check (public.is_admin());
+
+-- Aufgaben-Abhängigkeiten: Personal liest/schreibt (entstehen beim Ablauf-Start).
+drop policy if exists "ptd_select" on public.project_task_deps;
+create policy "ptd_select" on public.project_task_deps for select using (public.is_staff());
+drop policy if exists "ptd_write" on public.project_task_deps;
+create policy "ptd_write" on public.project_task_deps for all using (public.is_staff()) with check (public.is_staff());
+
+-- ── Seed: Vertriebsablauf-Vorlage (nur, wenn noch keine 'vertrieb'-Vorlage da) ──
+insert into public.workflow_templates (project_type, name, phase)
+select null, 'Vertriebsablauf — Standard', 'vertrieb'
+where not exists (select 1 from public.workflow_templates where phase = 'vertrieb');
+
+insert into public.workflow_steps (template_id, title, description, role, offset_days, sort, group_label)
+select wt.id, s.title, s.description, 'vertrieb', s.offset_days, s.sort, 'Vertrieb'
+from public.workflow_templates wt
+cross join (values
+  ('Kontaktaufnahme',          'Erstkontakt herstellen (Anruf/E-Mail).',                 0, 0),
+  ('2. Kontaktaufnahme',       'Nachfassen, falls kein Erstkontakt zustande kam.',       3, 1),
+  ('Telefongespräch',          'Bedarf und Eckdaten telefonisch klären.',                5, 2),
+  ('Bedarf / Qualifizierung',  'Anlagengröße, Budget und Zeithorizont qualifizieren.',   7, 3),
+  ('Vor-Ort-Termin',           'Beratung / Aufnahme vor Ort.',                          10, 4),
+  ('Angebot vorbereiten',      'Kalkulation und Angebot erstellen.',                    14, 5),
+  ('Nachfassen',               'Angebot nachverfolgen.',                                21, 6),
+  ('Abschluss / Auftrag',      'Auftrag gewinnen oder Absage dokumentieren.',           28, 7)
+) as s(title, description, offset_days, sort)
+where wt.phase = 'vertrieb'
+  and not exists (select 1 from public.workflow_steps ws where ws.template_id = wt.id);
+
+-- Vertriebsschritte laufen sequenziell: jeder hängt am vorigen.
+insert into public.workflow_step_deps (step_id, depends_on_step_id)
+select cur.id, prev.id
+from public.workflow_templates wt
+join public.workflow_steps cur  on cur.template_id  = wt.id
+join public.workflow_steps prev on prev.template_id = wt.id and prev.sort = cur.sort - 1
+where wt.phase = 'vertrieb'
+on conflict do nothing;
+
+-- ── Seed: Phasen-Labels für die Standard-Projektschritte (nur wo noch leer) ──
+update public.workflow_steps ws
+set group_label = m.grp
+from (values
+  ('Aufmaß / Vor-Ort-Termin',         'Planung'),
+  ('Planung & Auslegung',             'Planung'),
+  ('Netzanmeldung',                   'Vorbereitung'),
+  ('Materialbestellung',              'Vorbereitung'),
+  ('Terminierung / Gerüst',           'Vorbereitung'),
+  ('Montage',                         'Umsetzung'),
+  ('Elektroinstallation & Anschluss', 'Umsetzung'),
+  ('Inbetriebnahme',                  'Abschluss'),
+  ('Marktstammdatenregister',         'Abschluss'),
+  ('Dokumentation & Übergabe',        'Abschluss')
+) as m(title, grp)
+where ws.title = m.title
+  and ws.group_label is null
+  and exists (
+    select 1 from public.workflow_templates wt
+    where wt.id = ws.template_id and wt.phase = 'projekt'
+  );
+
+-- ── Seed: Vorgänger der Standard-Projektschritte (Titel-Matching je Vorlage) ──
+-- Ergibt eine Mischung aus Reihenfolge und Parallelität, z. B. nach „Planung"
+-- laufen Netzanmeldung und Materialbestellung parallel. (project_task_deps wird
+-- erst je Projekt beim Ablauf-Start aus diesen Schritt-Vorgängern erzeugt.)
+insert into public.workflow_step_deps (step_id, depends_on_step_id)
+select cur.id, prev.id
+from public.workflow_templates wt
+join public.workflow_steps cur  on cur.template_id  = wt.id
+join public.workflow_steps prev on prev.template_id = wt.id
+join (values
+  ('Planung & Auslegung',             'Aufmaß / Vor-Ort-Termin'),
+  ('Netzanmeldung',                   'Planung & Auslegung'),
+  ('Materialbestellung',              'Planung & Auslegung'),
+  ('Terminierung / Gerüst',           'Materialbestellung'),
+  ('Montage',                         'Terminierung / Gerüst'),
+  ('Elektroinstallation & Anschluss', 'Montage'),
+  ('Inbetriebnahme',                  'Elektroinstallation & Anschluss'),
+  ('Marktstammdatenregister',         'Inbetriebnahme'),
+  ('Marktstammdatenregister',         'Netzanmeldung'),
+  ('Dokumentation & Übergabe',        'Inbetriebnahme')
+) as e(child, parent) on cur.title = e.child and prev.title = e.parent
+where wt.phase = 'projekt'
+on conflict do nothing;
+
+
+-- ============================================================================
+-- ip³ PV-Tool — Rechnungen & Abschlagsrechnungen (Paket 11)
+-- Erweitert die generische `documents`-Tabelle um Rechnungs-Felder. Eine
+-- Rechnung ist ein document mit kind='rechnung' (Typ in meta.invoice_type:
+-- 'voll' | 'abschlag' | 'schluss'). Eigener Nummernkreis via nextDocNumber().
+-- Firmen-Zahlungsdaten (IBAN/Steuernr.) liegen im settings-Key 'company' (JSONB).
+-- Idempotent. Im Supabase SQL-Editor einmal ausführen.
+-- ============================================================================
+
+alter table public.documents add column if not exists invoice_date date;
+alter table public.documents add column if not exists due_date date;
+alter table public.documents add column if not exists paid_at timestamptz;
+alter table public.documents add column if not exists payment_status text; -- offen|teilbezahlt|bezahlt
+alter table public.documents add column if not exists paid_amount numeric;
+alter table public.documents add column if not exists percentage numeric;   -- Abschlag in %
+
+create index if not exists documents_kind_status_idx
+  on public.documents (kind, payment_status, due_date);
+
+-- kind erlaubt zusätzlich 'rechnung' (Spalte ist text ohne CHECK).
+-- RLS/Audit der documents-Tabelle gelten unverändert weiter.
+
+
+-- ============================================================================
+-- ip³ PV-Tool — Mahnwesen & Zahlungsstatus (Paket 12)
+-- Rechnungen (documents kind='rechnung') bekommen einen Mahnstand; Mahnungen
+-- sind eigene documents (kind='mahnung') mit Verweis auf die Rechnung.
+-- Idempotent. Im Supabase SQL-Editor einmal ausführen.
+-- ============================================================================
+
+alter table public.documents add column if not exists reminder_level int not null default 0;
+alter table public.documents add column if not exists last_reminder_at timestamptz;
+
+-- kind erlaubt zusätzlich 'mahnung' (Spalte ist text ohne CHECK).
+
+
+-- ============================================================================
+-- ip³ PV-Tool — Wartungsverträge (Paket 13)
+-- Wiederkehrende Wartung/Instandhaltung je Kunde/Projekt mit Intervall und
+-- nächster Fälligkeit. „Wartung erledigt" schiebt die nächste Fälligkeit weiter.
+-- Idempotent. Im Supabase SQL-Editor einmal ausführen.
+-- ============================================================================
+
+create table if not exists public.service_contracts (
+  id              uuid primary key default gen_random_uuid(),
+  customer_id     uuid references public.customers (id) on delete set null,
+  project_id      uuid references public.projects (id) on delete set null,
+  title           text not null,
+  start_date      date,
+  interval_months int not null default 12,
+  next_due        date,
+  price           numeric,
+  status          text not null default 'aktiv',  -- aktiv | pausiert | beendet
+  notes           text,
+  created_by      uuid references public.employees (id) on delete set null,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
+);
+create index if not exists service_contracts_due_idx on public.service_contracts (next_due);
+create index if not exists service_contracts_customer_idx on public.service_contracts (customer_id);
+
+alter table public.service_contracts enable row level security;
+
+drop policy if exists "sc_select" on public.service_contracts;
+create policy "sc_select" on public.service_contracts for select using (public.is_staff());
+drop policy if exists "sc_insert" on public.service_contracts;
+create policy "sc_insert" on public.service_contracts for insert with check (public.is_staff());
+drop policy if exists "sc_update" on public.service_contracts;
+create policy "sc_update" on public.service_contracts for update using (public.is_staff()) with check (public.is_staff());
+drop policy if exists "sc_delete" on public.service_contracts;
+create policy "sc_delete" on public.service_contracts for delete using (public.is_admin());
+
+
+-- ============================================================================
+-- ip³ PV-Tool — Plantafel / Disposition (Paket 14)
+-- Termine/Einsätze je Mitarbeiter und Tag (Montage, Aufmaß, Wartung …).
+-- Wird in einem Wochenraster per Drag & Drop verschoben.
+-- Idempotent. Im Supabase SQL-Editor einmal ausführen.
+-- ============================================================================
+
+create table if not exists public.dispo_entries (
+  id           uuid primary key default gen_random_uuid(),
+  project_id   uuid references public.projects (id) on delete set null,
+  employee_id  uuid references public.employees (id) on delete set null,
+  date         date not null,
+  title        text not null,
+  kind         text not null default 'einsatz',  -- einsatz | montage | aufmass | wartung | sonstiges
+  note         text,
+  created_by   uuid references public.employees (id) on delete set null,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now()
+);
+create index if not exists dispo_entries_date_idx on public.dispo_entries (date);
+create index if not exists dispo_entries_employee_idx on public.dispo_entries (employee_id, date);
+
+alter table public.dispo_entries enable row level security;
+
+drop policy if exists "de_select" on public.dispo_entries;
+create policy "de_select" on public.dispo_entries for select using (public.is_staff());
+drop policy if exists "de_insert" on public.dispo_entries;
+create policy "de_insert" on public.dispo_entries for insert with check (public.is_staff());
+drop policy if exists "de_update" on public.dispo_entries;
+create policy "de_update" on public.dispo_entries for update using (public.is_staff()) with check (public.is_staff());
+drop policy if exists "de_delete" on public.dispo_entries;
+create policy "de_delete" on public.dispo_entries for delete using (public.is_staff());
+
+
+-- ============================================================================
+-- ip³ PV-Tool — Aufmaß (Paket 17)
+-- Aufmaß-Positionen je Projekt (Dachflächen, Stückzahlen, Längen …), die in
+-- eine Kalkulation übernommen werden können.
+-- Idempotent. Im Supabase SQL-Editor einmal ausführen.
+-- ============================================================================
+
+create table if not exists public.measurements (
+  id          uuid primary key default gen_random_uuid(),
+  project_id  uuid not null references public.projects (id) on delete cascade,
+  label       text not null,
+  quantity    numeric,
+  unit        text,
+  area        numeric,
+  note        text,
+  sort        int not null default 0,
+  created_by  uuid references public.employees (id) on delete set null,
+  created_at  timestamptz not null default now()
+);
+create index if not exists measurements_project_idx on public.measurements (project_id, sort);
+
+alter table public.measurements enable row level security;
+
+drop policy if exists "ms_select" on public.measurements;
+create policy "ms_select" on public.measurements for select using (public.is_staff());
+drop policy if exists "ms_insert" on public.measurements;
+create policy "ms_insert" on public.measurements for insert with check (public.is_staff());
+drop policy if exists "ms_update" on public.measurements;
+create policy "ms_update" on public.measurements for update using (public.is_staff()) with check (public.is_staff());
+drop policy if exists "ms_delete" on public.measurements;
+create policy "ms_delete" on public.measurements for delete using (public.is_staff());
+
+
+-- ============================================================================
+-- ip³ PV-Tool — Bautagebuch / Baustellendokumentation (Paket 18)
+-- Chronologische Einträge je Projekt (Datum, Wetter, Mannschaft, Arbeiten).
+-- Fotos werden über die bestehende project_files-Ablage verknüpft.
+-- Idempotent. Im Supabase SQL-Editor einmal ausführen.
+-- ============================================================================
+
+create table if not exists public.site_log (
+  id          uuid primary key default gen_random_uuid(),
+  project_id  uuid not null references public.projects (id) on delete cascade,
+  log_date    date not null default current_date,
+  weather     text,
+  crew        text,
+  work_done   text,
+  note        text,
+  created_by  uuid references public.employees (id) on delete set null,
+  created_at  timestamptz not null default now()
+);
+create index if not exists site_log_project_idx on public.site_log (project_id, log_date desc);
+
+alter table public.site_log enable row level security;
+
+drop policy if exists "sl_select" on public.site_log;
+create policy "sl_select" on public.site_log for select using (public.is_staff());
+drop policy if exists "sl_insert" on public.site_log;
+create policy "sl_insert" on public.site_log for insert with check (public.is_staff());
+drop policy if exists "sl_update" on public.site_log;
+create policy "sl_update" on public.site_log for update using (public.is_staff()) with check (public.is_staff());
+drop policy if exists "sl_delete" on public.site_log;
+create policy "sl_delete" on public.site_log for delete using (public.is_admin() or created_by = public.current_employee_id());
+
+
+-- ============================================================================
+-- ip³ PV-Tool — Ad-hoc-Aufgaben ohne Projekt (Schnell-Rückfrage am Dashboard)
+-- project_tasks.project_id darf jetzt NULL sein (projektlose Aufgaben/Rückfragen).
+-- Die bestehende FK (on delete cascade) bleibt für projektbezogene Aufgaben gültig.
+-- Idempotent. Im Supabase SQL-Editor einmal ausführen.
+-- ============================================================================
+
+alter table public.project_tasks alter column project_id drop not null;
+
+
+-- ============================================================================
+-- ip³ PV-Tool — Service-Board (Kanban, getrennt von Wartung) — Paket 3
+-- Service-Tickets mit Status-Spalten, Kommentaren und Datei-/Foto-Anhängen.
+-- Idempotent. Im Supabase SQL-Editor einmal ausführen.
+-- ============================================================================
+
+create table if not exists public.service_tickets (
+  id                   uuid primary key default gen_random_uuid(),
+  title                text not null,
+  customer_id          uuid references public.customers (id) on delete set null,
+  project_id           uuid references public.projects (id) on delete set null,
+  location             text,
+  status               text not null default 'Eingang',
+  assignee_employee_id uuid references public.employees (id) on delete set null,
+  due_date             date,
+  description          text,
+  cover_path           text,                       -- Storage-Pfad des Titelbilds
+  sort                 int not null default 0,
+  source               text,                       -- z. B. 'trello'
+  external_id          text,                       -- Trello-Card-ID (Dedupe)
+  created_by           uuid references public.employees (id) on delete set null,
+  created_at           timestamptz not null default now(),
+  updated_at           timestamptz not null default now()
+);
+create index if not exists service_tickets_status_idx on public.service_tickets (status, sort);
+create unique index if not exists service_tickets_external_idx
+  on public.service_tickets (source, external_id) where external_id is not null;
+
+create table if not exists public.service_ticket_messages (
+  id                  uuid primary key default gen_random_uuid(),
+  ticket_id           uuid not null references public.service_tickets (id) on delete cascade,
+  author_employee_id  uuid references public.employees (id) on delete set null,
+  body                text not null,
+  kind                text not null default 'message', -- 'message' | 'event'
+  created_at          timestamptz not null default now()
+);
+create index if not exists service_ticket_messages_idx on public.service_ticket_messages (ticket_id, created_at);
+
+create table if not exists public.service_ticket_files (
+  id            uuid primary key default gen_random_uuid(),
+  ticket_id     uuid not null references public.service_tickets (id) on delete cascade,
+  name          text not null,
+  storage_path  text not null,
+  mime          text,
+  size          bigint,
+  uploaded_by   uuid references public.employees (id) on delete set null,
+  created_at    timestamptz not null default now()
+);
+create index if not exists service_ticket_files_idx on public.service_ticket_files (ticket_id);
+
+alter table public.service_tickets enable row level security;
+alter table public.service_ticket_messages enable row level security;
+alter table public.service_ticket_files enable row level security;
+
+drop policy if exists "st_select" on public.service_tickets;
+create policy "st_select" on public.service_tickets for select using (public.is_staff());
+drop policy if exists "st_insert" on public.service_tickets;
+create policy "st_insert" on public.service_tickets for insert with check (public.is_staff());
+drop policy if exists "st_update" on public.service_tickets;
+create policy "st_update" on public.service_tickets for update using (public.is_staff()) with check (public.is_staff());
+drop policy if exists "st_delete" on public.service_tickets;
+create policy "st_delete" on public.service_tickets for delete using (public.is_admin() or created_by = public.current_employee_id());
+
+drop policy if exists "stm_select" on public.service_ticket_messages;
+create policy "stm_select" on public.service_ticket_messages for select using (public.is_staff());
+drop policy if exists "stm_insert" on public.service_ticket_messages;
+create policy "stm_insert" on public.service_ticket_messages for insert with check (public.is_staff());
+drop policy if exists "stm_delete" on public.service_ticket_messages;
+create policy "stm_delete" on public.service_ticket_messages for delete
+  using (public.is_admin() or author_employee_id = public.current_employee_id());
+
+drop policy if exists "stf_select" on public.service_ticket_files;
+create policy "stf_select" on public.service_ticket_files for select using (public.is_staff());
+drop policy if exists "stf_insert" on public.service_ticket_files;
+create policy "stf_insert" on public.service_ticket_files for insert with check (public.is_staff());
+drop policy if exists "stf_delete" on public.service_ticket_files;
+create policy "stf_delete" on public.service_ticket_files for delete
+  using (public.is_admin() or uploaded_by = public.current_employee_id());
+
+-- Realtime für Live-Kommentare (idempotent).
+do $$
+begin
+  begin
+    alter publication supabase_realtime add table public.service_ticket_messages;
+  exception when duplicate_object then null; end;
+  begin
+    alter publication supabase_realtime add table public.service_tickets;
+  exception when duplicate_object then null; end;
+end $$;
+
+
+-- ============================================================================
+-- 20260603000100_file_text.sql
+-- ============================================================================
+-- ============================================================================
+-- ip³ PV-Tool — Datei-Volltext + Beleg-Metadaten
+-- (1) `text_content`: extrahierter PDF-Text wird gespeichert, damit Dateien
+--     intelligent nach Inhalt durchsucht werden können (globale Suche + KI).
+-- (2) `doc_meta`: KI-interpretierte Beleg-Felder (Lieferant, Rechnungsnummer,
+--     Datum, Fälligkeit, Betrag …) für eingezogene Dokumente/Rechnungen.
+-- Idempotent. Im Supabase SQL-Editor einmal ausführen.
+-- ============================================================================
+
+-- Volltext für die durchsuchbaren Datei-Tabellen
+alter table public.project_files       add column if not exists text_content text;
+alter table public.product_assets      add column if not exists text_content text;
+alter table public.service_ticket_files add column if not exists text_content text;
+
+-- Beleg-/Dokument-Metadaten (nur Projekt-Dateien — dort landen Rechnungen)
+alter table public.project_files add column if not exists doc_meta jsonb;
+
+-- Volltext-Indizes (deutsch) für schnelle Inhaltssuche
+create index if not exists project_files_text_idx
+  on public.project_files using gin (to_tsvector('german', coalesce(text_content, '')));
+create index if not exists product_assets_text_idx
+  on public.product_assets using gin (to_tsvector('german', coalesce(text_content, '')));
+create index if not exists service_ticket_files_text_idx
+  on public.service_ticket_files using gin (to_tsvector('german', coalesce(text_content, '')));
+
+
+-- ============================================================================
+-- 20260604000100_ai_conversations.sql
+-- ============================================================================
+-- ============================================================================
+-- ip³ PV-Tool — KI-Gesprächsverlauf (Persistenz)
+-- ai_conversations: ein Gesprächsfaden je Mitarbeiter (privat).
+-- ai_messages:      Nachrichten eines Gesprächs (user/assistant).
+-- RLS: Nur der eigene Mitarbeiter sieht/ändert seine Gespräche.
+-- Idempotent. Im Supabase SQL-Editor einmal ausführen.
+-- ============================================================================
+
+create table if not exists public.ai_conversations (
+  id          uuid primary key default gen_random_uuid(),
+  employee_id uuid not null references public.employees (id) on delete cascade,
+  title       text,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+create index if not exists ai_conversations_employee_idx
+  on public.ai_conversations (employee_id, updated_at desc);
+
+create table if not exists public.ai_messages (
+  id              uuid primary key default gen_random_uuid(),
+  conversation_id uuid not null references public.ai_conversations (id) on delete cascade,
+  role            text not null,                 -- 'user' | 'assistant'
+  content         text not null,
+  created_at      timestamptz not null default now()
+);
+create index if not exists ai_messages_conversation_idx
+  on public.ai_messages (conversation_id, created_at);
+
+alter table public.ai_conversations enable row level security;
+alter table public.ai_messages enable row level security;
+
+-- Gespräche: nur Eigentümer (Mitarbeiter)
+drop policy if exists "aic_select" on public.ai_conversations;
+create policy "aic_select" on public.ai_conversations for select
+  using (employee_id = public.current_employee_id());
+drop policy if exists "aic_insert" on public.ai_conversations;
+create policy "aic_insert" on public.ai_conversations for insert
+  with check (employee_id = public.current_employee_id());
+drop policy if exists "aic_update" on public.ai_conversations;
+create policy "aic_update" on public.ai_conversations for update
+  using (employee_id = public.current_employee_id())
+  with check (employee_id = public.current_employee_id());
+drop policy if exists "aic_delete" on public.ai_conversations;
+create policy "aic_delete" on public.ai_conversations for delete
+  using (employee_id = public.current_employee_id());
+
+-- Nachrichten: über Konversations-Besitz abgesichert
+drop policy if exists "aim_select" on public.ai_messages;
+create policy "aim_select" on public.ai_messages for select
+  using (exists (select 1 from public.ai_conversations c
+    where c.id = conversation_id and c.employee_id = public.current_employee_id()));
+drop policy if exists "aim_insert" on public.ai_messages;
+create policy "aim_insert" on public.ai_messages for insert
+  with check (exists (select 1 from public.ai_conversations c
+    where c.id = conversation_id and c.employee_id = public.current_employee_id()));
+drop policy if exists "aim_delete" on public.ai_messages;
+create policy "aim_delete" on public.ai_messages for delete
+  using (exists (select 1 from public.ai_conversations c
+    where c.id = conversation_id and c.employee_id = public.current_employee_id()));
+
+
+-- ============================================================================
+-- 20260605000100_embeddings.sql
+-- ============================================================================
+-- ============================================================================
+-- ip³ PV-Tool — Semantische Dokumentsuche (pgvector)
+-- Embeddings (OpenAI text-embedding-3-small, 1536 Dim.) für den extrahierten
+-- Datei-Volltext. Ermöglicht Bedeutungs-Suche statt nur Stichwort.
+-- Idempotent. Im Supabase SQL-Editor einmal ausführen.
+-- HINWEIS: Erfordert die Extension `vector` (in Supabase verfügbar).
+-- ============================================================================
+
+create extension if not exists vector;
+
+alter table public.project_files       add column if not exists embedding vector(1536);
+alter table public.product_assets      add column if not exists embedding vector(1536);
+alter table public.service_ticket_files add column if not exists embedding vector(1536);
+
+create index if not exists project_files_embedding_idx
+  on public.project_files using hnsw (embedding vector_cosine_ops);
+create index if not exists product_assets_embedding_idx
+  on public.product_assets using hnsw (embedding vector_cosine_ops);
+create index if not exists service_ticket_files_embedding_idx
+  on public.service_ticket_files using hnsw (embedding vector_cosine_ops);
+
+-- Ähnlichkeitssuche über alle Datei-Quellen. SECURITY INVOKER (Default) →
+-- RLS der zugrunde liegenden Tabellen gilt für den aufrufenden Nutzer.
+create or replace function public.match_documents(
+  query_embedding vector(1536),
+  match_count int default 8
+)
+returns table (source text, name text, owner text, content text, similarity float)
+language sql
+stable
+as $$
+  with hits as (
+    select 'Projekt'::text as source, pf.name,
+           coalesce(p.title, 'Projekt') as owner,
+           left(coalesce(pf.text_content, ''), 600) as content,
+           1 - (pf.embedding <=> query_embedding) as similarity
+    from public.project_files pf
+    left join public.projects p on p.id = pf.project_id
+    where pf.embedding is not null
+    union all
+    select 'Produkt'::text, pa.name,
+           coalesce(pr.name, 'Produkt'),
+           left(coalesce(pa.text_content, ''), 600),
+           1 - (pa.embedding <=> query_embedding)
+    from public.product_assets pa
+    left join public.products pr on pr.id = pa.product_id
+    where pa.embedding is not null
+    union all
+    select 'Service'::text, sf.name,
+           coalesce(t.title, 'Ticket'),
+           left(coalesce(sf.text_content, ''), 600),
+           1 - (sf.embedding <=> query_embedding)
+    from public.service_ticket_files sf
+    left join public.service_tickets t on t.id = sf.ticket_id
+    where sf.embedding is not null
+  )
+  select * from hits order by similarity desc limit match_count;
+$$;
+
+
+-- ============================================================================
+-- 20260606000100_hr.sql
+-- ============================================================================
+-- ============================================================================
+-- ip³ PV-Tool — Personal/HR: erweiterte Mitarbeiter-Stammdaten, Verträge, Urlaub
+-- (1) employees um echte Stammdaten erweitern (Vor-/Nachname getrennt → fixt
+--     auch die Vornamen-Begrüßung), Adresse, Daten, Kontakt, Urlaubsanspruch.
+-- (2) employee_contracts (Arbeitsverträge), employee_absences (Urlaub/Krank).
+-- RLS: Admin sieht/verwaltet alles; Mitarbeiter sieht nur seine eigenen Daten.
+-- Idempotent. Im Supabase SQL-Editor einmal ausführen.
+-- ============================================================================
+
+alter table public.employees add column if not exists first_name text;
+alter table public.employees add column if not exists last_name text;
+alter table public.employees add column if not exists birth_date date;
+alter table public.employees add column if not exists start_date date;
+alter table public.employees add column if not exists street text;
+alter table public.employees add column if not exists zip text;
+alter table public.employees add column if not exists city text;
+alter table public.employees add column if not exists phone text;
+alter table public.employees add column if not exists mobile text;
+alter table public.employees add column if not exists position text;
+alter table public.employees add column if not exists emergency_contact text;
+alter table public.employees add column if not exists vacation_days_per_year int not null default 30;
+
+-- Bestehende „name"-Daten in Vor-/Nachname aufteilen (nur wenn noch leer).
+update public.employees
+set first_name = split_part(name, ' ', 1),
+    last_name  = nullif(substring(name from position(' ' in name) + 1), name)
+where (first_name is null or first_name = '') and name is not null and name <> '';
+
+-- ---------------------------------------------------------------------------
+-- Arbeitsverträge
+-- ---------------------------------------------------------------------------
+create table if not exists public.employee_contracts (
+  id             uuid primary key default gen_random_uuid(),
+  employee_id    uuid not null references public.employees (id) on delete cascade,
+  contract_type  text not null default 'vollzeit',   -- vollzeit|teilzeit|minijob|freelance|ausbildung
+  start_date     date,
+  end_date       date,                               -- NULL = unbefristet
+  weekly_hours   numeric,
+  salary_monthly numeric,
+  hourly_rate    numeric,
+  vacation_days  int,                                -- abweichender Anspruch (optional)
+  notes          text,
+  file_path      text,                               -- Vertrags-PDF (Bucket hr-files)
+  status         text not null default 'aktiv',      -- aktiv|pausiert|beendet
+  created_by     uuid references public.employees (id) on delete set null,
+  created_at     timestamptz not null default now(),
+  updated_at     timestamptz not null default now()
+);
+create index if not exists employee_contracts_employee_idx on public.employee_contracts (employee_id);
+
+alter table public.employee_contracts enable row level security;
+drop policy if exists "ec_select" on public.employee_contracts;
+create policy "ec_select" on public.employee_contracts for select
+  using (public.is_admin() or employee_id = public.current_employee_id());
+drop policy if exists "ec_insert" on public.employee_contracts;
+create policy "ec_insert" on public.employee_contracts for insert with check (public.is_admin());
+drop policy if exists "ec_update" on public.employee_contracts;
+create policy "ec_update" on public.employee_contracts for update using (public.is_admin()) with check (public.is_admin());
+drop policy if exists "ec_delete" on public.employee_contracts;
+create policy "ec_delete" on public.employee_contracts for delete using (public.is_admin());
+
+-- ---------------------------------------------------------------------------
+-- Urlaub / Abwesenheiten
+-- ---------------------------------------------------------------------------
+create table if not exists public.employee_absences (
+  id            uuid primary key default gen_random_uuid(),
+  employee_id   uuid not null references public.employees (id) on delete cascade,
+  absence_type  text not null default 'urlaub',      -- urlaub|krank|fortbildung|unbezahlt|sonstiges
+  start_date    date not null,
+  end_date      date not null,
+  days          numeric not null default 0,          -- angerechnete (Arbeits-)Tage
+  status        text not null default 'pending',     -- pending|approved|rejected|cancelled
+  notes         text,
+  requested_by  uuid references public.employees (id) on delete set null,
+  approved_by   uuid references public.employees (id) on delete set null,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+create index if not exists employee_absences_employee_idx on public.employee_absences (employee_id);
+create index if not exists employee_absences_dates_idx on public.employee_absences (start_date, end_date);
+
+alter table public.employee_absences enable row level security;
+-- Lesen: Admin alles; Mitarbeiter eigene.
+drop policy if exists "ea_select" on public.employee_absences;
+create policy "ea_select" on public.employee_absences for select
+  using (public.is_admin() or employee_id = public.current_employee_id());
+-- Anlegen: Admin für jeden; Mitarbeiter nur für sich (Antrag).
+drop policy if exists "ea_insert" on public.employee_absences;
+create policy "ea_insert" on public.employee_absences for insert
+  with check (public.is_admin() or employee_id = public.current_employee_id());
+-- Ändern: Admin alles; Mitarbeiter nur eigene, solange pending.
+drop policy if exists "ea_update" on public.employee_absences;
+create policy "ea_update" on public.employee_absences for update
+  using (public.is_admin() or (employee_id = public.current_employee_id() and status = 'pending'))
+  with check (public.is_admin() or (employee_id = public.current_employee_id()));
+drop policy if exists "ea_delete" on public.employee_absences;
+create policy "ea_delete" on public.employee_absences for delete
+  using (public.is_admin() or (employee_id = public.current_employee_id() and status = 'pending'));
+
+
+-- ============================================================================
+-- 20260607000100_sitelog_photos.sql
+-- ============================================================================
+-- ============================================================================
+-- ip³ PV-Tool — Bautagebuch: Foto-Verknüpfung + KI-Markierung
+-- photo_ids: verknüpfte Fotos (project_files-IDs) zu einem Eintrag.
+-- ai_generated: Eintrag wurde aus einem Foto per KI vorbefüllt.
+-- Idempotent. Im Supabase SQL-Editor einmal ausführen.
+-- ============================================================================
+
+alter table public.site_log add column if not exists photo_ids jsonb;
+alter table public.site_log add column if not exists ai_generated boolean not null default false;
+
+
+-- ============================================================================
+-- 20260607000200_employee_skills.sql
+-- ============================================================================
+-- ============================================================================
+-- ip³ PV-Tool — Mitarbeiter-Skills/Qualifikationen (für die smarte Plantafel)
+-- skills: Liste von Schlagwörtern (z. B. ["Dachmontage","Elektrik","Speicher"]).
+-- Idempotent. Im Supabase SQL-Editor einmal ausführen.
+-- ============================================================================
+
+alter table public.employees add column if not exists skills jsonb;
+
+
+-- ============================================================================
+-- 20260608000100_incoming_invoices.sql
+-- ============================================================================
+-- ============================================================================
+-- ip³ PV-Tool — Eingangsrechnungen (Lieferantenrechnungen)
+-- Aus einem ausgelesenen Beleg (project_files.doc_meta) als offener Posten
+-- verbuchbar; Zahlungsstatus pflegbar. Idempotent.
+-- ============================================================================
+
+create table if not exists public.incoming_invoices (
+  id              uuid primary key default gen_random_uuid(),
+  supplier        text,
+  invoice_number  text,
+  invoice_date    date,
+  due_date        date,
+  amount          numeric,
+  currency        text not null default 'EUR',
+  project_id      uuid references public.projects (id) on delete set null,
+  source_file_id  uuid references public.project_files (id) on delete set null,
+  status          text not null default 'offen',   -- offen | bezahlt
+  paid_at         timestamptz,
+  notes           text,
+  created_by      uuid references public.employees (id) on delete set null,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
+);
+create index if not exists incoming_invoices_status_idx on public.incoming_invoices (status, due_date);
+create index if not exists incoming_invoices_file_idx on public.incoming_invoices (source_file_id);
+
+alter table public.incoming_invoices enable row level security;
+drop policy if exists "ii_select" on public.incoming_invoices;
+create policy "ii_select" on public.incoming_invoices for select using (public.is_staff());
+drop policy if exists "ii_insert" on public.incoming_invoices;
+create policy "ii_insert" on public.incoming_invoices for insert with check (public.is_staff());
+drop policy if exists "ii_update" on public.incoming_invoices;
+create policy "ii_update" on public.incoming_invoices for update using (public.is_staff()) with check (public.is_staff());
+drop policy if exists "ii_delete" on public.incoming_invoices;
+create policy "ii_delete" on public.incoming_invoices for delete
+  using (public.is_admin() or created_by = public.current_employee_id());

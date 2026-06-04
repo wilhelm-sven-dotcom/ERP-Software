@@ -18,6 +18,7 @@ import {
 import { CustomerFormDialog } from "@/components/kunden/customer-form-dialog";
 import { getCustomers } from "@/lib/data/customers";
 import { customerName } from "@/lib/format";
+import { NewBadge } from "@/components/shared/new-badge";
 
 export const metadata: Metadata = { title: "Kunden" };
 
@@ -36,7 +37,10 @@ export default async function KundenPage() {
 
   return (
     <div>
-      <PageHeader title="Kunden" description="Kundenstamm verwalten.">
+      <PageHeader title="Kunden" description="Kundenstamm verwalten." helpId="kunden">
+        <Button variant="outline" asChild>
+          <Link href="/kunden/dubletten">Dubletten prüfen</Link>
+        </Button>
         {newButton}
       </PageHeader>
 
@@ -68,12 +72,15 @@ export default async function KundenPage() {
                     {c.customer_nr ?? "–"}
                   </TableCell>
                   <TableCell>
-                    <Link
-                      href={`/kunden/${c.id}`}
-                      className="font-medium hover:underline"
-                    >
-                      {customerName(c)}
-                    </Link>
+                    <span className="flex items-center gap-2">
+                      <Link
+                        href={`/kunden/${c.id}`}
+                        className="font-medium hover:underline"
+                      >
+                        {customerName(c)}
+                      </Link>
+                      <NewBadge createdAt={c.created_at} />
+                    </span>
                   </TableCell>
                   <TableCell>
                     {c.kind ? (

@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useActionState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -50,9 +51,18 @@ export function EmployeeRowForm({
         <TableCell className="text-muted-foreground">
           {employee.email ?? "–"}
         </TableCell>
-        <TableCell className="capitalize">{employee.role}</TableCell>
+        <TableCell className="capitalize">
+          {employee.role}
+          {employee.is_sales ? (
+            <span className="text-muted-foreground ml-1 text-xs">· Vertrieb</span>
+          ) : null}
+        </TableCell>
         <TableCell>{employee.active ? "aktiv" : "inaktiv"}</TableCell>
-        <TableCell />
+        <TableCell>
+          <Link href={`/mitarbeiter/${employee.id}`} className="text-primary text-sm hover:underline">
+            Akte öffnen
+          </Link>
+        </TableCell>
       </TableRow>
     );
   }
@@ -62,7 +72,7 @@ export function EmployeeRowForm({
       <TableCell colSpan={5} className="p-0">
         <form
           action={action}
-          className="grid grid-cols-[1fr_1fr_140px_120px_auto] items-center gap-2 px-2 py-1.5"
+          className="grid grid-cols-[1fr_1fr_140px_96px_90px_90px_auto] items-center gap-2 px-2 py-1.5"
         >
           <input type="hidden" name="id" value={employee.id} />
           <Input
@@ -83,6 +93,24 @@ export function EmployeeRowForm({
               <SelectItem value="admin">Admin</SelectItem>
             </SelectContent>
           </Select>
+          <Input
+            name="cost_rate"
+            type="number"
+            step="0.01"
+            defaultValue={employee.cost_rate ?? ""}
+            placeholder="€/Std"
+            title="Interner Stundensatz (Nachkalkulation)"
+            className="h-8"
+          />
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="is_sales"
+              defaultChecked={employee.is_sales ?? false}
+              className="size-4"
+            />
+            Vertrieb
+          </label>
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
@@ -92,9 +120,14 @@ export function EmployeeRowForm({
             />
             aktiv
           </label>
-          <Button type="submit" size="sm" variant="outline" disabled={pending}>
-            {pending ? "…" : "Speichern"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button type="submit" size="sm" variant="outline" disabled={pending}>
+              {pending ? "…" : "Speichern"}
+            </Button>
+            <Button type="button" size="sm" variant="ghost" asChild>
+              <Link href={`/mitarbeiter/${employee.id}`}>Akte</Link>
+            </Button>
+          </div>
         </form>
       </TableCell>
     </TableRow>

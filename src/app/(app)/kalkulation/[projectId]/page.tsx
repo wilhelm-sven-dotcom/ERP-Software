@@ -7,34 +7,53 @@ import { PageHeader } from "@/components/shared/page-header";
 import { SupabaseNotice } from "@/components/shared/supabase-notice";
 import { Button } from "@/components/ui/button";
 import { CalcEditor } from "@/components/kalkulation/calc-editor";
+import { VariantBar } from "@/components/kalkulation/variant-bar";
 import { getProject } from "@/lib/data/projects";
-import { getProducts } from "@/lib/data/products";
+import { getProducts, getProductGroups } from "@/lib/data/products";
 import { getCalcTemplates } from "@/lib/data/templates";
 import {
-  getCalculationByProject,
+  getCalculationsByProject,
   readMeta,
   readPositions,
 } from "@/lib/data/calculations";
+import { getVatPerGroup } from "@/lib/data/settings";
 import { customerName } from "@/lib/format";
+import type { Calculation } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Kalkulation" };
 
 export default async function KalkulationEditorPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ projectId: string }>;
+  searchParams: Promise<{ calc?: string }>;
 }) {
   const { projectId } = await params;
+  const { calc: calcParam } = await searchParams;
   const project = await getProject(projectId);
   if (!project) notFound();
 
-  const [calc, products, templates] = await Promise.all([
-    getCalculationByProject(projectId),
-    getProducts(),
-    getCalcTemplates(),
-  ]);
-  const meta = readMeta(calc);
-  const positions = readPositions(calc);
+  const [variants, products, productGroups, templates, vatDefault] =
+    await Promise.all([
+      getCalculationsByProject(projectId),
+      getProducts(),
+      getProductGroups(),
+      getCalcTemplates(),
+      getVatPerGroup(),
+    ]);
+
+  // Aktive Variante: aus ?calc, sonst die ausgewählte, sonst die neueste.
+  const active: Calculation | null =
+    variants.find((v) => v.id === calcParam) ??
+    variants.find((v) => v.is_selected) ??
+    variants[variants.length - 1] ??
+    null;
+
+  const meta = readMeta(active);
+  const positions = readPositions(active);
+  // MwSt je Gruppe: gespeicherte Werte bevorzugen, sonst Default aus settings.
+  const vatPerGroup = meta.mwstPerGroup ?? vatDefault;
 
   return (
     <div>
@@ -53,15 +72,30 @@ export default async function KalkulationEditorPage({
 
       <SupabaseNotice />
 
+      {variants.length > 0 ? (
+        <div className="mb-4">
+          <VariantBar
+            projectId={projectId}
+            variants={variants}
+            activeId={active?.id ?? null}
+          />
+        </div>
+      ) : null}
+
       <CalcEditor
+        key={active?.id ?? "neu"}
         projectId={projectId}
-        calcId={calc?.id ?? null}
+        calcId={active?.id ?? null}
+        calcName={active?.name ?? "Standard"}
         initialPositions={positions}
         initialPauschalRabatt={meta.pauschalRabattPercent}
         initialNachlass={meta.nachlass}
-        initialMwst={meta.mwstPercent}
         initialSkonto={meta.skontoPercent}
+        vatPerGroup={vatPerGroup}
+        systemSizeKwp={project.system_size_kwp}
+        storageKwh={project.storage_kwh}
         products={products}
+        productGroups={productGroups}
         templates={templates}
       />
     </div>

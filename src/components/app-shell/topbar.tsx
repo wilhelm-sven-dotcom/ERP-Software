@@ -8,17 +8,26 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { MobileNav } from "@/components/app-shell/mobile-nav";
 import { Breadcrumb } from "@/components/app-shell/breadcrumb";
+import { GlobalSearch } from "@/components/shared/global-search";
+import { QuickTaskButton } from "@/components/shared/quick-task-button";
+import { NotificationBell } from "@/components/app-shell/notification-bell";
 
 /** Topbar: mobiles Menü, Zurück, Breadcrumb, Theme-Toggle, „Neues Projekt". */
-export function Topbar() {
+export function Topbar({
+  logoUrl,
+  aiEnabled = false,
+}: {
+  logoUrl?: string | null;
+  aiEnabled?: boolean;
+}) {
   const router = useRouter();
 
   return (
     <header
       data-app-shell-chrome
-      className="bg-background/80 supports-[backdrop-filter]:bg-background/60 sticky top-0 z-30 flex h-14 items-center gap-1 border-b px-3 backdrop-blur"
+      className="bg-background/80 supports-[backdrop-filter]:bg-background/60 sticky top-0 z-30 flex h-16 items-center gap-1 border-b px-4 backdrop-blur-xl"
     >
-      <MobileNav />
+      <MobileNav logoUrl={logoUrl} />
       <Button
         variant="ghost"
         size="icon"
@@ -30,6 +39,9 @@ export function Topbar() {
       </Button>
       <Breadcrumb />
       <div className="flex-1" />
+      <GlobalSearch aiEnabled={aiEnabled} />
+      <QuickTaskButton />
+      <NotificationBell />
       <ThemeToggle />
       <Button size="sm" className="gap-1.5" title="Neues Projekt anlegen" asChild>
         <Link href="/projekte?neu=1">

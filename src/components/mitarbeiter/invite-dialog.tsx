@@ -70,9 +70,15 @@ export function InviteDialog({ trigger }: { trigger: React.ReactNode }) {
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
             <div className="grid gap-2">
-              <Label htmlFor="invite-name">Name</Label>
-              <Input id="invite-name" name="name" />
+              <Label htmlFor="invite-first">Vorname *</Label>
+              <Input id="invite-first" name="first_name" required />
             </div>
+            <div className="grid gap-2">
+              <Label htmlFor="invite-last">Nachname</Label>
+              <Input id="invite-last" name="last_name" />
+            </div>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="invite-role">Rolle</Label>
               <Select name="role" defaultValue="mitarbeiter">

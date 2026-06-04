@@ -62,12 +62,23 @@ export function calculate(input: CalcInput): CalcResult {
   let ekGesamt = 0;
 
   for (const p of input.positions) {
-    const group = groupOf(p);
     const vkSum =
       num(p.menge) * num(p.einzelpreis) * (1 - clampPercent(p.rabatt) / 100);
-    const grRab = clampPercent(gruppenRabatte[group]);
-    const vkNachGroup = vkSum * (1 - grRab / 100);
-    gruppenSummen[group] += vkNachGroup;
+
+    if (p.splitPvPct !== null && p.splitPvPct !== undefined) {
+      // Hybrid: Position anteilig auf PV-Anlage und Speicher verteilen. Jeder
+      // Anteil bekommt den Gruppenrabatt SEINER Gruppe (konsistent zur Logik
+      // unten). Die Position wird nur einmal gezählt (Summe = vkSum).
+      const pvShare = clampPercent(p.splitPvPct) / 100;
+      const pvRab = clampPercent(gruppenRabatte["PV-Anlage"]);
+      const spRab = clampPercent(gruppenRabatte["Speicher"]);
+      gruppenSummen["PV-Anlage"] += vkSum * pvShare * (1 - pvRab / 100);
+      gruppenSummen["Speicher"] += vkSum * (1 - pvShare) * (1 - spRab / 100);
+    } else {
+      const group = groupOf(p);
+      const grRab = clampPercent(gruppenRabatte[group]);
+      gruppenSummen[group] += vkSum * (1 - grRab / 100);
+    }
     ekGesamt += num(p.menge) * num(p.ek);
   }
 
@@ -81,9 +92,38 @@ export function calculate(input: CalcInput): CalcResult {
   const nachlass = num(input.nachlass);
   const netto = nettoVorPauschal * (1 - pauschal / 100) - nachlass;
 
-  // Schritt 5: MwSt
-  const mwstSatz = num(input.mwstPercent);
-  const mwstBetrag = netto * (mwstSatz / 100);
+  // Schritt 5: MwSt — je Gruppe (Pauschalrabatt & Nachlass anteilig auf die
+  // Gruppen verteilt), damit § 12 Abs. 3 UStG (0 % PV+Speicher) korrekt greift.
+  const rateOf = (g: PositionGroup) =>
+    clampPercent(input.mwstPerGroup?.[g] ?? input.mwstPercent);
+  const perRate = new Map<number, { netto: number; betrag: number }>();
+  let mwstBetrag = 0;
+  for (const g of POSITION_GROUPS) {
+    const share = nettoVorPauschal !== 0 ? gruppenSummen[g] / nettoVorPauschal : 0;
+    const groupNetto = gruppenSummen[g] * (1 - pauschal / 100) - nachlass * share;
+    const rate = rateOf(g);
+    const betrag = groupNetto * (rate / 100);
+    mwstBetrag += betrag;
+    const e = perRate.get(rate) ?? { netto: 0, betrag: 0 };
+    e.netto += groupNetto;
+    e.betrag += betrag;
+    perRate.set(rate, e);
+  }
+  const mwstSaetze = [...perRate.entries()]
+    .map(([rate, v]) => ({
+      rate,
+      netto: round2(v.netto),
+      betrag: round2(v.betrag),
+    }))
+    .filter((r) => r.netto !== 0 || r.betrag !== 0)
+    .sort((a, b) => b.rate - a.rate);
+  // Einheitlicher Satz, wenn nur einer vorkommt; sonst gewichteter Effektivsatz.
+  const mwstSatz =
+    perRate.size === 1
+      ? [...perRate.keys()][0]
+      : netto > 0
+        ? round2((mwstBetrag / netto) * 100)
+        : 0;
   const brutto = netto + mwstBetrag;
 
   // Schritt 6: Skonto (auf brutto)
@@ -95,11 +135,20 @@ export function calculate(input: CalcInput): CalcResult {
   const marge = netto - ekGesamt;
   const margeProzent = netto > 0 ? (marge / netto) * 100 : 0;
 
+  // Spezifische Preise (netto-Basis = gruppenSummen, vor Pauschalrabatt).
+  const kwp = num(input.systemSizeKwp);
+  const kwh = num(input.storageKwh);
+  const spezifischPvProKwp =
+    kwp > 0 ? round2(gruppenSummen["PV-Anlage"] / kwp) : null;
+  const spezifischSpeicherProKwh =
+    kwh > 0 ? round2(gruppenSummen.Speicher / kwh) : null;
+
   const totals: CalcTotals = {
     nettoVorPauschal: round2(nettoVorPauschal),
     netto: round2(netto),
     mwstSatz,
     mwstBetrag: round2(mwstBetrag),
+    mwstSaetze,
     brutto: round2(brutto),
     skontoBetrag: round2(skontoBetrag),
     bruttoNachSkonto: round2(bruttoNachSkonto),
@@ -112,6 +161,8 @@ export function calculate(input: CalcInput): CalcResult {
       Wallbox: round2(gruppenSummen.Wallbox),
       Sonstiges: round2(gruppenSummen.Sonstiges),
     },
+    spezifischPvProKwp,
+    spezifischSpeicherProKwh,
   };
 
   return { positions: input.positions.map(computePosition), totals };

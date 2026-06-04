@@ -35,7 +35,7 @@ export const getCurrentEmployee = cache(
     const supabase = await createClient();
     const { data } = await supabase
       .from("employees")
-      .select("id, name, email, role")
+      .select("id, name, first_name, email, role, is_sales")
       .eq("auth_user_id", user.id)
       .maybeSingle();
 
@@ -43,15 +43,19 @@ export const getCurrentEmployee = cache(
       return {
         id: "",
         name: null,
+        first_name: null,
         email: user.email ?? "",
         role: "mitarbeiter",
+        is_sales: false,
       };
     }
     return {
       id: data.id,
       name: data.name,
+      first_name: (data as { first_name?: string | null }).first_name ?? null,
       email: data.email ?? user.email ?? "",
       role: (data.role as Role) ?? "mitarbeiter",
+      is_sales: Boolean(data.is_sales),
     };
   },
 );

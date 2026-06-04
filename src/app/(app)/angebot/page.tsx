@@ -15,28 +15,28 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getProjects } from "@/lib/data/projects";
-import { customerName } from "@/lib/format";
-import { statusVariant } from "@/lib/constants";
+import { getAllOffers } from "@/lib/data/offers";
+import { customerName, formatCurrency, formatNumber } from "@/lib/format";
+import { offerStatusVariant } from "@/lib/constants";
 
-export const metadata: Metadata = { title: "Angebot" };
+export const metadata: Metadata = { title: "Angebote" };
 
 export default async function AngebotPage() {
-  const projects = await getProjects();
+  const offers = await getAllOffers();
 
   return (
     <div>
       <PageHeader
-        title="Angebot"
-        description="Projekt wählen, um das Angebot zu erzeugen (basierend auf der Kalkulation)."
+        title="Angebote"
+        description="Erstellte Angebote. Neue Angebote entstehen im Projekt aus einer Kalkulations-Variante."
       />
 
       <SupabaseNotice />
 
-      {projects.length === 0 ? (
+      {offers.length === 0 ? (
         <EmptyState
-          title="Keine Projekte"
-          description="Lege zuerst ein Projekt mit Kalkulation an."
+          title="Noch keine Angebote"
+          description="Öffne ein Projekt und erstelle aus einer Kalkulations-Variante ein Angebot."
         >
           <Button asChild>
             <Link href="/projekte">Zu den Projekten</Link>
@@ -47,35 +47,56 @@ export default async function AngebotPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-20">Nr.</TableHead>
                 <TableHead>Projekt</TableHead>
                 <TableHead>Kunde</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="w-32" />
+                <TableHead className="text-right">kWp / kWh</TableHead>
+                <TableHead className="text-right">Brutto</TableHead>
+                <TableHead className="w-28" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {projects.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell className="font-medium">
-                    {p.title ?? "Ohne Titel"}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {p.customer ? customerName(p.customer) : "–"}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={statusVariant(p.status)}>
-                      {p.status ?? "–"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Button variant="outline" size="sm" asChild>
-                      <Link href={`/angebot/${p.id}`}>
-                        <FileText className="size-4" /> Angebot
-                      </Link>
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {offers.map((o) => {
+                const brutto =
+                  typeof o.totals?.brutto === "number" ? o.totals.brutto : null;
+                return (
+                  <TableRow key={o.id}>
+                    <TableCell className="font-medium">
+                      {o.offer_number ?? "–"}
+                    </TableCell>
+                    <TableCell>{o.project?.title ?? "–"}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {o.project?.customer
+                        ? customerName(o.project.customer)
+                        : "–"}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={offerStatusVariant(o.status)}>
+                        {o.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-right">
+                      {o.project?.system_size_kwp
+                        ? `${formatNumber(o.project.system_size_kwp)} kWp`
+                        : "–"}
+                      {o.project?.storage_kwh
+                        ? ` / ${formatNumber(o.project.storage_kwh)} kWh`
+                        : ""}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {brutto !== null ? formatCurrency(brutto) : "–"}
+                    </TableCell>
+                    <TableCell>
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={`/angebot/${o.id}`}>
+                          <FileText className="size-4" /> Öffnen
+                        </Link>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>

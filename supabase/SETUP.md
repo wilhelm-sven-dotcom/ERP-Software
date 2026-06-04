@@ -83,3 +83,68 @@ Summenstruktur ab (Positionsrabatt, Gesamtrabatt, Zuschlag, MwSt inkl.
 Kalkulation aus dem alten Tool nachrechnen und die Summen vergleichen; bei
 Abweichungen die Formeln in `engine.ts` anpassen (Tests in `engine.test.ts`
 ergänzen). `npm run test:calc` prüft die Engine isoliert.
+
+---
+
+## Neue Migrationen (UX-Paket 5 & 6)
+
+Im Supabase SQL-Editor **einmal** in dieser Reihenfolge ausführen (oder
+`setup_all.sql` neu einspielen — alle Schritte sind idempotent):
+
+1. `20260531121300_project_type.sql` — Projekttyp/Anlagentyp
+2. `20260531121400_text_blocks.sql` — Angebots-Textbausteine (+ Standard-Seed)
+3. `20260531121500_documents.sql` — Auftragsbestätigung & Lieferschein
+4. `20260531121600_workflow.sql` — Ablauf-Vorlagen, Schritte, Aufgaben (+ Seed)
+5. `20260531121800_time_tracking.sql` — Zeiterfassung + Stundensätze
+6. `20260531121900_user_integrations.sql` — Google-OAuth-Tokens je Mitarbeiter
+
+Danach in den **Einstellungen** das Firmenlogo hochladen und die
+Textbausteine/Ablauf-Schritte je Anlagentyp prüfen. Für die Nachkalkulation
+unter **Mitarbeiter** je Person den internen Stundensatz hinterlegen (oder
+global `settings.labor_rate`).
+
+## Google-Kalender anbinden (read-only, optional)
+
+Jeder Mitarbeiter verbindet seinen eigenen Google-Kalender; gelesen wird nur
+(keine Schreibzugriffe).
+
+1. **Google-Cloud-Projekt** anlegen (console.cloud.google.com).
+2. **Google Calendar API** aktivieren (APIs & Dienste → Bibliothek).
+3. **OAuth-Zustimmungsbildschirm** konfigurieren (intern, falls Workspace;
+   sonst „extern" + Testnutzer eintragen). Scope
+   `.../auth/calendar.readonly` hinzufügen.
+4. **OAuth-Client-ID** (Typ „Webanwendung") erstellen. Autorisierte
+   Redirect-URI: `https://DEINE-DOMAIN/api/google/oauth/callback`
+   (lokal: `http://localhost:3000/api/google/oauth/callback`).
+5. In Vercel/`.env.local` setzen: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+   (und optional `GOOGLE_OAUTH_REDIRECT`). Voraussetzung ist außerdem ein
+   gesetzter `SUPABASE_SERVICE_ROLE_KEY` (Token-Speicherung).
+6. In den **Einstellungen** auf „Mit Google verbinden" klicken. Die Termine
+   erscheinen danach im Dashboard.
+
+Hinweis: Bei vielen externen Nutzern verlangt Google ggf. eine App-Prüfung;
+für den internen Gebrauch genügen Testnutzer bzw. der App-Typ „intern".
+
+## ChatGPT / OpenAI (intelligente Suche, Assistent, KI-Dateiablage)
+
+Optional. Ohne `OPENAI_API_KEY` ist die KI schlicht aus — Suche und Datei-Ablage
+funktionieren wie bisher. Mit Key:
+
+- In der globalen Suche (⌘K) und im Dashboard-Suchfeld liefert **Enter** eine
+  interpretierte Antwort auf Deutsch und hebt die relevanten Treffer hervor;
+  freie/allgemeine Fragen sind möglich.
+- Hochgeladene PDFs werden im Volltext durchsuchbar (Datenblätter, Dokumente,
+  Service-Anhänge) — dafür einmalig die Migration `20260603000100_file_text.sql`
+  im SQL-Editor ausführen.
+- Beim Reinziehen von Dateien schlägt die KI Ziel + Ablage-Art vor und liest bei
+  Rechnungen/Dokumenten Lieferant, Nummer, Datum, Fälligkeit und Betrag aus
+  (Vorschlag + 1-Klick bestätigen).
+
+1. OpenAI-Konto + API-Key erstellen (platform.openai.com → API keys).
+2. In Vercel/`.env.local` setzen: `OPENAI_API_KEY` (optional `OPENAI_MODEL`,
+   Default `gpt-4o-mini`).
+3. Migration `20260603000100_file_text.sql` ausführen (Volltext + Beleg-Metadaten).
+
+Hinweis (Kosten/DSGVO): Pro Anfrage entstehen geringe Kosten (Cent-Bereich);
+knappe Treffer- bzw. Dokumentdaten werden an OpenAI übermittelt. Für strengere
+Anforderungen kommt später z. B. Azure-OpenAI (EU) infrage.

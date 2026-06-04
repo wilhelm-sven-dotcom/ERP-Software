@@ -28,7 +28,7 @@ import {
 import { AddressAutocomplete } from "@/components/shared/address-autocomplete";
 import { saveProject } from "@/app/(app)/projekte/actions";
 import { type ActionResult } from "@/lib/actions";
-import { PROJECT_STATUSES } from "@/lib/constants";
+import { PROJECT_STATUSES, PROJECT_TYPES } from "@/lib/constants";
 import { customerName } from "@/lib/format";
 import type { Customer, Employee, Project } from "@/lib/types";
 
@@ -44,6 +44,7 @@ export function ProjectFormDialog({
   customers,
   employees,
   defaultCustomerId,
+  projectTypes = PROJECT_TYPES,
   openOnMount = false,
   trigger,
 }: {
@@ -51,6 +52,8 @@ export function ProjectFormDialog({
   customers: CustomerOption[];
   employees: Employee[];
   defaultCustomerId?: string;
+  /** Wählbare Anlagentypen (Default-Konstante ∪ selbst angelegte Vorlagen-Typen). */
+  projectTypes?: readonly string[];
   /** Dialog beim ersten Rendern automatisch öffnen (z. B. via ?neu=1). */
   openOnMount?: boolean;
   trigger: React.ReactNode;
@@ -64,6 +67,13 @@ export function ProjectFormDialog({
   const [street, setStreet] = React.useState(project?.street ?? "");
   const [zip, setZip] = React.useState(project?.zip ?? "");
   const [city, setCity] = React.useState(project?.city ?? "");
+
+  // Technische Stammdaten aus projects.details lesen (für Default-Werte).
+  const projectDetails = (project?.details as Record<string, unknown> | undefined) ?? {};
+  const detail = (k: string) => {
+    const v = projectDetails[k];
+    return v == null ? "" : String(v);
+  };
 
   React.useEffect(() => {
     if (state.ok && open) {
@@ -141,6 +151,25 @@ export function ProjectFormDialog({
             </div>
           </div>
 
+          <div className="grid gap-2">
+            <Label htmlFor="project_type">Anlagentyp</Label>
+            <Select
+              name="project_type"
+              defaultValue={project?.project_type ?? undefined}
+            >
+              <SelectTrigger id="project_type" className="w-full">
+                <SelectValue placeholder="Anlagentyp wählen" />
+              </SelectTrigger>
+              <SelectContent>
+                {projectTypes.map((pt) => (
+                  <SelectItem key={pt} value={pt}>
+                    {pt}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="grid gap-2 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="assigned_employee_id">Bearbeiter</Label>
@@ -160,15 +189,55 @@ export function ProjectFormDialog({
                 </SelectContent>
               </Select>
             </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="system_size_kwp">Anlagengröße (kWp)</Label>
+                <Input
+                  id="system_size_kwp"
+                  name="system_size_kwp"
+                  type="number"
+                  step="0.01"
+                  defaultValue={project?.system_size_kwp ?? ""}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="storage_kwh">Speicherkapazität (kWh)</Label>
+                <Input
+                  id="storage_kwh"
+                  name="storage_kwh"
+                  type="number"
+                  step="0.01"
+                  defaultValue={project?.storage_kwh ?? ""}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Technische Stammdaten für Auslegung & Ertragsprognose */}
+          <div className="grid gap-2 sm:grid-cols-3">
             <div className="grid gap-2">
-              <Label htmlFor="system_size_kwp">Anlagengröße (kWp)</Label>
-              <Input
-                id="system_size_kwp"
-                name="system_size_kwp"
-                type="number"
-                step="0.01"
-                defaultValue={project?.system_size_kwp ?? ""}
-              />
+              <Label htmlFor="dach_ausrichtung">Dachausrichtung</Label>
+              <Input id="dach_ausrichtung" name="dach_ausrichtung" placeholder="z. B. Süd / SO-NW"
+                defaultValue={detail("dach_ausrichtung")} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="dach_neigung">Dachneigung (°)</Label>
+              <Input id="dach_neigung" name="dach_neigung" type="number" step="1" min={0} max={90}
+                placeholder="z. B. 30" defaultValue={detail("dach_neigung")} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="dach_flaeche">Dachfläche (m²)</Label>
+              <Input id="dach_flaeche" name="dach_flaeche" type="number" step="1" min={0}
+                placeholder="z. B. 60" defaultValue={detail("dach_flaeche")} />
+            </div>
+            <div className="grid gap-2 sm:col-span-2">
+              <Label htmlFor="jahresverbrauch_kwh">Jahresverbrauch (kWh)</Label>
+              <Input id="jahresverbrauch_kwh" name="jahresverbrauch_kwh" type="number" step="1" min={0}
+                placeholder="z. B. 4500" defaultValue={detail("jahresverbrauch_kwh")} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="zaehlernummer">Zählernummer</Label>
+              <Input id="zaehlernummer" name="zaehlernummer" defaultValue={detail("zaehlernummer")} />
             </div>
           </div>
 

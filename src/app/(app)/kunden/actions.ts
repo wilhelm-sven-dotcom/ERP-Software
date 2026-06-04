@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentEmployee } from "@/lib/supabase/auth";
 import { findCustomerDuplicates } from "@/lib/data/customers";
 import { ensureConfigured, fail, OK, type ActionResult } from "@/lib/actions";
 import { customerName } from "@/lib/format";
@@ -114,11 +115,13 @@ export async function addActivity(
   if (!title) return fail("Bitte einen Titel angeben.");
 
   const supabase = await createClient();
+  const me = await getCurrentEmployee();
   const { error } = await supabase.from("activities").insert({
     customer_id: customerId,
     type: s(fd, "type") ?? "notiz",
     title,
     body: s(fd, "body"),
+    employee_id: me?.id || null,
   });
   if (error) return fail(error.message);
 

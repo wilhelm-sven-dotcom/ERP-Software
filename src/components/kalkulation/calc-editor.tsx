@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, FileText, Minus, Plus, Split, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -23,11 +24,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { calculate } from "@/lib/calc/engine";
+import { calculate, round2 } from "@/lib/calc/engine";
+import { computeServicePrice } from "@/lib/calc/service-pricing";
 import { POSITION_GROUPS, type CalcPosition, type PositionGroup } from "@/lib/calc/types";
 import { saveCalculation } from "@/app/(app)/kalkulation/actions";
+import { createOfferFromCalculation } from "@/app/(app)/angebot/actions";
+import { ProductPicker } from "@/components/produkte/product-picker";
+import { TemplateLoadDialog } from "@/components/kalkulation/template-load-dialog";
+import { ConfigWizard } from "@/components/kalkulation/config-wizard";
+import { scaleQuantity } from "@/lib/calc/configurator";
 import { formatCurrency, formatNumber } from "@/lib/format";
-import type { CalcTemplate, Product } from "@/lib/types";
+import { HelpTip } from "@/components/shared/help-tip";
+import type { CalcTemplate, Product, ProductGroup } from "@/lib/types";
 
 let rowSeq = 0;
 function newRow(): CalcPosition {
@@ -47,44 +55,117 @@ function newRow(): CalcPosition {
 export function CalcEditor({
   projectId,
   calcId,
+  calcName = "Standard",
   initialPositions,
   initialPauschalRabatt,
   initialNachlass,
-  initialMwst,
   initialSkonto,
+  vatPerGroup,
+  systemSizeKwp,
+  storageKwh,
   products,
+  productGroups = [],
   templates = [],
 }: {
   projectId: string;
   calcId: string | null;
+  calcName?: string;
   initialPositions: CalcPosition[];
   initialPauschalRabatt: number;
   initialNachlass: number;
-  initialMwst: number;
   initialSkonto: number;
+  /** MwSt-Satz je Gruppe (Start: gespeicherte Werte bzw. Default aus settings). */
+  vatPerGroup: Record<string, number>;
+  systemSizeKwp?: number | null;
+  storageKwh?: number | null;
   products: Product[];
+  productGroups?: ProductGroup[];
   templates?: CalcTemplate[];
 }) {
   const router = useRouter();
-  const [positions, setPositions] = React.useState<CalcPosition[]>(
-    initialPositions.length ? initialPositions : [newRow()],
-  );
+  const [name, setName] = React.useState(calcName);
+  const [positions, setPositions] = React.useState<CalcPosition[]>(() => {
+    if (!initialPositions.length) return [newRow()];
+    // Eindeutige IDs sicherstellen: doppelte IDs würden dazu führen, dass eine
+    // Änderung (z. B. Hybrid-Aufteilung) scheinbar mehrere Zeilen trifft.
+    const seen = new Set<string>();
+    return initialPositions.map((p) => {
+      if (!p.id || seen.has(p.id)) {
+        rowSeq += 1;
+        return { ...p, id: `pos-${Date.now()}-${rowSeq}` };
+      }
+      seen.add(p.id);
+      return p;
+    });
+  });
   const [pauschal, setPauschal] = React.useState(String(initialPauschalRabatt));
   const [nachlass, setNachlass] = React.useState(String(initialNachlass));
-  const [mwst, setMwst] = React.useState(String(initialMwst));
+  const [vat, setVat] = React.useState<Record<string, number>>(() => ({
+    "PV-Anlage": vatPerGroup["PV-Anlage"] ?? 0,
+    Speicher: vatPerGroup["Speicher"] ?? 0,
+    Wallbox: vatPerGroup["Wallbox"] ?? 19,
+    Sonstiges: vatPerGroup["Sonstiges"] ?? 19,
+  }));
   const [skonto, setSkonto] = React.useState(String(initialSkonto));
   const [saving, setSaving] = React.useState(false);
+  // ID der gespeicherten Kalkulation (für „Angebot erstellen" direkt im Anschluss).
+  const [savedCalcId, setSavedCalcId] = React.useState<string | null>(calcId);
+  const offerFormRef = React.useRef<HTMLFormElement>(null);
+
+  // Anlagengröße (kWp) und Speicher (kWh) live aus den Positionen berechnen:
+  // Σ(Menge·Wp)/1000 bzw. Σ(Menge·kWh je Einheit). Übersteuert die Projektfelder.
+  const computedKwp = React.useMemo(
+    () =>
+      Math.round(
+        positions.reduce(
+          (s, p) => s + (Number(p.menge) || 0) * (Number(p.moduleWp) || 0),
+          0,
+        ) / 10,
+      ) / 100,
+    [positions],
+  );
+  const computedKwh = React.useMemo(
+    () =>
+      Math.round(
+        positions.reduce(
+          (s, p) => s + (Number(p.menge) || 0) * (Number(p.kwhPerUnit) || 0),
+          0,
+        ) * 100,
+      ) / 100,
+    [positions],
+  );
+  // Fallback auf die manuellen Projektfelder, solange keine Wp/kWh hinterlegt sind.
+  const effKwp = computedKwp > 0 ? computedKwp : (systemSizeKwp ?? null);
+  const effKwh = computedKwh > 0 ? computedKwh : (storageKwh ?? null);
+
+  // Dienstleistungs-Positionen: Einzelpreis dynamisch aus der Anlagengröße (kWp).
+  const pricedPositions = React.useMemo(
+    () =>
+      positions.map((p) =>
+        p.servicePricing
+          ? {
+              ...p,
+              menge: 1,
+              einzelpreis: computeServicePrice(p.servicePricing, effKwp),
+            }
+          : p,
+      ),
+    [positions, effKwp],
+  );
 
   const result = React.useMemo(
     () =>
       calculate({
-        positions,
+        positions: pricedPositions,
         pauschalRabattPercent: Number(pauschal) || 0,
         nachlass: Number(nachlass) || 0,
-        mwstPercent: Number(mwst) || 0,
+        mwstPercent: vat["Sonstiges"] ?? 19,
+        mwstPerGroup: vat,
         skontoPercent: Number(skonto) || 0,
+        systemSizeKwp: effKwp,
+        storageKwh: effKwh,
       }),
-    [positions, pauschal, nachlass, mwst, skonto],
+    [pricedPositions, pauschal, nachlass, vat, skonto, effKwp, effKwh],
   );
 
   function update(id: string, patch: Partial<CalcPosition>) {
@@ -96,92 +177,186 @@ export function CalcEditor({
   function addRow() {
     setPositions((rows) => [...rows, newRow()]);
   }
-  function applyProduct(id: string, productId: string) {
-    const p = products.find((x) => x.id === productId);
-    if (!p) return;
+  function applyProduct(id: string, p: Product) {
+    // Hybrid-Aufteilung, Wp/kWh sowie DL-Preisdynamik aus den Specs übernehmen.
+    const specs = (p.specs as Record<string, unknown> | null) ?? {};
+    const numOrNull = (v: unknown) =>
+      typeof v === "number" && Number.isFinite(v) ? v : null;
+    const servicePricing =
+      specs.is_service && specs.pricing && typeof specs.pricing === "object"
+        ? (specs.pricing as CalcPosition["servicePricing"])
+        : null;
     update(id, {
       product_id: p.id,
       bezeichnung: p.name,
       einheit: p.unit ?? "Stk",
       ek: p.price_purchase ?? 0,
-      einzelpreis: p.price_sell ?? 0,
+      einzelpreis: servicePricing
+        ? computeServicePrice(servicePricing, effKwp)
+        : (p.price_sell ?? 0),
+      splitPvPct: numOrNull(specs.split_pv_pct),
+      moduleWp: numOrNull(specs.module_wp),
+      kwhPerUnit: numOrNull(specs.storage_kwh),
+      servicePricing,
+      ...(servicePricing ? { menge: 1 } : {}),
     });
   }
 
+  /** Aus dem Schnell-Konfigurator erzeugte Positionen übernehmen. */
+  function applyConfigurator(generated: CalcPosition[]) {
+    if (generated.length === 0) return;
+    setPositions(generated);
+    toast.success(`${generated.length} Positionen aus der Schnell-Konfiguration übernommen.`);
+  }
+
   /** Eine Kalkulationsvorlage laden: Positionen + Default-Rabatte/MwSt. */
-  function loadTemplate(templateId: string) {
-    const tpl = templates.find((t) => t.id === templateId);
-    if (!tpl) return;
-    const tplPositions = (Array.isArray(tpl.positions) ? tpl.positions : []) as CalcPosition[];
-    if (tplPositions.length === 0) {
-      toast.error("Diese Vorlage enthält keine Positionen.");
-      return;
-    }
-    // Frische IDs vergeben, Menge auf 0 als Vorschlag (Nutzer trägt Mengen ein)
-    const loaded: CalcPosition[] = tplPositions.map((p) => {
+  /** Ausgewählte Vorlagen-Positionen übernehmen (aus dem Auswahl-Dialog). */
+  function applyTemplate(
+    selected: CalcPosition[],
+    d: Record<string, unknown>,
+    templateName: string,
+  ) {
+    // Frische, eindeutige IDs vergeben; bei parametrischen Vorlagen (qtyPerKwp/
+    // qtyPerModule) die Menge aus der Anlagengröße ableiten, sonst feste Menge.
+    const sizeKwp = systemSizeKwp ?? effKwp ?? 0;
+    const loaded: CalcPosition[] = selected.map((p) => {
       rowSeq += 1;
       return {
         ...p,
         id: `tpl-${Date.now()}-${rowSeq}`,
-        menge: typeof p.menge === "number" ? p.menge : 0,
+        menge: scaleQuantity(p as CalcPosition & { qtyPerKwp?: number | null; qtyPerModule?: number | null }, sizeKwp, 0),
       };
     });
     setPositions(loaded);
 
-    const d = (tpl.defaults ?? {}) as Record<string, unknown>;
-    if (typeof d.mwstPercent === "number") setMwst(String(d.mwstPercent));
+    // Vorlagen-Default-MwSt (Einzelsatz) auf Wallbox/Sonstiges anwenden,
+    // PV/Speicher bleiben beim Nullsteuersatz (§ 12 Abs. 3 UStG).
+    if (typeof d.mwstPercent === "number")
+      setVat((v) => ({ ...v, Wallbox: d.mwstPercent as number, Sonstiges: d.mwstPercent as number }));
     if (typeof d.skontoPercent === "number") setSkonto(String(d.skontoPercent));
     if (typeof d.pauschalRabattPercent === "number")
       setPauschal(String(d.pauschalRabattPercent));
     if (typeof d.nachlass === "number") setNachlass(String(d.nachlass));
 
     toast.success(
-      `Vorlage „${tpl.name}" geladen (${loaded.length} Positionen). Bitte Mengen eintragen.`,
+      `Vorlage „${templateName}" geladen (${loaded.length} Positionen). Bitte Mengen prüfen.`,
     );
   }
 
   async function onSave() {
     setSaving(true);
     // Vorlagen-Zeilen ohne Menge (0) werden beim Speichern verworfen, damit nur
-    // die tatsächlich gewählten Positionen im Angebot landen.
-    const toSave = positions.filter(
-      (p) => (Number(p.menge) || 0) > 0 && p.bezeichnung.trim() !== "",
-    );
+    // die tatsächlich gewählten Positionen im Angebot landen. DL-Preise sind in
+    // pricedPositions bereits aus der kWp-Staffel berechnet.
+    const toSave = pricedPositions
+      .filter((p) => (Number(p.menge) || 0) > 0 && p.bezeichnung.trim() !== "")
+      // Preise auf 2 Nachkommastellen normalisieren.
+      .map((p) => ({
+        ...p,
+        ek: p.ek === null || p.ek === undefined ? p.ek : round2(Number(p.ek)),
+        einzelpreis: round2(Number(p.einzelpreis)),
+      }));
     const fd = new FormData();
     fd.set("project_id", projectId);
     if (calcId) fd.set("calc_id", calcId);
+    fd.set("name", name.trim() || "Standard");
     fd.set(
       "payload",
       JSON.stringify({
         positions: toSave,
         pauschalRabattPercent: Number(pauschal) || 0,
         nachlass: Number(nachlass) || 0,
-        mwstPercent: Number(mwst) || 0,
+        mwstPercent: vat["Sonstiges"] ?? 19,
+        mwstPerGroup: vat,
         skontoPercent: Number(skonto) || 0,
       }),
     );
     const res = await saveCalculation({ ok: false }, fd);
     setSaving(false);
     if (res.ok) {
+      const id = res.id ?? calcId ?? null;
+      if (id) setSavedCalcId(id);
       toast.success("Kalkulation gespeichert");
-      router.refresh();
-    } else {
-      toast.error(res.error ?? "Fehler beim Speichern");
+      return id;
     }
+    toast.error(res.error ?? "Fehler beim Speichern");
+    return null;
+  }
+
+  // „Speichern" → bleibt in der Kalkulation (aktualisiert die Ansicht).
+  async function onSaveOnly() {
+    const id = await onSave();
+    if (id) router.refresh();
+  }
+
+  // „Speichern & Angebot erstellen" → speichert und springt direkt ins Angebot.
+  async function onSaveAndOffer() {
+    const id = await onSave();
+    if (!id) return;
+    const form = offerFormRef.current;
+    if (!form) return;
+    const input = form.elements.namedItem("calc_id") as HTMLInputElement | null;
+    if (input) input.value = id;
+    form.requestSubmit();
   }
 
   const t = result.totals;
 
+  // Positionen nach Gruppe gliedern (Reihenfolge PV→Speicher→Wallbox→Sonstiges);
+  // leere Gruppen werden ausgelassen. Hybride erscheinen unter ihrer Gruppe.
+  const groupedPositions = POSITION_GROUPS.map((g) => ({
+    groupLabel: g,
+    rows: result.positions.filter((p) => (p.group ?? "Sonstiges") === g),
+  })).filter((s) => s.rows.length > 0);
+
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-center gap-2 pt-1.5">
+          <Label htmlFor="calc-name" className="text-muted-foreground text-sm">
+            Variante
+          </Label>
+          <Input
+            id="calc-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="h-8 max-w-xs"
+            placeholder="Name der Variante"
+          />
+        </div>
+        {/* Anlagengröße/Speicher prominent oben rechts (statt unten in der Seitenspalte). */}
+        <div className="bg-primary/5 border-primary/20 flex gap-6 rounded-lg border px-4 py-2">
+          <div>
+            <p className="text-muted-foreground text-xs">
+              Anlagengröße <HelpTip id="calc-kwp" />
+            </p>
+            <p className="text-xl font-bold">{formatNumber(effKwp ?? 0)} kWp</p>
+            {t.spezifischPvProKwp !== null ? (
+              <p className="text-muted-foreground text-xs">
+                {formatCurrency(t.spezifischPvProKwp)} / kWp
+              </p>
+            ) : null}
+          </div>
+          <div>
+            <p className="text-muted-foreground text-xs">Speicher</p>
+            <p className="text-xl font-bold">{formatNumber(effKwh ?? 0)} kWh</p>
+            {t.spezifischSpeicherProKwh !== null ? (
+              <p className="text-muted-foreground text-xs">
+                {formatCurrency(t.spezifischSpeicherProKwh)} / kWh
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </div>
+
       <div className="bg-card overflow-x-auto rounded-lg border">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead className="min-w-44">Bezeichnung</TableHead>
               <TableHead className="w-36">Produkt</TableHead>
-              <TableHead className="w-32">Gruppe</TableHead>
-              <TableHead className="w-20 text-right">Menge</TableHead>
+              <TableHead className="w-44">Gruppe</TableHead>
+              <TableHead className="w-32 text-right">Menge</TableHead>
               <TableHead className="w-24 text-right">EK €</TableHead>
               <TableHead className="w-24 text-right">VK €</TableHead>
               <TableHead className="w-20 text-right">Rabatt %</TableHead>
@@ -190,7 +365,17 @@ export function CalcEditor({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {result.positions.map((p) => (
+            {groupedPositions.map(({ groupLabel, rows }) => (
+              <React.Fragment key={groupLabel}>
+                <TableRow className="bg-muted/40 hover:bg-muted/40">
+                  <TableCell
+                    colSpan={9}
+                    className="text-muted-foreground py-1.5 text-xs font-semibold"
+                  >
+                    {groupLabel}
+                  </TableCell>
+                </TableRow>
+                {rows.map((p) => (
               <TableRow key={p.id}>
                 <TableCell>
                   <Input
@@ -200,46 +385,129 @@ export function CalcEditor({
                   />
                 </TableCell>
                 <TableCell>
-                  <Select onValueChange={(v) => applyProduct(p.id, v)}>
-                    <SelectTrigger size="sm" className="h-8 w-full">
-                      <SelectValue placeholder="übernehmen" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {products.map((prod) => (
-                        <SelectItem key={prod.id} value={prod.id}>
-                          {prod.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </TableCell>
-                <TableCell>
-                  <Select
-                    value={p.group ?? "Sonstiges"}
-                    onValueChange={(v) =>
-                      update(p.id, { group: v as PositionGroup })
+                  <ProductPicker
+                    products={products}
+                    groups={productGroups}
+                    onSelect={(prod) => applyProduct(p.id, prod)}
+                    trigger={
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 w-full justify-start font-normal"
+                        title="Katalog-Produkt zuordnen / tauschen"
+                      >
+                        {p.product_id ? "Produkt ändern" : "Produkt wählen …"}
+                      </Button>
                     }
-                  >
-                    <SelectTrigger size="sm" className="h-8 w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {POSITION_GROUPS.map((g) => (
-                        <SelectItem key={g} value={g}>
-                          {g}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  />
                 </TableCell>
                 <TableCell>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={p.menge}
-                    onChange={(e) => update(p.id, { menge: Number(e.target.value) })}
-                    className="h-8 text-right"
-                  />
+                  {p.splitPvPct === null || p.splitPvPct === undefined ? (
+                    <div className="flex items-center gap-1">
+                      <Select
+                        value={p.group ?? "Sonstiges"}
+                        onValueChange={(v) =>
+                          update(p.id, { group: v as PositionGroup })
+                        }
+                      >
+                        <SelectTrigger size="sm" className="h-8 w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {POSITION_GROUPS.map((g) => (
+                            <SelectItem key={g} value={g}>
+                              {g}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 shrink-0"
+                        title="Als Hybrid aufteilen (PV/Speicher)"
+                        onClick={() => update(p.id, { splitPvPct: 50 })}
+                      >
+                        <Split className="size-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 rounded-md border px-1.5">
+                        <span className="text-muted-foreground text-xs">PV</span>
+                        <Input
+                          type="number"
+                          step="1"
+                          min={0}
+                          max={100}
+                          value={p.splitPvPct}
+                          onChange={(e) =>
+                            update(p.id, {
+                              splitPvPct: Math.min(
+                                Math.max(Number(e.target.value) || 0, 0),
+                                100,
+                              ),
+                            })
+                          }
+                          className="h-7 w-12 border-0 px-1 text-right shadow-none focus-visible:ring-0"
+                        />
+                        <span className="text-muted-foreground text-xs">
+                          % / Sp {100 - (Number(p.splitPvPct) || 0)} %
+                        </span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 shrink-0"
+                        title="Aufteilung entfernen"
+                        onClick={() => update(p.id, { splitPvPct: null })}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-0.5">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="size-7 shrink-0"
+                      title="Menge −1"
+                      onClick={() =>
+                        update(p.id, {
+                          menge: Math.max((Number(p.menge) || 0) - 1, 0),
+                        })
+                      }
+                    >
+                      <Minus className="size-3" />
+                    </Button>
+                    <Input
+                      type="number"
+                      step="1"
+                      value={p.menge}
+                      onChange={(e) =>
+                        update(p.id, { menge: Number(e.target.value) })
+                      }
+                      className="h-8 w-14 text-right"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="size-7 shrink-0"
+                      title="Menge +1"
+                      onClick={() =>
+                        update(p.id, { menge: (Number(p.menge) || 0) + 1 })
+                      }
+                    >
+                      <Plus className="size-3" />
+                    </Button>
+                  </div>
                 </TableCell>
                 <TableCell>
                   <Input
@@ -251,15 +519,25 @@ export function CalcEditor({
                   />
                 </TableCell>
                 <TableCell>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={p.einzelpreis}
-                    onChange={(e) =>
-                      update(p.id, { einzelpreis: Number(e.target.value) })
-                    }
-                    className="h-8 text-right"
-                  />
+                  {p.servicePricing ? (
+                    <div
+                      className="text-muted-foreground flex h-8 items-center justify-end gap-1 text-right text-sm"
+                      title="Preis automatisch nach Anlagengröße (kWp)"
+                    >
+                      {formatCurrency(computeServicePrice(p.servicePricing, effKwp))}
+                      <span className="text-[10px] uppercase">auto</span>
+                    </div>
+                  ) : (
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={p.einzelpreis}
+                      onChange={(e) =>
+                        update(p.id, { einzelpreis: Number(e.target.value) })
+                      }
+                      className="h-8 text-right"
+                    />
+                  )}
                 </TableCell>
                 <TableCell>
                   <Input
@@ -284,6 +562,8 @@ export function CalcEditor({
                   </Button>
                 </TableCell>
               </TableRow>
+                ))}
+              </React.Fragment>
             ))}
           </TableBody>
         </Table>
@@ -293,19 +573,14 @@ export function CalcEditor({
         <Button variant="outline" size="sm" onClick={addRow}>
           <Plus className="size-4" /> Position
         </Button>
+        <ConfigWizard
+          products={products}
+          defaultKwp={systemSizeKwp}
+          defaultKwh={storageKwh}
+          onApply={applyConfigurator}
+        />
         {templates.length > 0 ? (
-          <Select onValueChange={loadTemplate}>
-            <SelectTrigger size="sm" className="w-64">
-              <SelectValue placeholder="Vorlage übernehmen …" />
-            </SelectTrigger>
-            <SelectContent>
-              {templates.map((t) => (
-                <SelectItem key={t.id} value={t.id}>
-                  {t.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <TemplateLoadDialog templates={templates} onApply={applyTemplate} />
         ) : null}
         {positions.length > 0 ? (
           <span className="text-muted-foreground text-xs">
@@ -315,52 +590,69 @@ export function CalcEditor({
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
-        <div className="grid h-fit grid-cols-2 gap-4 sm:grid-cols-4">
-          <div className="grid gap-1.5">
-            <Label htmlFor="pauschal">Pauschalrabatt %</Label>
-            <Input
-              id="pauschal"
-              type="number"
-              step="1"
-              value={pauschal}
-              onChange={(e) => setPauschal(e.target.value)}
-            />
+        <div className="h-fit space-y-4">
+          <div className="grid grid-cols-3 gap-4">
+            <div className="grid gap-1.5">
+              <Label htmlFor="pauschal">
+                Pauschalrabatt % <HelpTip id="calc-pauschal" />
+              </Label>
+              <Input
+                id="pauschal"
+                type="number"
+                step="1"
+                value={pauschal}
+                onChange={(e) => setPauschal(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="nachlass">Nachlass €</Label>
+              <Input
+                id="nachlass"
+                type="number"
+                step="0.01"
+                value={nachlass}
+                onChange={(e) => setNachlass(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="skonto">Skonto %</Label>
+              <Input
+                id="skonto"
+                type="number"
+                step="0.1"
+                value={skonto}
+                onChange={(e) => setSkonto(e.target.value)}
+              />
+            </div>
           </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="nachlass">Nachlass €</Label>
-            <Input
-              id="nachlass"
-              type="number"
-              step="0.01"
-              value={nachlass}
-              onChange={(e) => setNachlass(e.target.value)}
-            />
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="mwst">MwSt</Label>
-            <Select value={mwst} onValueChange={setMwst}>
-              <SelectTrigger id="mwst" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="0">0 % (PV)</SelectItem>
-                <SelectItem value="19">19 %</SelectItem>
-                <SelectItem value="7">7 %</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="skonto">Skonto %</Label>
-            <Input
-              id="skonto"
-              type="number"
-              step="0.1"
-              value={skonto}
-              onChange={(e) => setSkonto(e.target.value)}
-            />
+          <div>
+            <Label className="text-muted-foreground mb-1.5 block text-xs">
+              MwSt je Gruppe % (§ 12 Abs. 3 UStG: PV + Speicher 0 %) <HelpTip id="calc-vat-group" />
+            </Label>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {POSITION_GROUPS.map((g) => (
+                <div key={g} className="grid gap-1">
+                  <Label htmlFor={`vat-${g}`} className="text-xs">
+                    {g}
+                  </Label>
+                  <Input
+                    id={`vat-${g}`}
+                    type="number"
+                    step="1"
+                    min={0}
+                    value={vat[g] ?? 0}
+                    onChange={(e) =>
+                      setVat((v) => ({ ...v, [g]: Number(e.target.value) || 0 }))
+                    }
+                    className="h-8"
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
+        <div className="space-y-4">
         <div className="bg-card space-y-1.5 rounded-lg border p-4 text-sm">
           <Row label="Zwischensumme" value={formatCurrency(t.nettoVorPauschal)} />
           {Number(pauschal) > 0 ? (
@@ -370,7 +662,13 @@ export function CalcEditor({
             <Row label="Nachlass" value={`- ${formatCurrency(Number(nachlass))}`} />
           ) : null}
           <Row label="Summe netto" value={formatCurrency(t.netto)} strong />
-          <Row label={`MwSt (${t.mwstSatz} %)`} value={formatCurrency(t.mwstBetrag)} />
+          {(t.mwstSaetze ?? []).map((m) => (
+            <Row
+              key={m.rate}
+              label={`MwSt ${m.rate} % (auf ${formatCurrency(m.netto)})`}
+              value={formatCurrency(m.betrag)}
+            />
+          ))}
           <Row label="Endpreis brutto" value={formatCurrency(t.brutto)} strong />
           {t.skontoBetrag > 0 ? (
             <>
@@ -378,18 +676,53 @@ export function CalcEditor({
               <Row label="Brutto nach Skonto" value={formatCurrency(t.bruttoNachSkonto)} />
             </>
           ) : null}
+          {t.spezifischPvProKwp !== null ||
+          t.spezifischSpeicherProKwh !== null ? (
+            <div className="border-t pt-1.5 text-xs">
+              {t.spezifischPvProKwp !== null ? (
+                <Row
+                  label="Spez. Preis PV (netto)"
+                  value={`${formatCurrency(t.spezifischPvProKwp)} / kWp`}
+                />
+              ) : null}
+              {t.spezifischSpeicherProKwh !== null ? (
+                <Row
+                  label="Spez. Preis Speicher (netto)"
+                  value={`${formatCurrency(t.spezifischSpeicherProKwh)} / kWh`}
+                />
+              ) : null}
+            </div>
+          ) : null}
           <div className="text-muted-foreground border-t pt-1.5 text-xs">
             <Row
-              label="Marge (DB)"
+              label={<>Marge (DB) <HelpTip id="calc-marge" /></>}
               value={`${formatCurrency(t.marge)} (${formatNumber(t.margeProzent, 1)} %)`}
             />
           </div>
         </div>
+        </div>
       </div>
 
-      <div>
-        <Button onClick={onSave} disabled={saving}>
+      {/* Verstecktes Formular: erzeugt das Angebot aus dieser Kalkulation und
+          leitet (serverseitig) direkt zur Angebotsansicht weiter. */}
+      <form ref={offerFormRef} action={createOfferFromCalculation} className="hidden">
+        <input type="hidden" name="project_id" value={projectId} />
+        <input type="hidden" name="calc_id" defaultValue={savedCalcId ?? ""} />
+      </form>
+
+      {/* Apple-like Aktionsleiste: bleibt unten sichtbar, klarer „nächster Schritt". */}
+      <div className="bg-background/85 sticky bottom-0 -mx-1 flex flex-wrap items-center gap-2 border-t px-1 py-3 backdrop-blur">
+        <Button onClick={onSaveOnly} disabled={saving} variant="outline">
           {saving ? "Speichern …" : "Kalkulation speichern"}
+        </Button>
+        <Button onClick={onSaveAndOffer} disabled={saving}>
+          <FileText className="size-4" />
+          Speichern &amp; Angebot erstellen
+        </Button>
+        <Button asChild variant="ghost" className="ml-auto">
+          <Link href={`/projekte/${projectId}`}>
+            <ArrowLeft className="size-4" /> Zur Projektübersicht
+          </Link>
         </Button>
       </div>
     </div>
@@ -401,7 +734,7 @@ function Row({
   value,
   strong,
 }: {
-  label: string;
+  label: React.ReactNode;
   value: string;
   strong?: boolean;
 }) {
