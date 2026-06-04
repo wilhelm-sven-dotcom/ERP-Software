@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { GripVertical, Plus, Trash2 } from "lucide-react";
+import { GripVertical, Plus, Trash2, Sparkles, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   DndContext,
@@ -95,6 +95,7 @@ export function OfferEditor({
   products,
   productGroups = [],
   meta,
+  context = "",
 }: {
   offerId: string;
   initialPositions: CalcPosition[];
@@ -107,6 +108,8 @@ export function OfferEditor({
     skontoPercent: number;
     mwstPerGroup?: Record<string, number>;
   };
+  /** Projekt-/Kundenkontext für die KI-Textgenerierung. */
+  context?: string;
 }) {
   const router = useRouter();
   const [positions, setPositions] = React.useState<(CalcPosition & { _uid: string })[]>(
@@ -115,6 +118,30 @@ export function OfferEditor({
   const [blocks, setBlocks] = React.useState<(OfferBlock & { _uid: string })[]>(
     () => initialBlocks.map((b) => ({ ...b, _uid: uid("b") })),
   );
+  const [genUid, setGenUid] = React.useState<string | null>(null);
+
+  /** Textbaustein per KI erzeugen (nutzt Überschrift/Art + Projektkontext). */
+  async function generateBlockText(b: OfferBlock & { _uid: string }) {
+    setGenUid(b._uid);
+    try {
+      const res = await fetch("/api/ai/text", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: `Schreibe einen Angebots-Textbaustein „${b.title || b.kind}" (2–4 Sätze, Sie-Form, ohne Anrede/Grußformel).`,
+          context,
+        }),
+      });
+      const data = (await res.json()) as { enabled?: boolean; text?: string | null };
+      if (data.enabled === false) toast.error("KI ist nicht aktiviert.");
+      else if (data.text) setBlocks((r) => r.map((x) => (x._uid === b._uid ? { ...x, body: data.text! } : x)));
+      else toast.error("Kein Text erhalten.");
+    } catch {
+      toast.error("Generierung fehlgeschlagen.");
+    } finally {
+      setGenUid(null);
+    }
+  }
   const [saving, setSaving] = React.useState(false);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -330,6 +357,18 @@ export function OfferEditor({
                           placeholder="Überschrift"
                           className="h-8 flex-1"
                         />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 shrink-0"
+                          title="Text per KI vorschlagen"
+                          disabled={genUid === b._uid}
+                          onClick={() => void generateBlockText(b)}
+                        >
+                          {genUid === b._uid ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+                          KI-Text
+                        </Button>
                       </div>
                       <Textarea
                         value={b.body ?? ""}

@@ -31,7 +31,7 @@ import { deleteOffer } from "@/app/(app)/angebot/actions";
 import { createOrderConfirmation } from "@/app/(app)/dokumente/actions";
 import { calculate } from "@/lib/calc/engine";
 import { POSITION_GROUPS } from "@/lib/calc/types";
-import { formatCurrency, formatNumber } from "@/lib/format";
+import { formatCurrency, formatNumber, customerName } from "@/lib/format";
 import type { CalcPosition } from "@/lib/calc/types";
 
 export const metadata: Metadata = { title: "Angebot" };
@@ -175,6 +175,13 @@ export default async function AngebotPage({
           products={products}
           productGroups={productGroups}
           meta={meta}
+          context={[
+            project?.title ? `Projekt: ${project.title}` : "",
+            customer ? `Kunde: ${customerName(customer)}` : "",
+            project?.system_size_kwp ? `Anlage: ${project.system_size_kwp} kWp` : "",
+            project?.storage_kwh ? `Speicher: ${project.storage_kwh} kWh` : "",
+            project?.city ? `Ort: ${project.city}` : "",
+          ].filter(Boolean).join(", ")}
         />
       </div>
 
