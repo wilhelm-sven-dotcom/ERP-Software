@@ -16,6 +16,7 @@ import {
   Settings,
   Database,
   HelpCircle,
+  Inbox,
   type LucideIcon,
 } from "lucide-react";
 
@@ -36,6 +37,7 @@ export interface NavItem {
  */
 export const navItems: NavItem[] = [
   { key: "assistent", label: "KI-Assistent", href: "/assistent", icon: Sparkles },
+  { key: "posteingang", label: "Posteingang", href: "/posteingang", icon: Inbox },
   { key: "dashboard", label: "Dashboard", href: "/dashboard", icon: LayoutGrid },
   { key: "projekte", label: "Projekte", href: "/projekte", icon: FolderKanban },
   { key: "pipeline", label: "Vertrieb", href: "/pipeline", icon: GitBranch },
