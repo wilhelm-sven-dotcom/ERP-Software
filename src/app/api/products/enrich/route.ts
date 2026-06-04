@@ -34,7 +34,16 @@ async function downloadPdf(url: string, timeoutMs = 15000): Promise<ArrayBuffer 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(url, { signal: controller.signal, redirect: "follow" });
+    const res = await fetch(url, {
+      signal: controller.signal,
+      redirect: "follow",
+      // Ohne Browser-User-Agent antworten viele Server mit 403 → PDF unlesbar.
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        Accept: "application/pdf,*/*;q=0.8",
+      },
+    });
     if (!res.ok) return null;
     const type = res.headers.get("content-type") ?? "";
     const len = Number(res.headers.get("content-length") ?? "0");

@@ -209,7 +209,8 @@ export function ProductEnrichButton({
     }
     setAttachingDocs(true);
     let ok = 0;
-    let failed = 0;
+    const errors: string[] = [];
+    const attachedUrls = new Set<string>();
     for (const d of selected) {
       const res = await attachDocumentFromUrl({
         productId,
@@ -217,16 +218,23 @@ export function ProductEnrichButton({
         kind: d.kind,
         name: `${DOC_LABEL[d.kind]}: ${d.title}`.slice(0, 120),
       });
-      if (res.ok) ok++;
-      else failed++;
+      if (res.ok) {
+        ok++;
+        attachedUrls.add(d.url);
+      } else if (res.error) {
+        errors.push(`${DOC_LABEL[d.kind]}: ${res.error}`);
+      }
     }
     setAttachingDocs(false);
     if (ok > 0) {
-      toast.success(`${ok} Dokument(e) angehängt.`);
-      setDocs((prev) => prev.filter((d) => !checkedDocs.has(d.url)));
+      toast.success(`${ok} Dokument(e) am Produkt gespeichert.`);
+      setDocs((prev) => prev.filter((d) => !attachedUrls.has(d.url)));
       router.refresh();
     }
-    if (failed > 0) toast.error(`${failed} Dokument(e) konnten nicht geladen werden.`);
+    if (errors.length > 0) {
+      // Konkreten Grund zeigen (z. B. HTTP 403), damit klar ist, warum es klemmt.
+      toast.error(`${errors.length} fehlgeschlagen — ${errors[0]}`);
+    }
   }
 
   function toggle(key: string) {
