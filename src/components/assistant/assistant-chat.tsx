@@ -87,6 +87,8 @@ export function AssistantChat({
   const [attachOpen, setAttachOpen] = React.useState(false);
   const [pendingFiles, setPendingFiles] = React.useState<File[]>([]);
   const [dragOver, setDragOver] = React.useState(false);
+  // Vorschläge/Briefing auf der Startseite nur auf Wunsch zeigen (cleane Optik).
+  const [showHints, setShowHints] = React.useState(false);
   // Verlauf durchsuchen (Titel + Nachrichteninhalt, debounced).
   const [histQuery, setHistQuery] = React.useState("");
   const [histResults, setHistResults] = React.useState<ConversationRow[] | null>(null);
@@ -454,52 +456,65 @@ export function AssistantChat({
             </h1>
             <div className="mb-4">{modeToggle}</div>
             <div className="w-full max-w-2xl">{inputBar}</div>
-            {mode === "crm" ? (
-              <button
-                type="button"
-                onClick={() =>
-                  void ask(
-                    "Fasse zusammen, was heute für mich ansteht: überfällige Aufgaben, mir angebotene Aufgaben, offene Leads, überfällige Rechnungen und fällige Wartungen. Gib mir eine kurze, priorisierte To-do-Liste.",
-                  )
-                }
-                className="text-primary hover:bg-primary/10 mt-3 inline-flex items-center gap-1.5 rounded-full border border-primary/40 px-3.5 py-1.5 text-sm font-medium"
-              >
-                <Sparkles className="size-4" /> Mein Tag — was steht an?
-              </button>
-            ) : null}
-            <div className="mt-4 flex max-w-2xl flex-wrap justify-center gap-1.5">
-              {suggestions.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => void ask(s)}
-                  className="hover:border-primary text-muted-foreground rounded-full border px-3 py-1.5 text-xs"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
+            {/* Cleane Startseite: Vorschläge/Briefing nur auf Wunsch einblenden. */}
+            <button
+              type="button"
+              onClick={() => setShowHints((v) => !v)}
+              className="text-muted-foreground hover:text-foreground mt-3 text-xs"
+            >
+              {showHints ? "Vorschläge ausblenden" : "Vorschläge & Tagesüberblick anzeigen"}
+            </button>
 
-            {briefing.length > 0 ? (
-              <div className="mt-8 w-full max-w-2xl">
-                <p className="text-muted-foreground mb-2 text-center text-xs">Heute für dich:</p>
-                <div className="flex flex-wrap justify-center gap-2">
-                  {briefing.map((b) => (
-                    <Link
-                      key={b.label}
-                      href={b.href}
-                      className={cn(
-                        "rounded-lg border px-3 py-1.5 text-sm transition-colors",
-                        b.tone === "warn"
-                          ? "border-destructive/40 bg-destructive/5 text-destructive hover:bg-destructive/10"
-                          : "hover:border-primary",
-                      )}
+            {showHints ? (
+              <>
+                {mode === "crm" ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void ask(
+                        "Fasse zusammen, was heute für mich ansteht: überfällige Aufgaben, mir angebotene Aufgaben, offene Leads, überfällige Rechnungen und fällige Wartungen. Gib mir eine kurze, priorisierte To-do-Liste.",
+                      )
+                    }
+                    className="text-primary hover:bg-primary/10 mt-3 inline-flex items-center gap-1.5 rounded-full border border-primary/40 px-3.5 py-1.5 text-sm font-medium"
+                  >
+                    <Sparkles className="size-4" /> Mein Tag — was steht an?
+                  </button>
+                ) : null}
+                <div className="mt-4 flex max-w-2xl flex-wrap justify-center gap-1.5">
+                  {suggestions.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => void ask(s)}
+                      className="hover:border-primary text-muted-foreground rounded-full border px-3 py-1.5 text-xs"
                     >
-                      {b.label}
-                    </Link>
+                      {s}
+                    </button>
                   ))}
                 </div>
-              </div>
+
+                {briefing.length > 0 ? (
+                  <div className="mt-8 w-full max-w-2xl">
+                    <p className="text-muted-foreground mb-2 text-center text-xs">Heute für dich:</p>
+                    <div className="flex flex-wrap justify-center gap-2">
+                      {briefing.map((b) => (
+                        <Link
+                          key={b.label}
+                          href={b.href}
+                          className={cn(
+                            "rounded-lg border px-3 py-1.5 text-sm transition-colors",
+                            b.tone === "warn"
+                              ? "border-destructive/40 bg-destructive/5 text-destructive hover:bg-destructive/10"
+                              : "hover:border-primary",
+                          )}
+                        >
+                          {b.label}
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </>
             ) : null}
           </div>
         ) : (

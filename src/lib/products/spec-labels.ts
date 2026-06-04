@@ -80,8 +80,22 @@ export function labelForSpec(key: string): string {
 }
 
 /**
- * Nur die generisch anzeigbaren Kenndaten (ohne reservierte/strukturelle Keys),
- * als sortierte [key, label, value]-Liste.
+ * Spalten-gebundene Felder: gehören NICHT in die generische Technik-Liste, da
+ * sie eigene echte Produktspalten/-felder haben (sonst Dubletten wie ein
+ * „Hersteller"-Kenndatum neben dem echten Hersteller-Feld).
+ */
+export const COLUMN_SPEC_KEYS = new Set<string>([
+  "manufacturer",
+  "hersteller",
+  "name",
+  "sku",
+  "category",
+  "kategorie",
+]);
+
+/**
+ * Nur die generisch anzeigbaren Kenndaten (ohne reservierte/strukturelle/
+ * spalten-gebundene Keys), als sortierte [key, label, value]-Liste.
  */
 export function genericSpecEntries(
   specs: Record<string, unknown> | null | undefined,
@@ -89,7 +103,7 @@ export function genericSpecEntries(
   if (!specs || typeof specs !== "object") return [];
   const out: { key: string; label: string; value: string | number }[] = [];
   for (const [k, v] of Object.entries(specs)) {
-    if (RESERVED_SPEC_KEYS.has(k)) continue;
+    if (RESERVED_SPEC_KEYS.has(k) || COLUMN_SPEC_KEYS.has(k)) continue;
     if (v === null || v === undefined || v === "") continue;
     if (typeof v !== "string" && typeof v !== "number") continue;
     out.push({ key: k, label: labelForSpec(k), value: v });
