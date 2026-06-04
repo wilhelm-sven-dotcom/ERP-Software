@@ -73,7 +73,7 @@ export async function analyzeDocument(
       if (data.status === "succeeded") {
         return {
           text: (data.analyzeResult?.content ?? "").slice(0, 16000),
-          tableCount: Array.isArray(data.analyzeResult?.tables) ? data.analyzeResult!.tables!.length : 0,
+          tableCount: data.analyzeResult?.tables?.length ?? 0,
         };
       }
       if (data.status === "failed") {

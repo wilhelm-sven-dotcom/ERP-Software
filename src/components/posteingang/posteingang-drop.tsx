@@ -107,6 +107,10 @@ export function PosteingangDrop({
   const [hideDone, setHideDone] = React.useState(false);
   const autoFileRef = React.useRef(false);
   autoFileRef.current = autoFile;
+  // Aktueller rows-Stand für asynchrone Closures (Auto-Ablage liest hieraus,
+  // damit zwischenzeitliche Nutzer-Edits nicht überschrieben werden).
+  const rowsRef = React.useRef(rows);
+  rowsRef.current = rows;
 
   function patch(uid: string, p: Partial<Row>) {
     setRows((rs) => rs.map((r) => (r.uid === uid ? { ...r, ...p } : r)));
@@ -212,7 +216,9 @@ export function PosteingangDrop({
 
       // „Alles automatisch": nur bei eindeutigem Ziel UND hoher Konfidenz (≥ 0,7).
       if (autoFileRef.current && (fields.confidence ?? 0) >= 0.7) {
-        const merged = { ...row, ...fields } as Row;
+        // Aktuellen Zeilenstand verwenden (Nutzer-Edits während der Klassifizierung).
+        const current = rowsRef.current.find((r) => r.uid === row.uid) ?? row;
+        const merged = { ...current, ...fields } as Row;
         if (!entityRequired(merged) || hasTarget(merged)) {
           patch(row.uid, { busy: true });
           const ok = await commitRow(merged);
@@ -479,7 +485,12 @@ export function PosteingangDrop({
               <div className="min-w-0">
                 <button
                   type="button"
-                  onClick={() => window.open(URL.createObjectURL(row.file), "_blank")}
+                  onClick={() => {
+                    const url = URL.createObjectURL(row.file);
+                    window.open(url, "_blank");
+                    // Blob-URL nach kurzer Zeit freigeben (kein Memory-Leak).
+                    setTimeout(() => URL.revokeObjectURL(url), 60000);
+                  }}
                   className="block max-w-full truncate text-left text-sm font-medium hover:underline"
                   title="Vorschau öffnen"
                 >
