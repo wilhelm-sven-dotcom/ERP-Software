@@ -1,5 +1,6 @@
 import { Sidebar } from "@/components/app-shell/sidebar";
 import { Topbar } from "@/components/app-shell/topbar";
+import { WelcomeTour } from "@/components/onboarding/welcome-tour";
 import { getCompanySettings } from "@/lib/data/settings";
 import { isAiConfigured } from "@/lib/ai/openai";
 
@@ -18,6 +19,7 @@ export default async function AppLayout({
         <Topbar logoUrl={logoUrl} aiEnabled={aiEnabled} />
         <main className="mx-auto w-full max-w-[1600px] flex-1 p-5 sm:p-7 lg:p-8">{children}</main>
       </div>
+      <WelcomeTour />
     </div>
   );
 }

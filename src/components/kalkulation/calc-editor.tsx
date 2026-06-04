@@ -34,6 +34,7 @@ import { TemplateLoadDialog } from "@/components/kalkulation/template-load-dialo
 import { ConfigWizard } from "@/components/kalkulation/config-wizard";
 import { scaleQuantity } from "@/lib/calc/configurator";
 import { formatCurrency, formatNumber } from "@/lib/format";
+import { HelpTip } from "@/components/shared/help-tip";
 import type { CalcTemplate, Product, ProductGroup } from "@/lib/types";
 
 let rowSeq = 0;
@@ -326,7 +327,9 @@ export function CalcEditor({
         {/* Anlagengröße/Speicher prominent oben rechts (statt unten in der Seitenspalte). */}
         <div className="bg-primary/5 border-primary/20 flex gap-6 rounded-lg border px-4 py-2">
           <div>
-            <p className="text-muted-foreground text-xs">Anlagengröße</p>
+            <p className="text-muted-foreground text-xs">
+              Anlagengröße <HelpTip id="calc-kwp" />
+            </p>
             <p className="text-xl font-bold">{formatNumber(effKwp ?? 0)} kWp</p>
             {t.spezifischPvProKwp !== null ? (
               <p className="text-muted-foreground text-xs">
@@ -590,7 +593,9 @@ export function CalcEditor({
         <div className="h-fit space-y-4">
           <div className="grid grid-cols-3 gap-4">
             <div className="grid gap-1.5">
-              <Label htmlFor="pauschal">Pauschalrabatt %</Label>
+              <Label htmlFor="pauschal">
+                Pauschalrabatt % <HelpTip id="calc-pauschal" />
+              </Label>
               <Input
                 id="pauschal"
                 type="number"
@@ -622,7 +627,7 @@ export function CalcEditor({
           </div>
           <div>
             <Label className="text-muted-foreground mb-1.5 block text-xs">
-              MwSt je Gruppe % (§ 12 Abs. 3 UStG: PV + Speicher 0 %)
+              MwSt je Gruppe % (§ 12 Abs. 3 UStG: PV + Speicher 0 %) <HelpTip id="calc-vat-group" />
             </Label>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {POSITION_GROUPS.map((g) => (
@@ -690,7 +695,7 @@ export function CalcEditor({
           ) : null}
           <div className="text-muted-foreground border-t pt-1.5 text-xs">
             <Row
-              label="Marge (DB)"
+              label={<>Marge (DB) <HelpTip id="calc-marge" /></>}
               value={`${formatCurrency(t.marge)} (${formatNumber(t.margeProzent, 1)} %)`}
             />
           </div>
@@ -729,7 +734,7 @@ function Row({
   value,
   strong,
 }: {
-  label: string;
+  label: React.ReactNode;
   value: string;
   strong?: boolean;
 }) {
