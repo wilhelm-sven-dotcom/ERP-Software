@@ -53,96 +53,39 @@ export function rankProductsForFilename(
   return scored.slice(0, limit);
 }
 
-/** Wenig aussagekräftige Wörter (Marken-/Domänen-Vokabular). */
-const STOPWORDS = new Set([
-  "energy", "energie", "system", "systeme", "hybrid", "controller", "control",
-  "inverter", "wechselrichter", "charger", "ladestation", "ladesaeule", "ladesäule",
-  "wallbox", "modul", "module", "panel", "speicher", "battery", "batterie", "storage",
-  "solar", "photovoltaik", "pv", "ac", "dc", "kw", "kwp", "kwh", "kva", "watt", "wp",
-  "pro", "plus", "max", "mini", "smart", "home", "set", "single", "phase", "phasig",
-  "dreiphasig", "einphasig", "serie", "series", "gmbh", "datenblatt", "datasheet",
-  "the", "und", "and", "der", "die", "das", "für", "fuer", "mit", "von",
-]);
-
-const hasDigit = (t: string) => /\d/.test(t);
-
 /**
- * Produkte im Volltext eines Datenblatts erkennen — präzisionsorientiert.
- * Nur die Produkte, für die das Datenblatt tatsächlich gilt, werden geliefert.
+ * Produkte im Volltext eines Datenblatts erkennen — STRENG präzisionsorientiert.
+ * Nur eindeutige Belege zählen, damit Geschwister-Modelle (z. B. „…3.0/4.0")
+ * oder fremde Linien NICHT fälschlich vormarkiert werden, nur weil ihre Ziffern
+ * irgendwo im Text vorkommen:
  *
- * Idee: Tokens, die in VIELEN Produkten vorkommen (Serien-/Markenwörter wie
- * „sigen", „energy"), sind nicht unterscheidend und werden ignoriert. Ein
- * Produkt matcht nur, wenn seine ARTIKELNUMMER, sein vollständiger NAME oder
- * ALLE seine DISTINKTIVEN Tokens (Modellnummern/seltene Wörter) im Text stehen.
+ *   (a) ARTIKELNUMMER (SKU, ≥ 4 Zeichen) als exakter Substring, ODER
+ *   (b) der vollständige PRODUKTNAME als ZUSAMMENHÄNGENDE Phrase (Wortgrenzen).
  *
- * Zusätzlich: reine WORT-Treffer (ohne Modellnummer) gelten nur, wenn sie im
- * TITEL-/Kopfbereich des Dokuments stehen. So werden kompatible Zubehörteile,
- * die ein Datenblatt nur im Fließtext nennt (z. B. „SMA Energy Meter",
- * „Home Manager"), NICHT fälschlich als Datenblatt-Produkt markiert — während
- * echte Mehrfach-Datenblätter (Modellnummern wie 5.0/6.0/8.0) weiter greifen.
+ * Verstreute Einzel-Tokens (Wort hier, Zahl dort) reichen bewusst NICHT mehr.
+ * Recall übernimmt die KI-Stufe; hier zählt Genauigkeit (keine Vorab-Häkchen-Flut).
  */
 export function matchProductsInText(text: string, products: Product[]): string[] {
   const hay = text.toLowerCase();
   if (hay.trim().length < 10 || products.length === 0) return [];
-  // Titel-/Kopfbereich: erste ~500 Zeichen (Produktname/Modell des Datenblatts).
-  const title = hay.slice(0, 500);
-
-  // Dokumentfrequenz je Token über alle Produktnamen.
-  const df = new Map<string, number>();
-  const manTokensAll = new Set<string>();
-  const nameTokensByProduct = new Map<string, string[]>();
-  for (const p of products) {
-    // Namens-Tokens ab 3 Zeichen ODER reine Modellnummern (z. B. „10") behalten.
-    const nt = Array.from(
-      new Set(tokens(normalize(p.name ?? "")).filter((t) => t.length >= 3 || /^\d+$/.test(t))),
-    );
-    nameTokensByProduct.set(p.id, nt);
-    for (const t of nt) df.set(t, (df.get(t) ?? 0) + 1);
-    for (const mt of tokens(normalize(p.manufacturer ?? ""))) manTokensAll.add(mt);
-  }
-  const n = products.length;
-  // „Häufig" = kommt in ≥ 40 % der Produkte (und in ≥ 3) vor → nicht unterscheidend.
-  const commonThreshold = Math.max(3, Math.ceil(n * 0.4));
-  const isGeneric = (t: string) =>
-    STOPWORDS.has(t) || manTokensAll.has(t) || (df.get(t) ?? 0) >= commonThreshold;
-  // „Spezifisch" = Ziffern-Modellnummer oder sehr seltenes Wort (≤ 2 Produkte).
-  const isSpecific = (t: string) => hasDigit(t) || (df.get(t) ?? 0) <= 2;
+  // Normalisierter Heuhaufen (Trenner/Punkte → Leerzeichen), mit Rand-Spaces für
+  // Wortgrenzen-Vergleich. So matcht „sma sunny tripower 10 0" als Phrase, aber
+  // nicht über verstreute Zahlen.
+  const hayNorm = ` ${normalize(text)} `;
 
   const ids: string[] = [];
   for (const p of products) {
+    // (a) Artikelnummer exakt → stärkster, eindeutiger Beleg.
     const sku = p.sku?.toLowerCase().trim();
     if (sku && sku.length >= 4 && hay.includes(sku)) {
       ids.push(p.id);
       continue;
     }
+    // (b) Vollständiger Produktname als zusammenhängende Phrase mit Wortgrenzen.
     const name = normalize(p.name ?? "");
-    // Vollständiger Name: als zusammenhängender Substring ODER alle Namens-Tokens
-    // im Text (toleriert Zeilenumbrüche/Umformatierung im PDF). Akzeptiert nur,
-    // wenn der Name eine Modellnummer (Ziffer) enthält oder im Titel steht — so
-    // matchen echte Produkte (auch umformatiert), Zubehör im Fließtext nicht.
-    const nameTokensAll = tokens(name);
-    const nameTokensPresent =
-      nameTokensAll.length > 0 && nameTokensAll.every((t) => hay.includes(t));
-    if (
-      name.length >= 6 &&
-      (hay.includes(name) || nameTokensPresent) &&
-      (hasDigit(name) || title.includes(name))
-    ) {
+    if (name.length >= 6 && hayNorm.includes(` ${name} `)) {
       ids.push(p.id);
-      continue;
     }
-    const nt = nameTokensByProduct.get(p.id) ?? [];
-    // Distinktive Tokens: Ziffern-Tokens immer, sonst nur nicht-generische.
-    const distinctive = nt.filter((t) => hasDigit(t) || !isGeneric(t));
-    if (distinctive.length === 0) continue;
-    const allPresent = distinctive.every((t) => hay.includes(t));
-    if (!allPresent) continue;
-    // Akzeptiere nur mit echtem Beleg: eine Modellnummer (Ziffern-Token) irgendwo
-    // im Text ODER ein spezifisches Wort im TITEL-/Kopfbereich. Reine Zubehör-
-    // Erwähnungen im Fließtext (Wort ohne Modellnummer) zählen nicht.
-    const hasDigitToken = distinctive.some((t) => hasDigit(t) && hay.includes(t));
-    const specificWordInTitle = distinctive.some((t) => !hasDigit(t) && isSpecific(t) && title.includes(t));
-    if (hasDigitToken || specificWordInTitle) ids.push(p.id);
   }
   return ids;
 }
