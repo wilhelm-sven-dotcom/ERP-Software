@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useActionState } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2, Upload, ImageIcon, Send } from "lucide-react";
+import { Trash2, Upload, ImageIcon, Send, Sparkles, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -193,6 +193,15 @@ export function ServiceCardDialog({
             <Label htmlFor="description">Beschreibung</Label>
             <Textarea id="description" name="description" rows={3} defaultValue={ticket?.description ?? ""} />
           </div>
+          {ticket ? (
+            <ServiceDiagnose
+              ticketId={ticket.id}
+              title={ticket.title}
+              description={ticket.description ?? ""}
+              location={ticket.location ?? ""}
+              onPosted={() => { loadDetail(); router.refresh(); }}
+            />
+          ) : null}
           <div className="flex items-center justify-between">
             <Button type="submit" size="sm" disabled={pending}>
               {pending ? "Speichern …" : "Speichern"}
@@ -324,5 +333,86 @@ function CommentForm({ ticketId, onPosted }: { ticketId: string; onPosted: () =>
         <Send className="size-4" />
       </Button>
     </form>
+  );
+}
+
+/** KI-Erstdiagnose für ein Service-Ticket (Ursache/Prüfschritte/Ersatzteile). */
+function ServiceDiagnose({
+  ticketId,
+  title,
+  description,
+  location,
+  onPosted,
+}: {
+  ticketId: string;
+  title: string;
+  description: string;
+  location: string;
+  onPosted: () => void;
+}) {
+  const [text, setText] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
+
+  async function gen() {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/ai/text", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt:
+            "Erstelle eine kurze technische Erstdiagnose für ein PV-/Speicher-Service-Ticket: " +
+            "mögliche Ursache(n), empfohlene Prüfschritte, mögliche Ersatzteile und nächste Schritte. " +
+            "Stichpunktartig, sachlich.",
+          context: [
+            title ? `Titel: ${title}` : "",
+            description ? `Beschreibung: ${description}` : "",
+            location ? `Ort: ${location}` : "",
+          ]
+            .filter(Boolean)
+            .join("\n"),
+        }),
+      });
+      const data = (await res.json()) as { enabled?: boolean; text?: string | null };
+      if (data.enabled === false) toast.error("KI ist nicht aktiviert.");
+      else setText(data.text ?? "");
+    } catch {
+      toast.error("Diagnose fehlgeschlagen.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="rounded-md border p-2">
+      <Button type="button" variant="outline" size="sm" onClick={() => void gen()} disabled={loading}>
+        {loading ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+        KI-Erstdiagnose
+      </Button>
+      {text ? (
+        <div className="mt-2 space-y-2">
+          <Textarea value={text} onChange={(e) => setText(e.target.value)} rows={6} />
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={async () => {
+              const fd = new FormData();
+              fd.set("ticket_id", ticketId);
+              fd.set("body", text);
+              const res = await postServiceMessage({ ok: false }, fd);
+              if (res.ok) {
+                toast.success("Als Kommentar gespeichert");
+                onPosted();
+              } else {
+                toast.error(res.error ?? "Konnte nicht speichern.");
+              }
+            }}
+          >
+            <Send className="size-4" /> Als Kommentar speichern
+          </Button>
+        </div>
+      ) : null}
+    </div>
   );
 }
