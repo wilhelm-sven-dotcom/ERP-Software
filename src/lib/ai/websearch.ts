@@ -101,3 +101,39 @@ async function braveSearch(query: string, maxResults: number, signal: AbortSigna
     content: (r.description ?? "").slice(0, 2000),
   }));
 }
+
+/**
+ * Bild-Suche (für Produktfotos). Aktuell nur über Tavily (`include_images`).
+ * Liefert direkte Bild-URLs. Fehlertolerant → leeres Array.
+ */
+export async function webImageSearch(
+  query: string,
+  opts: { maxResults?: number; timeoutMs?: number } = {},
+): Promise<string[]> {
+  if (!isWebSearchConfigured() || !query.trim() || provider() !== "tavily") return [];
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), opts.timeoutMs ?? 20000);
+  try {
+    const res = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: process.env.WEB_SEARCH_API_KEY,
+        query,
+        search_depth: "basic",
+        include_images: true,
+        max_results: opts.maxResults ?? 5,
+      }),
+      signal: controller.signal,
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { images?: (string | { url?: string })[] };
+    return (data.images ?? [])
+      .map((i) => (typeof i === "string" ? i : i?.url ?? ""))
+      .filter((u) => /^https?:\/\//.test(u));
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timeout);
+  }
+}
