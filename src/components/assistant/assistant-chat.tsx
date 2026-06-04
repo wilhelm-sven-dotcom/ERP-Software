@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Send, Loader2, Plus, MessageSquare, Trash2, Sparkles, Database, Mic, Search } from "lucide-react";
+import { Send, Loader2, Plus, Sparkles, Mic } from "lucide-react";
 import { toast } from "sonner";
 
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,9 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { GlobalFileDrop } from "@/components/shared/global-file-drop";
+import { AuroraBackground } from "@/components/assistant/aurora-background";
+import { AssistantSidebar } from "@/components/assistant/assistant-sidebar";
+import { AssistantTopbar } from "@/components/assistant/assistant-topbar";
 import type { Product } from "@/lib/types";
 import { ProposedActionCard, type ProposedAction } from "@/components/assistant/proposed-action-card";
 import {
@@ -25,7 +28,7 @@ import {
   searchConversations,
   loadConversation,
   deleteConversation,
-} from "@/app/(app)/assistent/actions";
+} from "@/app/assistent/actions";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -64,6 +67,7 @@ export function AssistantChat({
   initialConversations = [],
   briefing = [],
   canIndex = false,
+  logoUrl = null,
 }: {
   firstName?: string;
   projects?: { id: string; title: string }[];
@@ -72,6 +76,7 @@ export function AssistantChat({
   initialConversations?: ConversationRow[];
   briefing?: { label: string; href: string; tone?: "warn" }[];
   canIndex?: boolean;
+  logoUrl?: string | null;
 }) {
   const [chat, setChat] = React.useState<ChatMessage[]>([]);
   const [query, setQuery] = React.useState("");
@@ -150,32 +155,6 @@ export function AssistantChat({
   }
 
   const suggestions = mode === "general" ? GENERAL_SUGGESTIONS : SUGGESTIONS;
-  const modeToggle = (
-    <div className="bg-muted inline-flex rounded-full p-0.5 text-xs">
-      <button
-        type="button"
-        onClick={() => setMode("crm")}
-        className={
-          mode === "crm"
-            ? "bg-background rounded-full px-3 py-1 font-medium shadow-sm"
-            : "text-muted-foreground rounded-full px-3 py-1"
-        }
-      >
-        CRM
-      </button>
-      <button
-        type="button"
-        onClick={() => setMode("general")}
-        className={
-          mode === "general"
-            ? "bg-background rounded-full px-3 py-1 font-medium shadow-sm"
-            : "text-muted-foreground rounded-full px-3 py-1"
-        }
-      >
-        Allgemein
-      </button>
-    </div>
-  );
 
   async function indexDocuments() {
     setIndexing(true);
@@ -379,90 +358,41 @@ export function AssistantChat({
   );
 
   return (
-    <div className="flex h-[calc(100vh-9rem)] gap-4">
-      {/* Verlauf */}
-      <aside className="hidden w-60 shrink-0 flex-col md:flex">
-        <Button variant="outline" size="sm" className="mb-2 justify-start gap-2" onClick={newChat}>
-          <Plus className="size-4" /> Neuer Chat
-        </Button>
-        <div className="relative mb-2">
-          <Search className="text-muted-foreground absolute top-2.5 left-2.5 size-3.5" />
-          <Input
-            value={histQuery}
-            onChange={(e) => setHistQuery(e.target.value)}
-            placeholder="Verlauf durchsuchen …"
-            className="h-9 pl-8 text-sm"
-          />
-        </div>
-        <div className="flex-1 space-y-0.5 overflow-y-auto">
-          {(() => {
-            const visible = histResults ?? conversations;
-            if (visible.length === 0) {
-              return (
-                <p className="text-muted-foreground px-2 py-1 text-xs">
-                  {histQuery.trim() ? "Keine Treffer." : "Noch keine Gespräche."}
-                </p>
-              );
-            }
-            return visible.map((c) => (
-              <div
-                key={c.id}
-                className={cn(
-                  "group flex items-center gap-1 rounded-md px-2 py-1.5 text-sm",
-                  c.id === conversationId ? "bg-muted" : "hover:bg-muted/60",
-                )}
-              >
-                <button
-                  type="button"
-                  onClick={() => void openConversation(c.id)}
-                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                >
-                  <MessageSquare className="text-muted-foreground size-3.5 shrink-0" />
-                  <span className="truncate">{c.title ?? "Gespräch"}</span>
-                </button>
-                <button
-                  type="button"
-                  title="Löschen"
-                  onClick={() => void removeConversation(c.id)}
-                  className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
-                >
-                  <Trash2 className="size-3.5" />
-                </button>
-              </div>
-            ));
-          })()}
-        </div>
-        {canIndex ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground mt-2 justify-start gap-2"
-            disabled={indexing}
-            onClick={() => void indexDocuments()}
-            title="Hochgeladene Dokumente für die semantische Suche aufbereiten"
-          >
-            {indexing ? <Loader2 className="size-4 animate-spin" /> : <Database className="size-4" />}
-            Dokumente indexieren
-          </Button>
-        ) : null}
-      </aside>
+    <div className="relative flex h-svh overflow-hidden bg-background text-foreground">
+      <AuroraBackground />
 
-      {/* Chat / Hero */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <AssistantSidebar
+        conversations={conversations}
+        conversationId={conversationId}
+        histQuery={histQuery}
+        onHistQuery={setHistQuery}
+        histResults={histResults}
+        onNew={newChat}
+        onOpen={(id) => void openConversation(id)}
+        onDelete={(id) => void removeConversation(id)}
+        canIndex={canIndex}
+        indexing={indexing}
+        onIndex={() => void indexDocuments()}
+      />
+
+      <div className="relative z-10 flex min-w-0 flex-1 flex-col">
+        <AssistantTopbar firstName={firstName} mode={mode} onModeChange={setMode} logoUrl={logoUrl} onNew={newChat} />
+
         {empty ? (
-          <div className="flex flex-1 flex-col items-center justify-center px-2">
-            <h1 className="mb-6 text-center text-3xl font-semibold tracking-tight sm:text-4xl">
-              {mode === "general"
-                ? "Frag mich alles"
-                : `Was steht als Nächstes an${firstName ? `, ${firstName}` : ""}?`}
+          <div className="flex flex-1 flex-col items-center justify-center px-4 pb-12">
+            <h1 className="mb-8 bg-gradient-to-r from-[#0071e3] via-[#5ac8fa] to-[#0a84ff] bg-clip-text text-center text-4xl font-semibold tracking-tight text-transparent sm:text-5xl">
+              Hallo{firstName ? `, ${firstName}` : ""}
             </h1>
-            <div className="mb-4">{modeToggle}</div>
             <div className="w-full max-w-2xl">{inputBar}</div>
+            <p className="text-muted-foreground mt-3 text-center text-xs">
+              Der Assistent kann Fehler machen — wichtige Angaben bitte prüfen.
+            </p>
+
             {/* Cleane Startseite: Vorschläge/Briefing nur auf Wunsch einblenden. */}
             <button
               type="button"
               onClick={() => setShowHints((v) => !v)}
-              className="text-muted-foreground hover:text-foreground mt-3 text-xs"
+              className="text-muted-foreground hover:text-foreground mt-4 text-xs"
             >
               {showHints ? "Vorschläge ausblenden" : "Vorschläge & Tagesüberblick anzeigen"}
             </button>
@@ -520,8 +450,8 @@ export function AssistantChat({
             ) : null}
           </div>
         ) : (
-          <>
-            <div className="flex-1 space-y-2 overflow-y-auto pr-1">
+          <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-hidden px-4 pb-6">
+            <div className="flex-1 space-y-2 overflow-y-auto py-4 pr-1">
               {chat.map((m, i) => (
                 <div
                   key={i}
@@ -553,11 +483,8 @@ export function AssistantChat({
               ) : null}
               <div ref={endRef} />
             </div>
-            <div className="mt-3 flex items-center gap-2">
-              <div className="flex-1">{inputBar}</div>
-              {modeToggle}
-            </div>
-          </>
+            <div className="mt-3">{inputBar}</div>
+          </div>
         )}
       </div>
     </div>

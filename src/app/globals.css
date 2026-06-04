@@ -178,6 +178,32 @@
 }
 
 /*
+  Aurora-Hintergrund (KI-Startseite): weiche Farb-Blobs „atmen" langsam —
+  Skalierung + Deckkraft pulsieren subtil und versetzt (kein hartes Blinken).
+*/
+@keyframes aurora-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.4;
+  }
+  50% {
+    transform: scale(1.18);
+    opacity: 0.65;
+  }
+}
+
+.aurora-blob {
+  animation: aurora-breathe 7s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aurora-blob {
+    animation: none;
+  }
+}
+
+/*
   Druck: App-Shell (Sidebar/Topbar) ausblenden, nur Inhalt drucken.
   Elemente mit `print:hidden` (Tailwind) verschwinden ohnehin; zusätzlich
   blenden wir die Shell-Container per data-Attribut aus.

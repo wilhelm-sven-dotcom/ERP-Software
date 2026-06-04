@@ -1,8 +1,17 @@
 "use server";
 
+import { redirect } from "next/navigation";
+
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/supabase/auth";
 import { ensureConfigured, OK, fail, type ActionResult } from "@/lib/actions";
+
+/** Abmelden: Supabase-Session beenden und zur Login-Seite. */
+export async function signOut(): Promise<void> {
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  redirect("/login");
+}
 import {
   getConversations,
   getConversationMessages,
