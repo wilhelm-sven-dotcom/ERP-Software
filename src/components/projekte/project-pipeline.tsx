@@ -3,6 +3,7 @@ import { Check, ArrowRight, Calculator } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { HelpTip } from "@/components/shared/help-tip";
 import { cn } from "@/lib/utils";
 import { createOfferFromCalculation, setOfferStatus } from "@/app/(app)/angebot/actions";
 import { createOrderConfirmation, createDeliveryNote, createInvoice } from "@/app/(app)/dokumente/actions";
@@ -12,6 +13,10 @@ interface Step {
   key: string;
   label: string;
   done: boolean;
+  /** Ziel-Tab (URL-Hash) zum Anspringen. */
+  tab: string;
+  /** Kurzinfo (Anzahl/Status) für den Tooltip. */
+  info: string;
 }
 
 /**
@@ -41,11 +46,41 @@ export function ProjectPipeline({
   const ab = auftraege[0] ?? null;
 
   const steps: Step[] = [
-    { key: "kalkulation", label: "Kalkulation", done: variants.length > 0 },
-    { key: "angebot", label: "Angebot", done: offers.length > 0 },
-    { key: "auftrag", label: "Auftrag", done: auftraege.length > 0 },
-    { key: "lieferschein", label: "Lieferschein", done: lieferscheine.length > 0 },
-    { key: "rechnung", label: "Rechnung", done: rechnungen.length > 0 },
+    {
+      key: "kalkulation",
+      label: "Kalkulation",
+      done: variants.length > 0,
+      tab: "kalkulation",
+      info: variants.length > 0 ? `${variants.length} Variante(n)` : "offen",
+    },
+    {
+      key: "angebot",
+      label: "Angebot",
+      done: offers.length > 0,
+      tab: "angebot",
+      info: acceptedOffer ? "angenommen" : offers.length > 0 ? `${offers.length} Angebot(e)` : "offen",
+    },
+    {
+      key: "auftrag",
+      label: "Auftrag",
+      done: auftraege.length > 0,
+      tab: "belege",
+      info: auftraege.length > 0 ? `${auftraege.length} AB` : "offen",
+    },
+    {
+      key: "lieferschein",
+      label: "Lieferschein",
+      done: lieferscheine.length > 0,
+      tab: "belege",
+      info: lieferscheine.length > 0 ? `${lieferscheine.length} Lieferschein(e)` : "offen",
+    },
+    {
+      key: "rechnung",
+      label: "Rechnung",
+      done: rechnungen.length > 0,
+      tab: "belege",
+      info: rechnungen.length > 0 ? `${rechnungen.length} Rechnung(en)` : "offen",
+    },
   ];
 
   // Den ersten offenen Schritt als primäre Aktion bestimmen.
@@ -131,17 +166,20 @@ export function ProjectPipeline({
         <ol className="flex flex-1 flex-wrap items-center gap-1.5">
           {steps.map((s, i) => (
             <li key={s.key} className="flex items-center gap-1.5">
-              <span
+              {/* Anklickbar: springt per URL-Hash zum jeweiligen Tab. */}
+              <a
+                href={`#${s.tab}`}
+                title={`${s.label}: ${s.info} — zum Tab springen`}
                 className={cn(
-                  "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium",
+                  "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors hover:ring-2 hover:ring-primary/40",
                   s.done
                     ? "bg-primary/10 text-primary"
-                    : "bg-muted text-muted-foreground",
+                    : "bg-muted text-muted-foreground hover:text-foreground",
                 )}
               >
                 {s.done ? <Check className="size-3" /> : <span className="opacity-60">{i + 1}</span>}
                 {s.label}
-              </span>
+              </a>
               {i < steps.length - 1 ? (
                 <ArrowRight className="text-muted-foreground/50 size-3" />
               ) : null}
@@ -150,7 +188,11 @@ export function ProjectPipeline({
         </ol>
         <div className="flex flex-col items-start gap-1 lg:items-end">
           {primary}
-          {hint ? <p className="text-muted-foreground text-xs">{hint}</p> : null}
+          {hint ? (
+            <p className="text-muted-foreground text-xs">
+              {hint} <HelpTip id="next-step" />
+            </p>
+          ) : null}
         </div>
       </CardContent>
     </Card>

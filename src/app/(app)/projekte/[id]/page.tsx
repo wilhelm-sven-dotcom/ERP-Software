@@ -41,6 +41,7 @@ import { InvoiceActions } from "@/components/dokumente/invoice-actions";
 import { RueckfrageDialog } from "@/components/projekte/rueckfrage-dialog";
 import { ProjectTabs } from "@/components/projekte/project-tabs";
 import { ProjectPipeline } from "@/components/projekte/project-pipeline";
+import { ProjectSummary } from "@/components/projekte/project-summary";
 import { AiTextDialog } from "@/components/shared/ai-text-dialog";
 import { WirtschaftRechner } from "@/components/wirtschaft/wirtschaft-rechner";
 import { getWirtschaftDefaults } from "@/lib/data/settings";
@@ -235,6 +236,8 @@ export default async function ProjectDetailPage({
       <ProjectTabs
         uebersicht={
           <div className="space-y-4">
+            <ProjectSummary variants={variants} offers={offers} rechnungen={rechnungen} />
+
             {project.system_size_kwp || project.storage_kwh ? (
               <div className="grid grid-cols-2 gap-4 sm:max-w-md">
                 <Card>
