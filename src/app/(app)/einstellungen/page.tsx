@@ -9,6 +9,9 @@ import { WirtschaftDefaultsForm } from "@/components/einstellungen/wirtschaft-de
 import { getCompanySettings, getWirtschaftDefaults } from "@/lib/data/settings";
 import { getCurrentEmployee } from "@/lib/supabase/auth";
 import { getIntegration, isGoogleConfigured } from "@/lib/google/calendar";
+import { isDocIntelConfigured } from "@/lib/ai/doc-intelligence";
+import { isAiConfigured } from "@/lib/ai/openai";
+import { isWebSearchConfigured } from "@/lib/ai/websearch";
 import { disconnectGoogle } from "@/app/(app)/einstellungen/actions";
 import { formatDate } from "@/lib/format";
 
@@ -118,6 +121,54 @@ export default async function EinstellungenPage({
           )}
         </CardContent>
       </Card>
+
+      <Card className="mt-4 max-w-3xl">
+        <CardHeader>
+          <CardTitle className="text-base">KI-Dienste (Status)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <StatusRow
+            label="KI (Klassifizierung & Assistent)"
+            on={isAiConfigured()}
+            env="OPENAI_API_KEY"
+          />
+          <StatusRow
+            label="Dokument-Auslese (Azure Document Intelligence)"
+            on={isDocIntelConfigured()}
+            env="AZURE_DOCINTEL_ENDPOINT / _KEY"
+          />
+          <StatusRow
+            label="Web-Suche (Datenblätter & Dokumente)"
+            on={isWebSearchConfigured()}
+            env="WEB_SEARCH_API_KEY"
+          />
+          <p className="text-muted-foreground pt-1 text-xs">
+            Inaktiv bedeutet nur, dass der jeweilige Schlüssel fehlt — die App läuft mit
+            Fallback weiter. Schlüssel in Vercel (Environment Variables) hinterlegen und neu
+            deployen.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function StatusRow({ label, on, env }: { label: string; on: boolean; env: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+      <div className="min-w-0">
+        <p className="truncate font-medium">{label}</p>
+        <p className="text-muted-foreground truncate text-xs">{env}</p>
+      </div>
+      <span
+        className={
+          on
+            ? "shrink-0 rounded-full bg-green-500/15 px-2.5 py-0.5 text-xs font-medium text-green-600"
+            : "text-muted-foreground bg-muted shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium"
+        }
+      >
+        {on ? "Aktiv" : "Inaktiv"}
+      </span>
     </div>
   );
 }

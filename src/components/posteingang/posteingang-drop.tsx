@@ -60,6 +60,7 @@ interface Row {
   error: string | null;
   text: string;
   reason: string;
+  confidence: number;
   target: Target;
   productId: string;
   projectId: string;
@@ -117,6 +118,7 @@ export function PosteingangDrop({
       error: null,
       text: "",
       reason: "",
+      confidence: 0,
       target: "projekt",
       productId: "",
       projectId: "",
@@ -179,6 +181,7 @@ export function PosteingangDrop({
           employeeId: string | null;
           kind: string;
           reason: string;
+          confidence?: number;
           document?: DocMeta | null;
         } | null;
       };
@@ -198,11 +201,12 @@ export function PosteingangDrop({
         kind: typeof r.kind === "string" ? r.kind : "dokument",
         docMeta: r.document ?? null,
         reason: r.reason ?? "",
+        confidence: typeof r.confidence === "number" ? r.confidence : 0,
       };
       patch(row.uid, fields);
 
-      // „Alles automatisch": nur ablegen, wenn ein eindeutiges Ziel feststeht.
-      if (autoFileRef.current) {
+      // „Alles automatisch": nur bei eindeutigem Ziel UND hoher Konfidenz (≥ 0,7).
+      if (autoFileRef.current && (fields.confidence ?? 0) >= 0.7) {
         const merged = { ...row, ...fields } as Row;
         if (!entityRequired(merged) || selectedEntity(merged)) {
           patch(row.uid, { busy: true });
@@ -419,7 +423,21 @@ export function PosteingangDrop({
                     <Sparkles className="size-3" /> KI ordnet zu …
                   </p>
                 ) : row.reason ? (
-                  <p className="text-muted-foreground truncate text-xs">{row.reason}</p>
+                  <p className="text-muted-foreground truncate text-xs">
+                    {row.confidence > 0 ? (
+                      <span
+                        className={cn(
+                          "mr-1.5 rounded px-1 py-0.5 font-medium",
+                          row.confidence >= 0.7
+                            ? "bg-green-500/15 text-green-600"
+                            : "bg-amber-500/15 text-amber-600",
+                        )}
+                      >
+                        {Math.round(row.confidence * 100)}%
+                      </span>
+                    ) : null}
+                    {row.reason}
+                  </p>
                 ) : null}
                 {row.error ? <p className="text-destructive text-xs">{row.error}</p> : null}
               </div>

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getCurrentEmployee } from "@/lib/supabase/auth";
-import { chatJSON, isAiConfigured } from "@/lib/ai/openai";
+import { chatJSON, isAiConfigured, type ContentPart } from "@/lib/ai/openai";
 import { isWebSearchConfigured, webSearch, webImageSearch } from "@/lib/ai/websearch";
 
 export const maxDuration = 60;
@@ -101,11 +101,37 @@ export async function POST(req: Request) {
     }
   }
 
-  // 3) Produktbild (direkte Bild-URL) über die Bild-Suche.
+  // 3) Produktbild: Kandidaten suchen und per Vision prüfen, welches das Produkt
+  //    wirklich zeigt (kein Logo/Diagramm/fremdes Produkt). Nur dann übernehmen.
   if (wants.includes("image")) {
-    const imgs = await webImageSearch(`${full} Produktfoto product photo`, { maxResults: 5 });
-    if (imgs[0]) documents.push({ kind: "image", title: "Produktbild", url: imgs[0] });
+    const imgs = (await webImageSearch(`${full} Produktfoto product photo`, { maxResults: 6 })).slice(0, 4);
+    const chosen = await pickBestProductImage(full, imgs);
+    if (chosen) documents.push({ kind: "image", title: "Produktbild", url: chosen });
   }
 
   return NextResponse.json({ enabled: true, result: { documents } });
+}
+
+/** Vision-Check: welches Kandidatenbild zeigt wirklich das Produkt? URL oder null. */
+async function pickBestProductImage(product: string, urls: string[]): Promise<string | null> {
+  if (urls.length === 0) return null;
+  const content: ContentPart[] = [
+    {
+      type: "text",
+      text:
+        `Welches der folgenden Bilder zeigt am ehesten das PRODUKT „${product}" als echtes ` +
+        `Produktfoto (kein Logo, kein Schaltplan, kein Datenblatt-Ausschnitt, kein fremdes Produkt)? ` +
+        `Antworte als JSON { index: <0-basiert oder -1 wenn keines passt> }. Reihenfolge:`,
+    },
+    ...urls.map((url): ContentPart => ({ type: "image_url", image_url: { url } })),
+  ];
+  const res = await chatJSON<{ index?: number }>(
+    [
+      { role: "system", content: "Du prüfst Produktbilder streng und antwortest nur als JSON." },
+      { role: "user", content },
+    ],
+    { maxTokens: 50 },
+  );
+  const idx = typeof res?.index === "number" ? res.index : -1;
+  return idx >= 0 && idx < urls.length ? urls[idx] : null;
 }

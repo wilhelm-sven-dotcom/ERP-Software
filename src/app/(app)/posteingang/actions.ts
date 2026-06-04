@@ -50,6 +50,21 @@ export async function registerDocument(input: {
   return { ok: true, id: data.id };
 }
 
+/** Ein Entitäts-Dokument (Kunde/Mitarbeiter) entfernen — Storage + Datensatz. */
+export async function deleteEntityDocument(fd: FormData): Promise<void> {
+  if (ensureConfigured()) return;
+  const id = String(fd.get("id") ?? "");
+  const path = String(fd.get("path") ?? "");
+  const entityType = String(fd.get("entity_type") ?? "");
+  const entityId = String(fd.get("entity_id") ?? "");
+  if (!id) return;
+  const supabase = await createClient();
+  if (path) await supabase.storage.from("entity-documents").remove([path]);
+  await supabase.from("entity_documents").delete().eq("id", id);
+  if (entityType === "kunde" && entityId) revalidatePath(`/kunden/${entityId}`);
+  if (entityType === "mitarbeiter" && entityId) revalidatePath(`/mitarbeiter/${entityId}`);
+}
+
 /** Eine Eingangsrechnung (offener Posten) aus ausgelesenen Feldern anlegen. */
 export async function createIncomingInvoice(input: {
   supplier?: string | null;
