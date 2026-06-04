@@ -38,6 +38,27 @@ export async function getInvoiceFileUrls(
   return out;
 }
 
+/** Kennzahlen offener Eingangsrechnungen (Anzahl, Summe, überfällig). */
+export async function getIncomingInvoiceStats(): Promise<{
+  openCount: number;
+  openSum: number;
+  overdueCount: number;
+}> {
+  if (!isSupabaseConfigured()) return { openCount: 0, openSum: 0, overdueCount: 0 };
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("incoming_invoices")
+    .select("amount, due_date, status")
+    .neq("status", "bezahlt");
+  const today = new Date().toISOString().slice(0, 10);
+  const rows = (data ?? []) as { amount: number | null; due_date: string | null; status: string }[];
+  return {
+    openCount: rows.length,
+    openSum: rows.reduce((s, r) => s + (typeof r.amount === "number" ? r.amount : 0), 0),
+    overdueCount: rows.filter((r) => r.due_date != null && r.due_date < today).length,
+  };
+}
+
 /** Alle Eingangsrechnungen (neueste zuerst), inkl. Projekt-Titel. */
 export async function getIncomingInvoices(): Promise<IncomingInvoice[]> {
   if (!isSupabaseConfigured()) return [];

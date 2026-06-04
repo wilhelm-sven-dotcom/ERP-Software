@@ -37,6 +37,7 @@ import {
 import { getSalesEmployees } from "@/lib/data/employees";
 import { LeadIntakeDialog } from "@/components/vertrieb/lead-intake-dialog";
 import { getInbox, getOverdueTasks, type InboxItem } from "@/lib/data/notifications";
+import { getIncomingInvoiceStats } from "@/lib/data/incoming-invoices";
 import { listUpcomingEvents } from "@/lib/google/calendar";
 import { getCurrentEmployee } from "@/lib/supabase/auth";
 import { isAiConfigured } from "@/lib/ai/openai";
@@ -261,13 +262,14 @@ async function SalesDashboard({
 }
 
 async function AdminDashboard({ meId }: { meId: string | null }) {
-  const [projects, customers, stats, overdue, employees, taskLoad] = await Promise.all([
+  const [projects, customers, stats, overdue, employees, taskLoad, incoming] = await Promise.all([
     getProjects(),
     getCustomers(),
     getAdminStats(),
     getOverdueTasks(),
     getEmployees(),
     getEmployeesTaskLoad(),
+    getIncomingInvoiceStats(),
   ]);
   const recent = projects.slice(0, 6);
   const maxRevenue = Math.max(1, ...stats.months.map((m) => m.revenue));
@@ -305,7 +307,16 @@ async function AdminDashboard({ meId }: { meId: string | null }) {
           href="/projekte"
         />
         <Kpi label="Pipeline kWp" value={formatNumber(stats.pipelineKwp)} icon={Sun} />
-        <Kpi label="Pipeline kWh" value={formatNumber(stats.pipelineKwh)} icon={BatteryCharging} />
+        <Kpi
+          label={
+            incoming.overdueCount > 0
+              ? `Eingangsrechnungen offen (${incoming.overdueCount} überfällig)`
+              : "Eingangsrechnungen offen"
+          }
+          value={`${formatCurrency(incoming.openSum)} · ${formatNumber(incoming.openCount, 0)}`}
+          icon={Euro}
+          href="/buchhaltung"
+        />
       </div>
 
       <Card className="mt-4">

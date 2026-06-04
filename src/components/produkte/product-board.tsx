@@ -112,6 +112,7 @@ export function ProductBoard({
   const [items, setItems] =
     React.useState<Record<string, Product[]>>(initialItems);
   const [query, setQuery] = React.useState("");
+  const [docFilter, setDocFilter] = React.useState<"all" | "no_datasheet" | "no_image">("all");
   const [collapsed, setCollapsed] = React.useState<Set<string>>(new Set());
   const [activeId, setActiveId] = React.useState<string | null>(null);
   const [activeType, setActiveType] = React.useState<"item" | "group" | null>(
@@ -259,10 +260,19 @@ export function ProductBoard({
     })();
   }
 
-  // ── Suche: gefilterte, nicht-ziehbare Ansicht ────────────────────────────
+  // ── Suche/Filter: gefilterte, nicht-ziehbare Ansicht ─────────────────────
   const q = query.trim();
-  const filtering = q.length > 0;
-  const matches = (p: Product) => productMatches(p, q);
+  const filtering = q.length > 0 || docFilter !== "all";
+  const docPred = (p: Product) => {
+    if (docFilter === "all") return true;
+    const a = assetsByProduct[p.id] ?? [];
+    if (docFilter === "no_datasheet") return !a.some((x) => x.kind !== "image");
+    return !a.some((x) => x.kind === "image"); // no_image
+  };
+  const matches = (p: Product) => (q.length === 0 || productMatches(p, q)) && docPred(p);
+  const filteredCount = filtering
+    ? containers.reduce((n, c) => n + (items[c] ?? []).filter(matches).length, 0)
+    : 0;
 
   const activeProduct =
     activeType === "item" && activeId
@@ -273,18 +283,37 @@ export function ProductBoard({
 
   return (
     <div className="space-y-4">
-      <div className="relative max-w-sm">
-        <Search className="text-muted-foreground absolute top-2.5 left-2.5 size-4" />
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Produkte suchen …"
-          className="pl-8"
-        />
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative max-w-sm flex-1">
+          <Search className="text-muted-foreground absolute top-2.5 left-2.5 size-4" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Produkte suchen …"
+            className="pl-8"
+          />
+        </div>
+        <div className="flex gap-1">
+          {([
+            ["all", "Alle"],
+            ["no_datasheet", "ohne Datenblatt"],
+            ["no_image", "ohne Bild"],
+          ] as const).map(([val, label]) => (
+            <Button
+              key={val}
+              type="button"
+              size="sm"
+              variant={docFilter === val ? "default" : "outline"}
+              onClick={() => setDocFilter(val)}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
       </div>
       {filtering ? (
         <p className="text-muted-foreground text-xs">
-          Während der Suche ist das Sortieren per Drag &amp; Drop deaktiviert.
+          {filteredCount} Treffer · Sortieren per Drag &amp; Drop ist beim Filtern deaktiviert.
         </p>
       ) : (
         <p className="text-muted-foreground text-xs">
@@ -292,6 +321,12 @@ export function ProductBoard({
           andere Gruppe, oder Gruppen umsortieren.
         </p>
       )}
+
+      {filtering && filteredCount === 0 ? (
+        <p className="text-muted-foreground rounded-md border border-dashed py-8 text-center text-sm">
+          Kein Produkt entspricht der Suche/dem Filter.
+        </p>
+      ) : null}
 
       {filtering ? (
         <div className="space-y-6">

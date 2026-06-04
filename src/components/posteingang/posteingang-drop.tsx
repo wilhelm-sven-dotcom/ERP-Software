@@ -102,6 +102,7 @@ export function PosteingangDrop({
   const [committing, setCommitting] = React.useState(false);
   // „Alles automatisch": sicher klassifizierte Dokumente direkt ablegen.
   const [autoFile, setAutoFile] = React.useState(false);
+  const [hideDone, setHideDone] = React.useState(false);
   const autoFileRef = React.useRef(false);
   autoFileRef.current = autoFile;
 
@@ -428,18 +429,35 @@ export function PosteingangDrop({
         )}
       </div>
 
-      {pending.length > 0 ? (
-        <div className="flex items-center justify-between">
-          <p className="text-muted-foreground text-sm">{pending.length} Dokument(e) im Posteingang</p>
-          <Button onClick={commitAll} disabled={committing}>
-            {committing ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
-            Alle bestätigen &amp; ablegen
-          </Button>
+      {rows.length > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-muted-foreground text-sm">
+            {pending.length} offen · {rows.length - pending.length} abgelegt
+          </p>
+          <div className="flex items-center gap-3">
+            {rows.some((r) => r.done) ? (
+              <label className="text-muted-foreground inline-flex cursor-pointer items-center gap-1.5 text-xs">
+                <input
+                  type="checkbox"
+                  checked={hideDone}
+                  onChange={(e) => setHideDone(e.target.checked)}
+                  className="size-4"
+                />
+                Erledigte ausblenden
+              </label>
+            ) : null}
+            {pending.length > 0 ? (
+              <Button onClick={commitAll} disabled={committing}>
+                {committing ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+                Alle bestätigen &amp; ablegen
+              </Button>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
       <div className="space-y-2">
-        {rows.map((row) => (
+        {(hideDone ? rows.filter((r) => !r.done) : rows).map((row) => (
           <div key={row.uid} className={cn("rounded-lg border p-3", row.done && "opacity-50")}>
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
