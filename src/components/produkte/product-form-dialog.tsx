@@ -315,6 +315,9 @@ export function ProductFormDialog({
                   productId={product?.id ?? null}
                   name={product?.name ?? ""}
                   manufacturer={product?.manufacturer ?? null}
+                  category={product?.category ?? null}
+                  sku={product?.sku ?? null}
+                  groupName={groups.find((g) => g.id === product?.group_id)?.name ?? null}
                 />
               </div>
             </div>

@@ -551,6 +551,81 @@ export async function updateProductSpecs(
   return OK;
 }
 
+/**
+ * Aus dem Netz/Datenblatt gezogene STAMMDATEN + technische Daten ins Produkt
+ * übernehmen — überschreibt gezielt die echten Spalten (Hersteller, Kategorie,
+ * Name, Artikelnr., Gruppe) und merged die specs. Die Gruppe wird per Name in
+ * `product_groups` aufgelöst (sonst angelegt). Nur die übergebenen Felder werden
+ * geändert; der Nutzer hat sie zuvor bestätigt.
+ */
+export async function applyEnrichedProduct(input: {
+  productId: string;
+  header?: { manufacturer?: string; category?: string; name?: string; sku?: string; group?: string };
+  specs?: Record<string, string | number> | null;
+}): Promise<ActionResult> {
+  const guard = ensureConfigured();
+  if (guard) return guard;
+  if (!input.productId) return fail("Produkt fehlt.");
+  const supabase = await createClient();
+  const { data: product } = await supabase
+    .from("products")
+    .select("specs")
+    .eq("id", input.productId)
+    .maybeSingle();
+
+  const clean = (v?: string) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 200) : undefined);
+  const header = input.header ?? {};
+  const columnUpdate: Record<string, unknown> = {};
+  if (clean(header.manufacturer)) columnUpdate.manufacturer = clean(header.manufacturer);
+  if (clean(header.category)) columnUpdate.category = clean(header.category);
+  if (clean(header.name)) columnUpdate.name = clean(header.name);
+  if (clean(header.sku)) columnUpdate.sku = clean(header.sku);
+
+  // Gruppe per Name finden; existiert keine, neu anlegen (ans Ende sortieren).
+  const groupName = clean(header.group);
+  if (groupName) {
+    const { data: g } = await supabase
+      .from("product_groups")
+      .select("id")
+      .ilike("name", groupName)
+      .maybeSingle();
+    let groupId = g?.id as string | undefined;
+    if (!groupId) {
+      const { data: last } = await supabase
+        .from("product_groups")
+        .select("sort")
+        .order("sort", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const { data: created } = await supabase
+        .from("product_groups")
+        .insert({ name: groupName, sort: ((last?.sort as number | null) ?? -1) + 1 })
+        .select("id")
+        .single();
+      groupId = created?.id as string | undefined;
+    }
+    if (groupId) columnUpdate.group_id = groupId;
+  }
+
+  // specs mergen — spalten-gebundene Schlüssel nicht zusätzlich in specs ablegen.
+  const rest: Record<string, string | number> = {};
+  for (const [k, v] of Object.entries(input.specs ?? {})) {
+    if (["manufacturer", "hersteller", "name", "sku", "category", "kategorie"].includes(k)) continue;
+    if (typeof v === "string" || typeof v === "number") rest[k] = v;
+  }
+  const merged = { ...((product?.specs as Record<string, unknown>) ?? {}), ...rest };
+
+  if (Object.keys(columnUpdate).length === 0 && Object.keys(rest).length === 0) return fail("Keine Daten.");
+
+  const { error } = await supabase
+    .from("products")
+    .update({ specs: merged, ...columnUpdate })
+    .eq("id", input.productId);
+  if (error) return fail(error.message);
+  revalidatePath("/produkte");
+  return OK;
+}
+
 export async function deleteProductAsset(fd: FormData): Promise<void> {
   const id = String(fd.get("id") ?? "");
   const path = String(fd.get("path") ?? "");

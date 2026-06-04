@@ -285,7 +285,9 @@ export function AssistantChat({
 
   const empty = chat.length === 0 && !thinking;
 
-  const canAttach = projects.length > 0;
+  // Upload/Posteingang immer erlauben — ein Datenblatt o. Ä. braucht kein Projekt
+  // (es kann auch einem Produkt/Kunden zugeordnet oder neu angelegt werden).
+  const canAttach = true;
   const inputBar = (
     <div className="flex items-center gap-2">
       <div

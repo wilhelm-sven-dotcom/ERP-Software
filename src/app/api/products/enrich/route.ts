@@ -16,6 +16,14 @@ interface EnrichBody {
 export interface EnrichResult {
   /** Freie Kenndaten-Map (key → Wert), wie aus dem Datenblatt gelesen. */
   specs: Record<string, string | number>;
+  /** Stammdaten-Vorschläge für die echten Spalten (zur Korrektur falscher Werte). */
+  fields: {
+    manufacturer?: string;
+    model?: string;
+    category?: string;
+    name?: string;
+    sku?: string;
+  };
   /** Quellen (URLs), aus denen die Daten stammen — zur Nachprüfung. */
   sources: string[];
   reason: string;
@@ -100,28 +108,35 @@ export async function POST(req: Request) {
     ? `### Datenblatt-PDF (${pdfSource}) — maßgeblich:\n${pdfText.slice(0, 22000)}\n\n### Weitere Web-Quellen:\n${snippetContext.slice(0, 4000)}`
     : snippetContext.slice(0, 16000);
 
-  const result = await chatJSON<{ specs?: Record<string, string | number>; reason?: string }>(
+  const result = await chatJSON<{
+    specs?: Record<string, string | number>;
+    fields?: { manufacturer?: string; model?: string; category?: string; name?: string; sku?: string };
+    reason?: string;
+  }>(
     [
       {
         role: "system",
         content:
-          "Du extrahierst die technischen Kenndaten eines PV-/Speicher-Produkts (Wechselrichter, " +
-          "Modul, Speicher, Wallbox) aus den Quellen — das DATENBLATT-PDF ist maßgeblich. Nutze NUR " +
-          "Angaben, die zum genannten Produkt/Modell passen und in den Quellen wirklich stehen — NICHTS " +
-          "erfinden, keine Werte anderer Modelle. Deckt das Datenblatt mehrere Modelle einer Familie ab, " +
-          "führe modell-abhängige Werte mit klarem Modell-Suffix auf (z. B. inverter_kw_10_0 = 10). Gib " +
-          "ein JSON { specs: { … }, reason } zurück. Verwende, wo passend, diese Schlüssel (Zahlen ohne " +
-          "Einheit): manufacturer, model, module_wp, inverter_kw, max_ac_power_kw, storage_kwh, " +
-          "efficiency_pct, max_efficiency_pct, max_dc_voltage, nominal_dc_voltage, mppt_count, " +
-          "max_input_current_a, max_short_circuit_current_a, max_output_current_a, nominal_ac_voltage, " +
-          "phases, grid_frequency, dimensions (BxHxT als Text), weight_kg, warranty_years, ip_rating, " +
-          "operating_temp, communication, standards, cell_type. Weitere belegte Kenndaten als zusätzliche " +
-          "Schlüssel erlaubt — sei VOLLSTÄNDIG. Sind keine sicheren Daten auffindbar, gib specs: {} und " +
-          "erkläre es kurz in reason.",
+          "Du liest ein PV-/Speicher-Produkt (Wechselrichter, Modul, Speicher, Wallbox) aus den Quellen " +
+          "aus — das DATENBLATT-PDF ist maßgeblich. Nutze NUR Angaben, die zum genannten Produkt/Modell " +
+          "passen und in den Quellen wirklich stehen — NICHTS erfinden, keine Werte anderer Modelle. " +
+          "Gib ein JSON { fields, specs, reason } zurück.\n" +
+          "1) 'fields' = korrigierte STAMMDATEN für die Katalog-Spalten: " +
+          "{ manufacturer: ECHTER Hersteller/Marke (NICHT der Großhändler wie Memodo/Baywa/Krannich!), " +
+          "model: Modellbezeichnung, sku: Artikel-/Bestellnummer (falls vorhanden), " +
+          "category: Produkttyp EXAKT einer von 'Wechselrichter'|'Modul'|'Speicher'|'Wallbox'|'Zubehör', " +
+          "name: sauberer Produktname 'Hersteller Modell' }. Felder weglassen, die nicht belegbar sind.\n" +
+          "2) 'specs' = ALLE technischen Kenndaten (Zahlen ohne Einheit), Schlüssel z. B.: model, " +
+          "module_wp, inverter_kw, max_ac_power_kw, storage_kwh, efficiency_pct, max_efficiency_pct, " +
+          "max_dc_voltage, nominal_dc_voltage, mppt_count, max_input_current_a, max_output_current_a, " +
+          "nominal_ac_voltage, phases, grid_frequency, dimensions (BxHxT als Text), weight_kg, " +
+          "warranty_years, ip_rating, operating_temp, communication, standards, cell_type. Deckt das " +
+          "Datenblatt mehrere Modelle einer Familie ab, modell-abhängige Werte mit Suffix (z. B. " +
+          "inverter_kw_10_0 = 10). Sei VOLLSTÄNDIG. Keine sicheren Daten? specs: {}, kurze reason.",
       },
       {
         role: "user",
-        content: `Produkt: ${manufacturer} ${name}\n\nQuellen:\n${context}`,
+        content: `Produkt (evtl. mit falschem Hersteller): ${manufacturer} ${name}\n\nQuellen:\n${context}`,
       },
     ],
     { maxTokens: 4000, timeoutMs: 45000, model: aiModelStrong() },
@@ -136,9 +151,19 @@ export async function POST(req: Request) {
     }
   }
 
+  // Stammdaten-Vorschläge säubern (nur nicht-leere Strings).
+  const fields: EnrichResult["fields"] = {};
+  const f = result.fields ?? {};
+  const pick = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 200) : undefined);
+  if (pick(f.manufacturer)) fields.manufacturer = pick(f.manufacturer);
+  if (pick(f.model)) fields.model = pick(f.model);
+  if (pick(f.category)) fields.category = pick(f.category);
+  if (pick(f.name)) fields.name = pick(f.name);
+  if (pick(f.sku)) fields.sku = pick(f.sku);
+
   const reason =
     (typeof result.reason === "string" ? result.reason : "") +
     (pdfText ? "" : " (Hinweis: Kein Datenblatt-PDF gefunden — Auslese aus Web-Texten, daher evtl. unvollständig.)");
-  const out: EnrichResult = { specs, sources, reason: reason.trim() };
+  const out: EnrichResult = { specs, fields, sources, reason: reason.trim() };
   return NextResponse.json({ enabled: true, result: out });
 }
