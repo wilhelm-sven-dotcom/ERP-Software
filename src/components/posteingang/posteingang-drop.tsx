@@ -88,6 +88,7 @@ export function PosteingangDrop({
   employees,
   aiEnabled,
   azureEnabled = false,
+  suppliers = [],
 }: {
   projects: Opt[];
   products: Opt[];
@@ -95,6 +96,7 @@ export function PosteingangDrop({
   employees: Opt[];
   aiEnabled: boolean;
   azureEnabled?: boolean;
+  suppliers?: string[];
 }) {
   const router = useRouter();
   const [rows, setRows] = React.useState<Row[]>([]);
@@ -374,6 +376,11 @@ export function PosteingangDrop({
 
   return (
     <div className="space-y-4">
+      <datalist id="posteingang-suppliers">
+        {suppliers.map((s) => (
+          <option key={s} value={s} />
+        ))}
+      </datalist>
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -589,6 +596,7 @@ export function PosteingangDrop({
                       <label className="text-muted-foreground text-xs">Lieferant</label>
                       <Input
                         className="h-9"
+                        list="posteingang-suppliers"
                         value={row.docMeta?.supplier ?? ""}
                         onChange={(e) =>
                           patch(row.uid, { docMeta: { ...row.docMeta, supplier: e.target.value } })

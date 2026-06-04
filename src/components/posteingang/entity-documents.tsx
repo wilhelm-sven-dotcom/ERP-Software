@@ -21,7 +21,9 @@ export async function EntityDocuments({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Dokumente</CardTitle>
+        <CardTitle className="text-base">
+          Dokumente{docs.length > 0 ? ` (${docs.length})` : ""}
+        </CardTitle>
       </CardHeader>
       <CardContent>
         {docs.length === 0 ? (

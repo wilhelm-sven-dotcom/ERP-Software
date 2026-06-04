@@ -162,6 +162,9 @@ export function AssetUpload({
       </div>
 
       {images.length > 0 ? (
+        <p className="text-muted-foreground text-xs font-medium">Bilder ({images.length})</p>
+      ) : null}
+      {images.length > 0 ? (
         <div className="flex flex-wrap gap-3">
           {images.map((a) => (
             <div key={a.id} className="group relative">
@@ -177,6 +180,9 @@ export function AssetUpload({
         </div>
       ) : null}
 
+      {datasheets.length > 0 ? (
+        <p className="text-muted-foreground text-xs font-medium">Dokumente ({datasheets.length})</p>
+      ) : null}
       {datasheets.length > 0 ? (
         <ul className="space-y-1">
           {datasheets.map((a) => (
