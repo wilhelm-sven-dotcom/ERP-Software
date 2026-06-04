@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Send, Loader2, Plus, MessageSquare, Trash2, Sparkles, Database } from "lucide-react";
+import { Send, Loader2, Plus, MessageSquare, Trash2, Sparkles, Database, Mic } from "lucide-react";
 import { toast } from "sonner";
 
 import { Input } from "@/components/ui/input";
@@ -80,7 +80,48 @@ export function AssistantChat({
   const [conversations, setConversations] = React.useState<ConversationRow[]>(initialConversations);
   const [indexing, setIndexing] = React.useState(false);
   const [mode, setMode] = React.useState<"crm" | "general">("crm");
+  const [recording, setRecording] = React.useState(false);
+  const [transcribing, setTranscribing] = React.useState(false);
+  const recorderRef = React.useRef<MediaRecorder | null>(null);
+  const chunksRef = React.useRef<Blob[]>([]);
   const endRef = React.useRef<HTMLDivElement>(null);
+
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const rec = new MediaRecorder(stream);
+      chunksRef.current = [];
+      rec.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      rec.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
+        setTranscribing(true);
+        try {
+          const fd = new FormData();
+          fd.set("file", blob, "notiz.webm");
+          const res = await fetch("/api/audio/transcribe", { method: "POST", body: fd });
+          const data = (await res.json()) as { text?: string | null };
+          if (data.text) setQuery((q) => (q ? `${q} ${data.text}` : (data.text as string)));
+          else toast.error("Konnte nichts erkennen.");
+        } catch {
+          toast.error("Transkription fehlgeschlagen.");
+        } finally {
+          setTranscribing(false);
+        }
+      };
+      rec.start();
+      recorderRef.current = rec;
+      setRecording(true);
+    } catch {
+      toast.error("Kein Mikrofon-Zugriff.");
+    }
+  }
+  function stopRecording() {
+    recorderRef.current?.stop();
+    setRecording(false);
+  }
 
   const suggestions = mode === "general" ? GENERAL_SUGGESTIONS : SUGGESTIONS;
   const modeToggle = (
@@ -260,6 +301,18 @@ export function AssistantChat({
           placeholder="Frage stellen, Auswertung anfordern oder Aufgabe vergeben …"
           className="h-10 border-0 bg-transparent shadow-none focus-visible:ring-0"
         />
+        <button
+          type="button"
+          title={recording ? "Aufnahme stoppen" : "Sprachnotiz aufnehmen"}
+          onClick={() => (recording ? stopRecording() : void startRecording())}
+          disabled={transcribing}
+          className={
+            (recording ? "text-destructive" : "text-muted-foreground hover:text-foreground") +
+            " shrink-0"
+          }
+        >
+          {transcribing ? <Loader2 className="size-5 animate-spin" /> : <Mic className="size-5" />}
+        </button>
         <Button
           size="icon"
           className="size-9 shrink-0 rounded-full"
