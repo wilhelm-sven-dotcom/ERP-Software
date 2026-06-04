@@ -61,6 +61,13 @@ export async function saveEmployee(
     const vac = Math.round(Number((s(fd, "vacation_days_per_year") ?? "30").replace(",", ".")));
     if (Number.isFinite(vac)) payload.vacation_days_per_year = vac;
   }
+  if (fd.has("skills")) {
+    const list = String(fd.get("skills") ?? "")
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean);
+    payload.skills = list;
+  }
 
   const supabase = await createClient();
   const { error } = await supabase

@@ -1918,3 +1918,15 @@ create policy "ea_delete" on public.employee_absences for delete
 
 alter table public.site_log add column if not exists photo_ids jsonb;
 alter table public.site_log add column if not exists ai_generated boolean not null default false;
+
+
+-- ============================================================================
+-- 20260607000200_employee_skills.sql
+-- ============================================================================
+-- ============================================================================
+-- ip³ PV-Tool — Mitarbeiter-Skills/Qualifikationen (für die smarte Plantafel)
+-- skills: Liste von Schlagwörtern (z. B. ["Dachmontage","Elektrik","Speicher"]).
+-- Idempotent. Im Supabase SQL-Editor einmal ausführen.
+-- ============================================================================
+
+alter table public.employees add column if not exists skills jsonb;

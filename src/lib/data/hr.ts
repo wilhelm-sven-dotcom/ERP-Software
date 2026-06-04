@@ -5,7 +5,7 @@ import type { Employee, EmployeeContract, EmployeeAbsence } from "@/lib/types";
 const EMP_SELECT =
   "id, auth_user_id, name, first_name, last_name, email, role, active, is_sales, cost_rate, " +
   "birth_date, start_date, street, zip, city, phone, mobile, position, emergency_contact, " +
-  "vacation_days_per_year, created_at, updated_at";
+  "vacation_days_per_year, skills, created_at, updated_at";
 
 export async function getEmployee(id: string): Promise<Employee | null> {
   if (!isSupabaseConfigured() || !id) return null;

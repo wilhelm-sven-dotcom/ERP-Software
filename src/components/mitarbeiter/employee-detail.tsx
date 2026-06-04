@@ -132,6 +132,10 @@ function Stammdaten({ employee, isAdmin }: { employee: Employee; isAdmin: boolea
             <Lbl label="Ort"><Input name="city" defaultValue={employee.city ?? ""} /></Lbl>
             <Lbl label="Eintrittsdatum"><Input name="start_date" type="date" defaultValue={employee.start_date ?? ""} /></Lbl>
             <Lbl label="Notfallkontakt"><Input name="emergency_contact" defaultValue={employee.emergency_contact ?? ""} /></Lbl>
+            <div className="grid gap-1.5 sm:col-span-3">
+              <Label>Skills / Qualifikationen (Komma-getrennt)</Label>
+              <Input name="skills" defaultValue={(employee.skills ?? []).join(", ")} placeholder="z. B. Dachmontage, Elektrik, Speicher" />
+            </div>
             <Lbl label="Urlaubstage/Jahr"><Input name="vacation_days_per_year" type="number" defaultValue={String(employee.vacation_days_per_year ?? 30)} /></Lbl>
             <Lbl label="Stundensatz (€)"><Input name="cost_rate" defaultValue={employee.cost_rate != null ? String(employee.cost_rate) : ""} /></Lbl>
             <Lbl label="Rolle">

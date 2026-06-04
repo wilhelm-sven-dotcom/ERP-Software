@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { SupabaseNotice } from "@/components/shared/supabase-notice";
 import { Button } from "@/components/ui/button";
 import { PlantafelBoard } from "@/components/plantafel/plantafel-board";
+import { DispoSuggest } from "@/components/plantafel/dispo-suggest";
 import { getEmployees } from "@/lib/data/employees";
 import { getProjects } from "@/lib/data/projects";
 import { getDispoEntries } from "@/lib/data/dispo";
@@ -96,6 +97,10 @@ export default async function PlantafelPage({
         </div>
       </PageHeader>
       <SupabaseNotice />
+
+      <div className="mb-4">
+        <DispoSuggest defaultDate={from} />
+      </div>
 
       <PlantafelBoard
         employees={employeeOptions}

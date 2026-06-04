@@ -54,6 +54,8 @@ export interface Employee {
   position?: string | null;
   emergency_contact?: string | null;
   vacation_days_per_year?: number | null;
+  /** Qualifikationen/Skills (für die smarte Plantafel). */
+  skills?: string[] | null;
   created_at: string;
   updated_at: string;
 }
