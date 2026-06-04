@@ -25,6 +25,16 @@ export const RESERVED_SPEC_KEYS = new Set<string>([
   "base_purchase",
   "safety_pct",
   "margin_pct",
+  // Interne/Import-Felder (Preislisten-Import): NICHT als „Technische Daten"
+  // anzeigen UND beim Speichern NICHT löschen (load-bearing: `sizes` für den
+  // Konfigurator, `aufschlag_pct` für die Preisbildung).
+  "aufschlag_pct",
+  "art",
+  "supplier",
+  "description",
+  "source",
+  "sizes",
+  "legacy_id",
 ]);
 
 /** Bekannte Kenndaten → deutsches Label (inkl. Einheit). */

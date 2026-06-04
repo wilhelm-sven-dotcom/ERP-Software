@@ -650,15 +650,20 @@ export function GlobalFileDrop({
                 </p>
               ) : null}
 
-              {/* Kein passendes Produkt gefunden → neu anlegen (Name vorbefüllt). */}
-              {!row.aiBusy && row.productIds.length === 0 && (row.productSuggestion || row.specs) ? (
+              {/* Nichts zugeordnet → immer das Anlegen anbieten (Name vorbefüllt:
+                  KI-Vorschlag, sonst aus dem Dateinamen). So bleibt man nie hängen. */}
+              {!row.aiBusy && !row.detecting && row.productIds.length === 0 ? (
                 <div className="border-primary/40 bg-primary/5 mt-2 rounded-md border p-2">
                   <p className="text-xs font-medium">
                     Kein passendes Produkt im Katalog — neu anlegen?
                   </p>
                   <div className="mt-1.5 flex flex-wrap items-center gap-2">
                     <Input
-                      value={row.newProductName || row.productSuggestion?.name || ""}
+                      value={
+                        row.newProductName ||
+                        row.productSuggestion?.name ||
+                        row.file.name.replace(/\.[^.]+$/, "").replace(/[_]+/g, " ").trim()
+                      }
                       onChange={(e) => patch(row.uid, { newProductName: e.target.value })}
                       placeholder="Produktname"
                       className="h-8 flex-1 min-w-48"
