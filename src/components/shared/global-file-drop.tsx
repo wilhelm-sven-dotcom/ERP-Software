@@ -98,10 +98,14 @@ export function GlobalFileDrop({
   projects,
   products,
   aiEnabled = false,
+  initialFiles,
 }: {
   projects: { id: string; title: string }[];
   products: Product[];
   aiEnabled?: boolean;
+  /** Von außen übergebene Dateien (z. B. Drop aufs Eingabefeld) — automatisch
+   *  verarbeitet, sobald die Komponente sie erhält. */
+  initialFiles?: File[];
 }) {
   const router = useRouter();
   const [rows, setRows] = React.useState<Row[]>([]);
@@ -110,6 +114,7 @@ export function GlobalFileDrop({
     () => new Map(products.map((p) => [p.id, p])),
     [products],
   );
+  const handledRef = React.useRef<File[] | null>(null);
 
   function addFiles(list: FileList | File[]) {
     const arr = Array.from(list);
@@ -500,6 +505,16 @@ export function GlobalFileDrop({
     patch(row.uid, { busy: false, done: true });
     router.refresh();
   }
+
+  // Von außen übergebene Dateien (Drop aufs Eingabefeld) einmalig verarbeiten.
+  // Steht nach allen Helfern, damit der Compiler keine „vor Deklaration"-Zugriffe sieht.
+  React.useEffect(() => {
+    if (!initialFiles || initialFiles.length === 0 || handledRef.current === initialFiles) return;
+    handledRef.current = initialFiles;
+    const id = window.setTimeout(() => addFiles(initialFiles), 0);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFiles]);
 
   const pending = rows.filter((r) => !r.done);
 

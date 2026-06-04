@@ -82,6 +82,10 @@ export function AssistantChat({
   const [mode, setMode] = React.useState<"crm" | "general">("crm");
   const [recording, setRecording] = React.useState(false);
   const [transcribing, setTranscribing] = React.useState(false);
+  // Datei direkt aufs Eingabefeld ziehen → Upload-Dialog öffnen + Dateien füllen.
+  const [attachOpen, setAttachOpen] = React.useState(false);
+  const [pendingFiles, setPendingFiles] = React.useState<File[]>([]);
+  const [dragOver, setDragOver] = React.useState(false);
   const recorderRef = React.useRef<MediaRecorder | null>(null);
   const chunksRef = React.useRef<Blob[]>([]);
   const endRef = React.useRef<HTMLDivElement>(null);
@@ -262,13 +266,32 @@ export function AssistantChat({
   const canAttach = projects.length > 0;
   const inputBar = (
     <div className="flex items-center gap-2">
-      <div className="bg-card focus-within:border-primary flex flex-1 items-center gap-2 rounded-full border px-4 py-1 shadow-sm transition-colors">
+      <div
+        onDragOver={canAttach ? (e) => {
+          e.preventDefault();
+          setDragOver(true);
+        } : undefined}
+        onDragLeave={canAttach ? () => setDragOver(false) : undefined}
+        onDrop={canAttach ? (e) => {
+          e.preventDefault();
+          setDragOver(false);
+          const files = Array.from(e.dataTransfer.files ?? []);
+          if (files.length > 0) {
+            setPendingFiles(files);
+            setAttachOpen(true);
+          }
+        } : undefined}
+        className={
+          "bg-card flex flex-1 items-center gap-2 rounded-full border px-4 py-1 shadow-sm transition-colors " +
+          (dragOver ? "border-primary ring-primary/30 ring-2" : "focus-within:border-primary")
+        }
+      >
         {canAttach ? (
-          <Dialog>
+          <Dialog open={attachOpen} onOpenChange={(o) => { setAttachOpen(o); if (!o) setPendingFiles([]); }}>
             <DialogTrigger asChild>
               <button
                 type="button"
-                title="Dokument hochladen (KI ordnet zu)"
+                title="Dokument hochladen (KI ordnet zu) — oder Datei direkt hierher ziehen"
                 className="text-muted-foreground hover:text-foreground shrink-0"
               >
                 <Plus className="size-5" />
@@ -282,7 +305,12 @@ export function AssistantChat({
                 Datenblatt, Rechnung, Plan oder Foto hierher ziehen — die KI liest es aus und schlägt
                 die richtige Zuordnung vor.
               </p>
-              <GlobalFileDrop projects={projects} products={products} aiEnabled={aiEnabled} />
+              <GlobalFileDrop
+                projects={projects}
+                products={products}
+                aiEnabled={aiEnabled}
+                initialFiles={pendingFiles}
+              />
             </DialogContent>
           </Dialog>
         ) : (
