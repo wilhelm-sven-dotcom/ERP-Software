@@ -10,15 +10,17 @@ import { getEmployees } from "@/lib/data/employees";
 import { customerName } from "@/lib/format";
 import { isAiConfigured } from "@/lib/ai/openai";
 import { isDocIntelConfigured } from "@/lib/ai/doc-intelligence";
+import { getSupplierNames } from "@/lib/data/incoming-invoices";
 
 export const metadata: Metadata = { title: "Posteingang" };
 
 export default async function PosteingangPage() {
-  const [projects, products, customers, employees] = await Promise.all([
+  const [projects, products, customers, employees, suppliers] = await Promise.all([
     getProjects(),
     getProducts(),
     getCustomers(),
     getEmployees(),
+    getSupplierNames(),
   ]);
 
   return (
@@ -32,6 +34,7 @@ export default async function PosteingangPage() {
       <PosteingangDrop
         aiEnabled={isAiConfigured()}
         azureEnabled={isDocIntelConfigured()}
+        suppliers={suppliers}
         projects={projects.map((p) => ({
           id: p.id,
           label: p.title ?? "Ohne Titel",
