@@ -1904,3 +1904,17 @@ create policy "ea_update" on public.employee_absences for update
 drop policy if exists "ea_delete" on public.employee_absences;
 create policy "ea_delete" on public.employee_absences for delete
   using (public.is_admin() or (employee_id = public.current_employee_id() and status = 'pending'));
+
+
+-- ============================================================================
+-- 20260607000100_sitelog_photos.sql
+-- ============================================================================
+-- ============================================================================
+-- ip³ PV-Tool — Bautagebuch: Foto-Verknüpfung + KI-Markierung
+-- photo_ids: verknüpfte Fotos (project_files-IDs) zu einem Eintrag.
+-- ai_generated: Eintrag wurde aus einem Foto per KI vorbefüllt.
+-- Idempotent. Im Supabase SQL-Editor einmal ausführen.
+-- ============================================================================
+
+alter table public.site_log add column if not exists photo_ids jsonb;
+alter table public.site_log add column if not exists ai_generated boolean not null default false;

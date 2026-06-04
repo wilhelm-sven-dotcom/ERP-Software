@@ -251,7 +251,7 @@ export async function registerProjectFile(input: {
   textContent?: string | null;
   /** KI-interpretierte Beleg-Felder (Lieferant, Betrag, Datum …). */
   docMeta?: Record<string, unknown> | null;
-}): Promise<ActionResult> {
+}): Promise<ActionResult & { id?: string }> {
   const guard = ensureConfigured();
   if (guard) return guard;
   if (!input.projectId || !input.storagePath) return fail("Ungültige Daten.");
@@ -281,7 +281,7 @@ export async function registerProjectFile(input: {
     title: `Datei hochgeladen: ${input.name}`,
   });
   revalidatePath(`/projekte/${input.projectId}`);
-  return OK;
+  return { ok: true, id: row?.id };
 }
 
 export async function deleteProjectFile(fd: FormData): Promise<void> {

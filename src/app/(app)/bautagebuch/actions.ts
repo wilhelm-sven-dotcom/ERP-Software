@@ -26,6 +26,16 @@ export async function addSiteLogEntry(
   if (!workDone) return fail("Bitte die durchgeführten Arbeiten angeben.");
 
   const supabase = await createClient();
+  let photoIds: string[] | null = null;
+  const rawPhotos = s(fd, "photo_ids");
+  if (rawPhotos) {
+    try {
+      const parsed = JSON.parse(rawPhotos);
+      if (Array.isArray(parsed)) photoIds = parsed.filter((x) => typeof x === "string");
+    } catch {
+      photoIds = null;
+    }
+  }
   const { error } = await supabase.from("site_log").insert({
     project_id: projectId,
     log_date: s(fd, "log_date") ?? new Date().toISOString().slice(0, 10),
@@ -33,6 +43,8 @@ export async function addSiteLogEntry(
     crew: s(fd, "crew"),
     work_done: workDone,
     note: s(fd, "note"),
+    photo_ids: photoIds,
+    ai_generated: fd.get("ai_generated") === "true",
     created_by: (await getCurrentEmployee())?.id ?? null,
   });
   if (error) return fail(error.message);
