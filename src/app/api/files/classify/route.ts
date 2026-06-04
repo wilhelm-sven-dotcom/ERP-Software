@@ -10,12 +10,20 @@ interface ClassifyBody {
   images?: string[];
   projects?: { id: string; title: string }[];
   products?: { id: string; name: string; sku?: string | null; manufacturer?: string | null }[];
+  customers?: { id: string; name: string; city?: string | null; nr?: number | null }[];
+  employees?: { id: string; name: string }[];
 }
 
+export type ClassifyTarget = "produkt" | "projekt" | "kunde" | "mitarbeiter" | "buchhaltung";
+
 export interface ClassifyResult {
-  target: "produkt" | "projekt";
+  target: ClassifyTarget;
   productIds: string[];
   projectId: string | null;
+  /** Ziel-Kunde (bei target='kunde' oder zur Verknüpfung einer Rechnung). */
+  customerId?: string | null;
+  /** Ziel-Mitarbeiter (bei target='mitarbeiter'). */
+  employeeId?: string | null;
   kind: string;
   confidence: number;
   reason: string;
@@ -64,6 +72,10 @@ export async function POST(req: Request) {
   const projects = (body.projects ?? []).slice(0, 80);
   // Mehr Kandidaten zulassen; der Client schickt die relevantesten zuerst.
   const products = (body.products ?? []).slice(0, 140);
+  const customers = (body.customers ?? []).slice(0, 120);
+  const employees = (body.employees ?? []).slice(0, 60);
+  const customerIds = new Set(customers.map((c) => c.id));
+  const employeeIds = new Set(employees.map((e) => e.id));
 
   // Nutzer-Nachricht: zuerst Daten/Text, dann das/die Seitenbild(er) für die
   // Vision-Auslese (funktioniert auch bei gescannten PDFs).
@@ -72,7 +84,7 @@ export async function POST(req: Request) {
       type: "text",
       text:
         "Klassifiziere und interpretiere dieses Dokument. Daten:\n" +
-        JSON.stringify({ fileName, titel: title, projects, products }) +
+        JSON.stringify({ fileName, titel: title, projects, products, customers, employees }) +
         (text ? `\n\nExtrahierter Text (Hilfe, evtl. unvollständig):\n${text}` : ""),
     },
     ...images.map((url): ContentPart => ({ type: "image_url", image_url: { url } })),
@@ -85,9 +97,15 @@ export async function POST(req: Request) {
         content:
           "Du ordnest eine hochgeladene Datei in einem PV-/Speicher-CRM korrekt zu und " +
           "interpretierst Dokumente. Lies das Dokument PRIMÄR aus dem BILD (auch gescannte PDFs/ " +
-          "Tabellen); der mitgelieferte Text ist nur Hilfe. Entscheide, ob die Datei zu einem " +
-          "PRODUKT (z. B. Datenblatt, Produktbild) oder einem PROJEKT (z. B. Rechnung, Plan, Foto, " +
-          "Dokument) gehört. WICHTIG: Ein DATENBLATT gehört IMMER zu Produkten (target='produkt'), " +
+          "Tabellen); der mitgelieferte Text ist nur Hilfe. Bestimme das beste 'target' aus: " +
+          "'produkt' (Datenblatt, Produktbild), 'projekt' (Beleg/Plan/Foto/Schriftverkehr mit klarem " +
+          "Projektbezug), 'kunde' (Kundendokument ohne Projektbezug: z. B. Stromrechnung, Ausweis, " +
+          "Lageplan, Korrespondenz → fülle 'customerId' aus der Kundenliste), 'mitarbeiter' " +
+          "(Personaldokument: Arbeitsvertrag, Bescheinigung, Lohnabrechnung → fülle 'employeeId' aus der " +
+          "Mitarbeiterliste), 'buchhaltung' (EINGANGS-/Lieferantenrechnung → fülle 'document' und, wenn " +
+          "erkennbar, projectId/customerId). Bevorzuge bei Belegen mit klarem Projekt/Kunde die jeweilige " +
+          "ID; eine Lieferanten-Eingangsrechnung gehört nach 'buchhaltung'. " +
+          "WICHTIG: Ein DATENBLATT gehört IMMER zu Produkten (target='produkt'), " +
           "auch wenn kein passendes Produkt in der Liste steht. Ein Datenblatt kann MEHRERE Produkte " +
           "abdecken — wähle ALLE productIds aus der Liste, deren MODELLNAME oder ARTIKELNUMMER WÖRTLICH " +
           "im Dokument vorkommt. STRENG: Wähle ein Produkt NIEMALS nur, weil es vom selben Hersteller " +
@@ -119,7 +137,8 @@ export async function POST(req: Request) {
           "zusätzliche Schlüssel erlaubt. Wenn das Datenblatt MEHRERE Produkte mit UNTERSCHIEDLICHEN Werten zeigt, " +
           "fülle zusätzlich 'productSpecs' als Objekt { <productId aus der Liste>: { kenndaten… } } je " +
           "Produkt. Nur was wirklich sichtbar/belegbar ist, nichts erfinden. confidence 0..1. Antworte " +
-          "ausschließlich als JSON mit target, productIds, projectId, kind, confidence, reason, document, " +
+          "ausschließlich als JSON mit target ('produkt'|'projekt'|'kunde'|'mitarbeiter'|'buchhaltung'), " +
+          "productIds, projectId, customerId, employeeId, kind, confidence, reason, document, " +
           "specs, productSpecs, product_suggestion.",
       },
       { role: "user", content: userContent },
@@ -130,10 +149,18 @@ export async function POST(req: Request) {
   if (!result) return NextResponse.json({ enabled: true, result: null });
 
   // Defensiv normalisieren.
+  const allowedTargets: ClassifyTarget[] = ["produkt", "projekt", "kunde", "mitarbeiter", "buchhaltung"];
+  const target = allowedTargets.includes(result.target) ? result.target : "projekt";
+  const customerId =
+    typeof result.customerId === "string" && customerIds.has(result.customerId) ? result.customerId : null;
+  const employeeId =
+    typeof result.employeeId === "string" && employeeIds.has(result.employeeId) ? result.employeeId : null;
   const normalized: ClassifyResult = {
-    target: result.target === "produkt" ? "produkt" : "projekt",
+    target,
     productIds: Array.isArray(result.productIds) ? result.productIds : [],
     projectId: result.projectId ?? null,
+    customerId,
+    employeeId,
     kind: typeof result.kind === "string" ? result.kind : "dokument",
     confidence: typeof result.confidence === "number" ? result.confidence : 0,
     reason: typeof result.reason === "string" ? result.reason : "",

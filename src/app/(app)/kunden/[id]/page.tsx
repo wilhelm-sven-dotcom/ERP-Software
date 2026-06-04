@@ -4,6 +4,7 @@ import { ArrowLeft, Pencil, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 
 import { PageHeader } from "@/components/shared/page-header";
+import { EntityDocuments } from "@/components/posteingang/entity-documents";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -178,6 +179,10 @@ export default async function CustomerDetailPage({
             <ActivityTimeline activities={activities} />
           </CardContent>
         </Card>
+
+        <div className="lg:col-span-3">
+          <EntityDocuments entityType="kunde" entityId={customer.id} />
+        </div>
       </div>
     </div>
   );

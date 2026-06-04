@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { SupabaseNotice } from "@/components/shared/supabase-notice";
 import { Button } from "@/components/ui/button";
 import { EmployeeDetail } from "@/components/mitarbeiter/employee-detail";
+import { EntityDocuments } from "@/components/posteingang/entity-documents";
 import { getEmployee, getContracts, getAbsences, vacationBalance } from "@/lib/data/hr";
 import { getCurrentEmployee } from "@/lib/supabase/auth";
 
@@ -55,6 +56,9 @@ export default async function MitarbeiterDetailPage({
         balance={balance}
         isAdmin={isAdmin}
       />
+      <div className="mt-4">
+        <EntityDocuments entityType="mitarbeiter" entityId={employee.id} />
+      </div>
     </div>
   );
 }
