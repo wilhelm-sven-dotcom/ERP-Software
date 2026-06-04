@@ -7,6 +7,32 @@ import { analyzeDocument, isDocIntelConfigured } from "@/lib/ai/doc-intelligence
 export const maxDuration = 60;
 
 /**
+ * Selbsttest (im Browser aufrufbar): zeigt, ob Azure DI in der Produktion
+ * erkannt wird — ohne die Schlüssel preiszugeben. Nur für eingeloggte Nutzer.
+ */
+export async function GET() {
+  const me = await getCurrentEmployee();
+  if (!me) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const configured = isDocIntelConfigured();
+  // Nur den Host des Endpoints zeigen (kein Geheimnis), zur Sichtprüfung.
+  let endpointHost: string | null = null;
+  try {
+    if (process.env.AZURE_DOCINTEL_ENDPOINT) {
+      endpointHost = new URL(process.env.AZURE_DOCINTEL_ENDPOINT).host;
+    }
+  } catch {
+    endpointHost = "ungültige URL in AZURE_DOCINTEL_ENDPOINT";
+  }
+  return NextResponse.json({
+    azure_configured: configured,
+    endpointHost,
+    hinweis: configured
+      ? "Azure ist aktiv. Lade ein gescanntes Datenblatt im Posteingang hoch, um die Auslese zu testen."
+      : "Azure-Keys werden nicht erkannt — AZURE_DOCINTEL_ENDPOINT/_KEY in Vercel prüfen und neu deployen.",
+  });
+}
+
+/**
  * Robuste Dokument-Auslese per Azure AI Document Intelligence (EU).
  * Nimmt die Datei (multipart) und liefert sauberen Text (+ Tabellen-Anzahl).
  * Ohne Azure-Keys: { enabled:false } → der Client nutzt die pdf.js-Auslese.
