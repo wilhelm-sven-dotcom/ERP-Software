@@ -14,13 +14,30 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { updateProductSpecs } from "@/app/(app)/produkte/actions";
+import { updateProductSpecs, attachDocumentFromUrl } from "@/app/(app)/produkte/actions";
 
 interface EnrichResponse {
   enabled?: boolean;
   reason?: string;
   result?: { specs: Record<string, string | number>; sources: string[]; reason: string } | null;
 }
+
+type DocKind = "datasheet" | "manual" | "certificate" | "image";
+interface FoundDocument {
+  kind: DocKind;
+  title: string;
+  url: string;
+}
+interface DocsResponse {
+  enabled?: boolean;
+  result?: { documents: FoundDocument[] } | null;
+}
+const DOC_LABEL: Record<DocKind, string> = {
+  datasheet: "Datenblatt",
+  manual: "Anleitung",
+  certificate: "Zertifikat",
+  image: "Produktbild",
+};
 
 /**
  * „Daten aus dem Netz ziehen": sucht das echte Datenblatt im Web, liest die
@@ -44,6 +61,10 @@ export function ProductEnrichButton({
   const [specs, setSpecs] = React.useState<Record<string, string | number>>({});
   const [sources, setSources] = React.useState<string[]>([]);
   const [checked, setChecked] = React.useState<Set<string>>(new Set());
+  const [docs, setDocs] = React.useState<FoundDocument[]>([]);
+  const [docsBusy, setDocsBusy] = React.useState(false);
+  const [checkedDocs, setCheckedDocs] = React.useState<Set<string>>(new Set());
+  const [attachingDocs, setAttachingDocs] = React.useState(false);
 
   async function run() {
     setOpen(true);
@@ -51,6 +72,10 @@ export function ProductEnrichButton({
     setError(null);
     setSpecs({});
     setSources([]);
+    setDocs([]);
+    setCheckedDocs(new Set());
+    // Dokument-Suche parallel anstoßen (blockiert die Specs nicht).
+    void fetchDocuments();
     try {
       const res = await fetch("/api/products/enrich", {
         method: "POST",
@@ -74,6 +99,70 @@ export function ProductEnrichButton({
     } finally {
       setBusy(false);
     }
+  }
+
+  async function fetchDocuments() {
+    setDocsBusy(true);
+    try {
+      const res = await fetch("/api/products/documents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          manufacturer,
+          wants: ["datasheet", "manual", "certificate", "image"],
+        }),
+      });
+      const data = (await res.json()) as DocsResponse;
+      const found = data.result?.documents ?? [];
+      setDocs(found);
+      setCheckedDocs(new Set(found.map((d) => d.url)));
+    } catch {
+      /* Dokument-Suche optional → still ignorieren */
+    } finally {
+      setDocsBusy(false);
+    }
+  }
+
+  function toggleDoc(url: string) {
+    setCheckedDocs((prev) => {
+      const next = new Set(prev);
+      if (next.has(url)) next.delete(url);
+      else next.add(url);
+      return next;
+    });
+  }
+
+  async function attachDocs() {
+    if (!productId) {
+      toast.error("Bitte das Produkt zuerst speichern, dann Dokumente anhängen.");
+      return;
+    }
+    const selected = docs.filter((d) => checkedDocs.has(d.url));
+    if (selected.length === 0) {
+      toast.error("Bitte mindestens ein Dokument auswählen.");
+      return;
+    }
+    setAttachingDocs(true);
+    let ok = 0;
+    let failed = 0;
+    for (const d of selected) {
+      const res = await attachDocumentFromUrl({
+        productId,
+        url: d.url,
+        kind: d.kind,
+        name: `${DOC_LABEL[d.kind]}: ${d.title}`.slice(0, 120),
+      });
+      if (res.ok) ok++;
+      else failed++;
+    }
+    setAttachingDocs(false);
+    if (ok > 0) {
+      toast.success(`${ok} Dokument(e) angehängt.`);
+      setDocs((prev) => prev.filter((d) => !checkedDocs.has(d.url)));
+      router.refresh();
+    }
+    if (failed > 0) toast.error(`${failed} Dokument(e) konnten nicht geladen werden.`);
   }
 
   function toggle(key: string) {
@@ -168,13 +257,63 @@ export function ProductEnrichButton({
                 ) : null}
               </>
             )}
+
+            {/* Gefundene Dokumente (Datenblatt/Anleitung/Zertifikat/Bild) */}
+            {docsBusy || docs.length > 0 ? (
+              <div className="mt-4 border-t pt-3">
+                <p className="mb-2 text-sm font-medium">Gefundene Dokumente</p>
+                {docsBusy && docs.length === 0 ? (
+                  <p className="text-muted-foreground text-xs">Suche Datenblatt, Anleitung, Zertifikat, Bild …</p>
+                ) : (
+                  <ul className="divide-y rounded-md border">
+                    {docs.map((d) => (
+                      <li key={d.url}>
+                        <label className="flex cursor-pointer items-start gap-3 px-3 py-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={checkedDocs.has(d.url)}
+                            onChange={() => toggleDoc(d.url)}
+                            className="mt-0.5 size-4"
+                          />
+                          <span className="bg-muted w-24 shrink-0 rounded px-1.5 py-0.5 text-center text-xs font-medium">
+                            {DOC_LABEL[d.kind]}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate">{d.title}</span>
+                            <a
+                              href={d.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-muted-foreground block truncate text-xs hover:underline"
+                            >
+                              {d.url}
+                            </a>
+                          </span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ) : null}
           </div>
 
-          {entries.length > 0 ? (
-            <DialogFooter>
-              <Button onClick={apply} disabled={applying || checked.size === 0}>
-                {applying ? "Übernehmen …" : `${checked.size} Felder übernehmen`}
-              </Button>
+          {entries.length > 0 || docs.length > 0 ? (
+            <DialogFooter className="gap-2 sm:gap-2">
+              {docs.length > 0 ? (
+                <Button
+                  variant="outline"
+                  onClick={attachDocs}
+                  disabled={attachingDocs || checkedDocs.size === 0}
+                >
+                  {attachingDocs ? "Hänge an …" : `${checkedDocs.size} Dokument(e) anhängen`}
+                </Button>
+              ) : null}
+              {entries.length > 0 ? (
+                <Button onClick={apply} disabled={applying || checked.size === 0}>
+                  {applying ? "Übernehmen …" : `${checked.size} Felder übernehmen`}
+                </Button>
+              ) : null}
             </DialogFooter>
           ) : null}
         </DialogContent>

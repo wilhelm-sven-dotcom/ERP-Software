@@ -350,7 +350,7 @@ export async function deleteGroup(fd: FormData): Promise<void> {
 /** Metadaten eines hochgeladenen Assets in product_assets schreiben. */
 export async function registerProductAsset(input: {
   productId: string;
-  kind: "image" | "datasheet";
+  kind: "image" | "datasheet" | "manual" | "certificate";
   name: string;
   storagePath: string;
   mime: string | null;
@@ -379,6 +379,78 @@ export async function registerProductAsset(input: {
 
   revalidatePath("/produkte");
   return OK;
+}
+
+const PRODUCT_BUCKET = "product-assets";
+const EXT_BY_MIME: Record<string, string> = {
+  "application/pdf": "pdf",
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+};
+
+/**
+ * Ein im Netz gefundenes Dokument (Datenblatt/Anleitung/Zertifikat/Bild) per URL
+ * herunterladen, in den Storage legen und am Produkt registrieren. Server-seitig,
+ * damit keine CORS-/Geheimnis-Probleme entstehen. Validiert Typ & Größe.
+ */
+export async function attachDocumentFromUrl(input: {
+  productId: string;
+  url: string;
+  kind: "image" | "datasheet" | "manual" | "certificate";
+  name?: string | null;
+}): Promise<ActionResult> {
+  const guard = ensureConfigured();
+  if (guard) return guard;
+  if (!input.productId || !/^https?:\/\//.test(input.url)) return fail("Ungültige URL.");
+
+  // 1) Herunterladen (mit Timeout & Größenlimit).
+  let bytes: ArrayBuffer;
+  let mime: string;
+  try {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 25000);
+    const res = await fetch(input.url, { signal: controller.signal, redirect: "follow" });
+    clearTimeout(t);
+    if (!res.ok) return fail(`Download fehlgeschlagen (HTTP ${res.status}).`);
+    mime = (res.headers.get("content-type") ?? "").split(";")[0].trim() || "application/octet-stream";
+    bytes = await res.arrayBuffer();
+  } catch {
+    return fail("Download fehlgeschlagen (Netz/Timeout).");
+  }
+  if (bytes.byteLength === 0) return fail("Leere Datei.");
+  if (bytes.byteLength > 25 * 1024 * 1024) return fail("Datei zu groß (>25 MB).");
+
+  // 2) Plausibilität: Dokumente sollten PDF sein, Bilder ein Bildtyp.
+  const isImage = input.kind === "image";
+  if (isImage && !mime.startsWith("image/")) return fail("Das ist kein Bild.");
+  if (!isImage && mime !== "application/pdf" && !mime.startsWith("application/"))
+    return fail("Das ist kein Dokument (PDF erwartet).");
+
+  // 3) In den Storage legen.
+  const ext = EXT_BY_MIME[mime] ?? (isImage ? "img" : "pdf");
+  const path = `shared/${crypto.randomUUID()}.${ext}`;
+  const supabase = await createClient();
+  const up = await supabase.storage
+    .from(PRODUCT_BUCKET)
+    .upload(path, bytes, { contentType: mime });
+  if (up.error) return fail(`Upload fehlgeschlagen: ${up.error.message}`);
+
+  // 4) Registrieren.
+  const defaultName: Record<string, string> = {
+    image: "Produktbild",
+    datasheet: "Datenblatt",
+    manual: "Anleitung",
+    certificate: "Zertifikat",
+  };
+  return registerProductAsset({
+    productId: input.productId,
+    kind: input.kind,
+    name: input.name?.trim() || `${defaultName[input.kind]} (Web)`,
+    storagePath: path,
+    mime,
+    textContent: null,
+  });
 }
 
 /**
