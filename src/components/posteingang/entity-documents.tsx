@@ -1,7 +1,9 @@
-import { FileText } from "lucide-react";
+import { FileText, Trash2 } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getDocumentsWithUrls, type DocumentEntityType } from "@/lib/data/entity-documents";
+import { deleteEntityDocument } from "@/app/(app)/posteingang/actions";
 import { formatDateTime } from "@/lib/format";
 
 /**
@@ -43,6 +45,15 @@ export async function EntityDocuments({
                     {d.kind} · {formatDateTime(d.created_at)}
                   </p>
                 </div>
+                <form action={deleteEntityDocument}>
+                  <input type="hidden" name="id" value={d.id} />
+                  <input type="hidden" name="path" value={d.storage_path} />
+                  <input type="hidden" name="entity_type" value={entityType} />
+                  <input type="hidden" name="entity_id" value={entityId} />
+                  <Button type="submit" variant="ghost" size="icon" className="size-7" title="Entfernen">
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                </form>
               </li>
             ))}
           </ul>

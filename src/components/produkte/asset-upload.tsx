@@ -34,7 +34,7 @@ export function AssetUpload({
   const router = useRouter();
   const [busy, setBusy] = React.useState(false);
 
-  async function upload(file: File, kind: "image" | "datasheet") {
+  async function upload(file: File, kind: "image" | "datasheet" | "manual" | "certificate") {
     setBusy(true);
     try {
       const supabase = createClient();
@@ -47,9 +47,9 @@ export function AssetUpload({
         toast.error(`Upload fehlgeschlagen: ${upErr.message}`);
         return;
       }
-      // Datenblatt-Volltext für die Inhaltssuche ablegen (best-effort).
+      // Dokument-Volltext für die Inhaltssuche ablegen (best-effort).
       let text: string | null = null;
-      if (kind === "datasheet" && /\.pdf$/i.test(file.name)) {
+      if (kind !== "image" && /\.pdf$/i.test(file.name)) {
         try {
           text = await extractTextFromPdf(file);
         } catch {
@@ -120,6 +120,42 @@ export function AssetUpload({
           <Button type="button" variant="outline" size="sm" asChild disabled={busy}>
             <span>
               <Upload className="size-4" /> Datenblatt (PDF)
+            </span>
+          </Button>
+        </label>
+        <label>
+          <input
+            type="file"
+            accept="application/pdf"
+            className="hidden"
+            disabled={busy}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void upload(f, "manual");
+              e.target.value = "";
+            }}
+          />
+          <Button type="button" variant="outline" size="sm" asChild disabled={busy}>
+            <span>
+              <FileText className="size-4" /> Anleitung (PDF)
+            </span>
+          </Button>
+        </label>
+        <label>
+          <input
+            type="file"
+            accept="application/pdf"
+            className="hidden"
+            disabled={busy}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void upload(f, "certificate");
+              e.target.value = "";
+            }}
+          />
+          <Button type="button" variant="outline" size="sm" asChild disabled={busy}>
+            <span>
+              <FileText className="size-4" /> Zertifikat (PDF)
             </span>
           </Button>
         </label>
