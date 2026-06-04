@@ -14,9 +14,27 @@ export interface IncomingInvoice {
   status: string;
   paid_at: string | null;
   created_at: string;
+  notes: string | null;
   document_path: string | null;
   document_name: string | null;
   project: { id: string; title: string | null } | null;
+}
+
+/** Bisher verwendete Lieferantennamen (für Autovervollständigung). */
+export async function getSupplierNames(): Promise<string[]> {
+  if (!isSupabaseConfigured()) return [];
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("incoming_invoices")
+    .select("supplier")
+    .not("supplier", "is", null)
+    .limit(500);
+  const set = new Set<string>();
+  for (const r of data ?? []) {
+    const s = (r as { supplier: string | null }).supplier?.trim();
+    if (s) set.add(s);
+  }
+  return [...set].sort((a, b) => a.localeCompare(b, "de"));
 }
 
 /** Signierte Download-Links (1 h) für die hinterlegten Beleg-PDFs. */

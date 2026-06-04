@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BookCheck, Check, FileText, Trash2 } from "lucide-react";
+import { BookCheck, Check, Copy, FileText, Trash2 } from "lucide-react";
 
 import { EmptyState } from "@/components/shared/empty-state";
 import { Badge } from "@/components/ui/badge";
@@ -13,9 +13,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getIncomingDocuments } from "@/lib/data/project-files";
-import { getIncomingInvoices, getBookedFileIds, getInvoiceFileUrls } from "@/lib/data/incoming-invoices";
+import { getIncomingInvoices, getBookedFileIds, getInvoiceFileUrls, getSupplierNames } from "@/lib/data/incoming-invoices";
 import { bookIncomingInvoice, markIncomingPaid, markIncomingOpen, deleteIncomingInvoice } from "@/app/(app)/buchhaltung/actions";
 import { NewIncomingInvoiceDialog } from "@/components/buchhaltung/new-incoming-invoice-dialog";
+import { ExportInvoicesButton } from "@/components/buchhaltung/export-invoices-button";
 import { formatCurrency, formatDate } from "@/lib/format";
 
 const num = (v: unknown): number => (typeof v === "number" ? v : 0);
@@ -25,16 +26,24 @@ const num = (v: unknown): number => (typeof v === "number" ? v : 0);
  * Liste der gebuchten Eingangsrechnungen mit Zahlungsstatus.
  */
 export async function EingangsbelegeSection() {
-  const [docs, invoices, bookedIds] = await Promise.all([
+  const [docs, invoicesRaw, bookedIds, suppliers] = await Promise.all([
     getIncomingDocuments(),
     getIncomingInvoices(),
     getBookedFileIds(),
+    getSupplierNames(),
   ]);
   const unbooked = docs.filter((d) => !bookedIds.has(d.id));
-  const fileUrls = await getInvoiceFileUrls(invoices);
+  const fileUrls = await getInvoiceFileUrls(invoicesRaw);
   const today = new Date().toISOString().slice(0, 10);
+  const isOverdue = (i: (typeof invoicesRaw)[number]) =>
+    i.status !== "bezahlt" && i.due_date != null && i.due_date < today;
+  // Sortierung: überfällige zuerst, dann offene, dann bezahlte.
+  const rank = (i: (typeof invoicesRaw)[number]) =>
+    isOverdue(i) ? 0 : i.status !== "bezahlt" ? 1 : 2;
+  const invoices = [...invoicesRaw].sort((a, b) => rank(a) - rank(b));
   const open = invoices.filter((i) => i.status !== "bezahlt");
   const openSum = open.reduce((s, i) => s + num(i.amount), 0);
+  const overdueCount = invoices.filter(isOverdue).length;
   // Offene Summen je Lieferant (Top 5) für die Übersicht.
   const bySupplier = new Map<string, number>();
   for (const i of open) {
@@ -109,12 +118,16 @@ export async function EingangsbelegeSection() {
         <div className="mb-2 flex items-center justify-between gap-2">
           <h3 className="text-sm font-semibold">Eingangsrechnungen</h3>
           <div className="flex items-center gap-3">
+            {overdueCount > 0 ? (
+              <span className="text-destructive text-sm font-medium">{overdueCount} überfällig</span>
+            ) : null}
             {openSum > 0 ? (
               <span className="text-muted-foreground text-sm">
                 offen: <span className="text-foreground font-semibold">{formatCurrency(openSum)}</span>
               </span>
             ) : null}
-            <NewIncomingInvoiceDialog />
+            <ExportInvoicesButton rows={invoices} />
+            <NewIncomingInvoiceDialog suppliers={suppliers} />
           </div>
         </div>
         {topSuppliers.length > 0 ? (
@@ -151,7 +164,12 @@ export async function EingangsbelegeSection() {
                   const overdue = i.status !== "bezahlt" && i.due_date != null && i.due_date < today;
                   return (
                     <TableRow key={i.id}>
-                      <TableCell className="font-medium">{i.supplier ?? "—"}</TableCell>
+                      <TableCell className="font-medium">
+                        {i.supplier ?? "—"}
+                        {i.notes ? (
+                          <span className="text-muted-foreground block text-xs font-normal">{i.notes}</span>
+                        ) : null}
+                      </TableCell>
                       <TableCell className="text-muted-foreground">{i.invoice_number ?? "—"}</TableCell>
                       <TableCell className={overdue ? "text-destructive" : "text-muted-foreground"}>
                         {i.due_date ? formatDate(i.due_date) : "—"}
@@ -169,6 +187,22 @@ export async function EingangsbelegeSection() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-end gap-1">
+                          <NewIncomingInvoiceDialog
+                            suppliers={suppliers}
+                            title="Eingangsrechnung duplizieren"
+                            initial={{
+                              supplier: i.supplier,
+                              invoice_number: i.invoice_number,
+                              amount: i.amount,
+                              currency: i.currency,
+                              notes: i.notes,
+                            }}
+                            trigger={
+                              <Button variant="ghost" size="icon" className="size-7" title="Duplizieren">
+                                <Copy className="size-3.5" />
+                              </Button>
+                            }
+                          />
                           {fileUrls[i.id] ? (
                             <Button variant="ghost" size="sm" asChild title="Beleg-PDF öffnen">
                               <a href={fileUrls[i.id]} target="_blank" rel="noopener noreferrer">
